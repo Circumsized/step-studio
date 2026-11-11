@@ -1,9 +1,10 @@
-# Step Studio 设计开发方案 v4.10
+# Step Studio 设计开发方案 v5.0
 
 > 目标：以 omp-studio 为功能与 UI 基准，用 Rust + TypeScript 重新实现其桌面形态，运行时对接 Step Code CLI，产出 Windows 优先、高性能、低开销、低占用、低存储的可视化智能体平台。
 > **范围（用户 2026-11-11 确认）**：**功能与前端显示基本全复刻 omp-studio，仅把 omp 换成 step**。基准是 `docs/images/` 九张官方截图（README 第 30-86 行的功能说明段），§9.5 矩阵已逐模块对应到具体图片。版式照抄；数据来自 Step——凡 Step 拿不到的，按本节末的「数据源台账」记 unavailable 或自建，不静默留空。
-> 硬约束（用户指定）：**GUI 面板与 omp-studio 像素级一致复刻**；**TUI 做到产品级**；外壳 Tauri + egui + gpui 混合；**尽量减少 WebView 使用**（用户 2026-11-11 解除「禁用 WebView」禁令，收窄为「单实例、只承载 React 工作台」）。
+> 硬约束（用户指定）：**GUI 面板与 omp-studio 像素级一致复刻**；**TUI 做到产品级**；**外壳纯 Tauri**：单个 WebView 承载全部面板（用户 2026-11-11 定，推翻此前的「Tauri + egui + gpui 混合」与「尽量减少 WebView」）。
 > 基线：omp-studio 0.1.17（MIT）、Step Code（stepfun-ai/Step-Code，MIT）、本机 step CLI 随附文档与实测探针（2026-11-11）、crates.io/GitHub/npm API 取数（2026-11-11）。
+> 本版相对 v4.10 的变化（**外壳纯 Tauri，架构级变更**）：用户定「外壳使用纯 Tauri」，删除 egui 与 gpui 两个原生面——FR-2 由四表面收窄为二表面（Tauri + HQTUI TUI），§0 结论摘要、架构图、Rust 职责、目录树同步更新；`crates/step-studio-shell` 标记为死代码待删（其无头夹具职责已由 Xvfb + Tauri release 二进制承接，M1.1 实证）；M3 的终端/diff go/no-go 与 gpui 五项 go/no-go 全部关闭；新增两条决策记录——纯 Tauri 的理由与代价、以及内存代价改由 G-1 单独承担（失去 egui 118 MB 低开销模式兜底）。
 > 本版相对 v4.9 的变化（slash 命令可经桥抵达，实测）：用户指出「桥上输 /usage 应与 CLI 输 /usage 等效」，实测成立——`/usage` 作为 prompt 发出后被按 slash 命令分发，渲染面板经 `notify` 回传（适配器已处理的 fire-and-forget 通道）。据此：用量面板的数据源从「待定路由」改为「桥上直接可用」，D-2 关闭；并新增通则——CLI 的 TUI 面板类 slash 命令大多可经 `prompt` 取到，不必等 RPC 暴露或自扫文件，代价是回传为 ANSI 文本。此前「`/usage` 不是 RPC 命令所以取不到」的判断据此作废。
 > 本版相对 v4.8 的变化（Agent Hub 数据源查实后修正）：原写「Step RPC 不暴露 subagent 列表与状态」 overstated——真相是子代理会话以 `origin: "subagent"` / id 前缀存在于 `<agentDir>/sessions`，Step 在 `session-index.md` 中**有意**将其排除出所有列表与搜索，故无枚举命令；数据可达，路径为自扫会话目录（Step 自己的 `/usage` 即如此）。D-3 随之定为自建扫描、不等上游，并要求与 `/usage` 共用同一套读取与缓存。
 > 本版相对 v4.7 的变化（范围确认 + 基准图台账）：用户确认「功能与前端显示基本全复刻 omp-studio，仅 omp→step」，写入目标声明；§9.5 增加「基准图」列并逐模块对应 `docs/images/` 九张官方截图；新增 §9.6 数据源台账，把九个基准面对到 Step 实际数据源，其中 Agent Hub（`hub.png`）经实测确认 Step RPC 不暴露 subagent 列表与状态，记为数据源缺失；列出的 D-1 worktree、D-2 用量路由、D-3 Agent Hub 数据源三条岔路待决策。
@@ -20,9 +21,9 @@
 | 项 | 决策 | 一行理由 |
 |---|---|---|
 | 主外壳 | Tauri v2 + **单一 WebView** + React renderer 原样复用 | 像素级复刻 omp-studio 的唯一路径 |
-| 终端 / diff 承载 | **默认 WebView（xterm.js/CodeMirror 在库）**，M3 go/no-go 不过关则维持 | 二审判决：拓扑像素级是第一门禁约束，原生化收益未实测且落在 WebView2 不确定带内；gpui Windows 浮动子窗能力上游缺失 |
-| gpui 原表面板 | 范围收缩为「进程树监控」一个候选（htop 式新形态，无像素级义务），go/no-go 不过则整体推迟 | 同一协调成本只换一个面板时收益需单独论证 |
-| egui 轻量壳 | 双模式（直连适配器 / 经 daemon）+ 无头夹具 + gpui 失效退路 | 在库 1,993 行资产；**不承担终端面板实现**（退路成本 16-24 人日是黑洞） |
+| 终端 / diff / 文件树 / Git / 进程树 / 诊断 | **全部 WebView**（xterm.js、CodeMirror 等在库） | 纯 Tauri 定案：无原生化选项，M3 的 go/no-go 随之关闭 |
+| ~~gpui 原表面板~~ | **已删除**（v5.0） | 纯 Tauri 后无第二个原生面；进程树监控改 WebView 实现，无像素级义务 |
+| ~~egui 轻量壳~~ | **已删除**（v5.0） | 同上；`crates/step-studio-shell` 成为死代码待清。代价是失去 118 MB 低开销模式，G-1 成为唯一内存门禁 |
 | TUI | HQTUI Rust 移植版 fork 自管，产品级 | 用户定向；TS 版需 JS 运行时或 88 MB 编译产物 |
 | M1 接法 | Tauri 壳进程内 facade 直连 Rust 适配器（复现 3.4 实测路径），`HostTransport` trait 双实现，M2.4 删过渡 | studio-host 是无 bin 的库，(a) 要么嵌 JS 运行时要么新写第三条协议面；(c) 复用已验证事实 |
 | Host | 常驻 daemon（Rust/tokio），壳是客户端；壳重启不杀会话 | tty7 模式 |
@@ -41,13 +42,14 @@
 
 - Windows 10/11 x64 桌面应用；主链路：登录 → 工作区 → 会话 → 流式对话 → 工具审批 → 会话恢复。
 - GUI 面板与 omp-studio **像素级一致复刻**（WebView 承载面；窗口拓扑是否在像素级范围内见 19 节待签字项）。
-- 四表面同一核心：Tauri 桌面壳（像素级）、gpui 原表面板（候选，go/no-go 约束）、egui 轻量壳（低开销）、HQTUI TUI（产品级终端）。
+- 二表面同一核心：Tauri 桌面壳（单 WebView 承载全部面板，像素级）、HQTUI TUI（产品级终端）。v5.0 起 egui 与 gpui 删除。
 - 计算全部下沉 Rust，UI 只做纯视图投影。
 
 ### 1.2 约束演变记录
 
 - 2026-11-11 早前：用户指令「不使用任何 WebView」，v3.0 至 v3.2 按 egui 单壳设计。
 - 2026-11-11 当日：用户解除禁令，改为「Tauri + egui + gpui 混合、像素级复刻、尽量减少 WebView 使用」。
+- 2026-11-11 当日晚：用户定「**外壳使用纯 Tauri**」，删除 egui 与 gpui 两个原生面，单 WebView 承载全部面板。
 - 现行约束：WebView **允许但最小化**：全局单实例、只承载 React 工作台。面板移出 WebView 的判定标准（v4.3 收紧）：**先实测该面板在 WebView 内成为瓶颈，且协调原型通过 go/no-go，两个条件同时满足才迁移**。
 
 ### 1.3 非目标（v4.3）
@@ -73,7 +75,7 @@
 | 编号 | 需求 | 来源 |
 |---|---|---|
 | FR-1 | 运行时对接 Step Code CLI：复用 Studio Bridge 协议，零上游补丁，版本下限探测 | v1.0 延续 |
-| FR-2 | 四表面：Tauri 主壳（单 WebView 像素级）、gpui 原表面板（go/no-go 约束）、egui 轻量壳、HQTUI TUI | 用户指定 |
+| FR-2 | 二表面：Tauri 主壳（单 WebView 承载全部面板，像素级）、HQTUI TUI（产品级） | 用户指定；v5.0 起由四表面收窄 |
 | FR-3 | omp-studio 功能模块全量等价（矩阵见 9.5） | 用户指定 |
 | FR-4 | 审批交互：9 个 `extension_ui_request` method 全处理，Full Access 二次确认，plan 提案 UI | 3.3 实测 |
 | FR-5 | 会话管理：创建/恢复/树/归档/惰性激活/热进程窗口 | 3.3 实测 |
@@ -197,7 +199,7 @@ Electron 安装包 100 MB 以上；Tauri 单窗口空闲 20 至 80 MB、6 窗口
 
 | 语言 | 承担 | 不承担 |
 |---|---|---|
-| Rust | host daemon、桥、适配器、gpui 面板（若过 go/no-go）、egui 轻量壳、平台原语、插件沙箱宿主 | 无 |
+| Rust | host daemon、桥、适配器、Tauri 壳、平台原语、插件沙箱宿主 | 无 |
 | TypeScript | React renderer（WebView 内）、HQTUI 上游参考、插件脚本、上游 step CLI、开发工具链 | host 运行时 |
 
 ### 4.3 进程模型
@@ -242,9 +244,9 @@ step-studio/
 ├── crates/
 │   ├── studio-bridge/            # 帧协议 + HMAC + UDS/命名管道 + host 客户端（在用）
 │   ├── step-studio-runtime/      # Step CLI 适配器（在用）
-│   ├── step-studio-shell/        # egui 轻量壳 + 无头夹具（在用，M5 定型）
+│   ├── step-studio-shell/        # 【死代码，v5.0 待删】原 egui 轻量壳；无头夹具职责已由 Xvfb + Tauri release 二进制承接（M1.1 实证）
 │   ├── studio-host/              # 常驻 daemon：服务层 + 会话多路复用（M2 起）
-│   ├── studio-native-panels/     # gpui 面板：进程树监控（go/no-go 约束，M3）
+│   ├── studio-native-panels/     # 【已取消，v5.0】gpui 面板；进程树监控改 WebView 实现
 │   └── hqtui/                    # HQTUI fork 的唯一实体位置（vendored path，M6）
 ├── apps/
 │   ├── renderer/                 # React renderer，产品本体（M1 Tauri 化）
@@ -431,7 +433,9 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 - 验收：`ui_reference/` 逐页并排比对 + vitest 快照 + 兼容矩阵；**高 DPI 150%/200% 两档进比对口径**（NFR-11）。
 - **终端与 diff 面板默认在本表面**（AT-1 二审）：xterm.js（WebGL 渲染器）与 diff 组件已在库，数据面改走 daemon→壳→WebView 二进制帧；「xterm 相关面板因终端原生化而移除」一句废止。
 
-### 9.2 表面 B：gpui 原表面板（go/no-go 约束）
+### 9.2 表面 B：gpui 原表面板（**已取消，v5.0**）
+
+> 纯 Tauri 定案后本表面删除。进程树监控改由 WebView 实现（htop 式 canvas/SVG，无像素级义务），原 go/no-go 五项与降级梯作废。以下内容仅作历史留存。
 
 - 范围收缩：**唯一候选是进程树监控面板**（htop 式新形态，omp-studio 无 dock 像素级义务）；终端与 diff 的迁移权收回到 9.1 默认，除非 9.6 go/no-go 五项全过。
 - 构成（若过）：gpui + gpui-component + `NativePanel` trait；独立无边框 owner 窗，主窗最小化/关闭时跟随（4.3 窗口生命周期）。
@@ -835,6 +839,8 @@ flowchart LR
 | egui 不承担终端面板 | 退路 16-24 人日是成本黑洞 | egui 终端退路（v4.2 风险表） | 不改 |
 | 30 天 MVP = M0 + M1.1-M1.4 | 可验证的像素级 dev build | 无 MVP 定义（v4.2） | M1' 后 |
 | 每会话一 step 进程 + 惰性激活 | 上游实测约束 | 进程内切会话（上游不支持） | M2 重入实测后 |
+| **外壳纯 Tauri，删除 egui 与 gpui 两个原生面**（v5.0） | 用户 2026-11-11 定。一个 UI 栈承载全部 19 个 WebView 模块，像素级复刻零成本（同一份 React）；省掉两套原生面的实现与协调（gpui 子窗 owner 链/最小化跟随/杀壳重连恢复、egui 双模式与无头夹具）；M3 的终端/diff go/no-go 与 gpui 五项 go/no-go 随之关闭 | Tauri + egui + gpui 混合（v4.x 既定架构）；单一 egui（v3.0-v3.2，用户曾禁 WebView） | M5 实测后 |
+| 纯 Tauri 的内存代价由 G-1 单独承担 | 失去 egui 118 MB 低开销模式后无兜底；但上游地板 252 MB（step 167.1 + MCP 84.9）不变，壳层差异被稀释 | 保留 egui 作低开销模式 | M5 回填 G-1 后 |
 | Tauri 命令名去掉 `omp-studio:desktop:` 家族前缀 | Tauri 插件命令按 `plugin:name\|cmd` 命名空间化，带冒号的命令名要逐个 rename | 直接用 channel 串作命令名（v4.2 §5.2 原述，不可达） | 不改 |
 | sender 用「单 listen 扇出到 Set」 | Tauri `listen` 返回 Promise，逐订阅注册会让早于 resolve 的 `removeListener` 找不到目标，监听活到窗口生命周期结束 | 每订阅一个 listen + `Map<listener, UnlistenFn>` | M1.2 三桥重建时 |
 | 事件派发传 `(event, payload)` 两个参数 | `subscribeChannel`（`apps/desktop/src/chrome-api.ts:81-93`）解构第二个参数 | 只传 payload：M1.2 所有 chrome/terminal 监听会收到 undefined | 不改 |
