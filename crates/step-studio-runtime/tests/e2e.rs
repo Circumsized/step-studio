@@ -161,11 +161,11 @@ fn the_rust_adapter_drives_the_real_step_cli() {
     );
 }
 
-/// The approval loop end to end against the fake CLI: the dialog must reach
-/// the Host as `interaction.required`, the answer must reach the CLI as
-/// `extension_ui_response` carrying the id the CLI issued, and only then does
-/// the turn settle. The answer is sent from inside the event callback, which
-/// is how a shell answers while the turn is still streaming.
+/// The approval loop end to end against the fake CLI, on the Studio
+/// interaction contract: the dialog arrives as `interaction.required` with a
+/// nested request, the answer travels as decision/value, and the dialog is
+/// closed out by `interaction.resolved`. The payloads here are the contract's,
+/// not the adapter's: a test that invents its own shape agrees with itself.
 #[test]
 fn an_approval_round_trips_through_the_rust_adapter() {
     if !has_node() {
@@ -209,53 +209,64 @@ fn an_approval_round_trips_through_the_rust_adapter() {
     .expect("connect to the Rust adapter");
 
     let mut saw_required = false;
-    let mut saw_notice = false;
-    let mut answered = false;
+    let mut saw_resolved = false;
     let receipt = session
         .invoke_with(
             serde_json::json!({ "kind": "core.prompt", "text": "approve" }),
-            |event| {
-                match event.get("kind").and_then(|k| k.as_str()) {
-                    Some("conversation.interaction.notice") => {
-                        saw_notice = true;
-                        assert_eq!(
-                            event.get("method").and_then(|m| m.as_str()),
-                            Some("setStatus"),
-                            "the fire-and-forget method must survive the mapping"
-                        );
-                    }
-                    Some("conversation.interaction.required") => {
-                        saw_required = true;
-                        let interaction_id = event
-                            .get("interactionId")
-                            .and_then(|v| v.as_str())
-                            .expect("interactionId")
-                            .to_string();
-                        // Answering from inside the callback is the streaming
-                        // path: the turn is still open when this runs.
-                        let (answer_receipt, _) = session
-                            .invoke(serde_json::json!({
-                                "kind": "interaction.respond",
-                                "interactionId": interaction_id,
-                                "response": { "confirmed": true },
-                            }))
-                            .expect("the adapter accepted the answer");
-                        assert_eq!(
-                            answer_receipt.get("status").and_then(|s| s.as_str()),
-                            Some("completed"),
-                            "the answer was not accepted: {answer_receipt}"
-                        );
-                        answered = true;
-                    }
-                    _ => {}
+            |event| match event.get("kind").and_then(|k| k.as_str()) {
+                Some("interaction.required") => {
+                    saw_required = true;
+                    let request = event.pointer("/request").expect("nested request");
+                    let interaction_id = request
+                        .get("interactionId")
+                        .and_then(|v| v.as_str())
+                        .expect("interactionId")
+                        .to_string();
+                    // The contract's confirm shape, not a passthrough of the
+                    // CLI's frame: title and message, ids the client can echo.
+                    assert_eq!(request.get("kind").and_then(|k| k.as_str()), Some("confirm"));
+                    assert!(request.get("commandId").and_then(|v| v.as_str()).is_some(), "commandId");
+                    assert_eq!(
+                        request.get("message").and_then(|m| m.as_str()),
+                        Some("delete the build directory"),
+                        "the dialog message must survive the mapping"
+                    );
+                    assert_eq!(event.get("owner").and_then(|o| o.as_str()), Some("gui"));
+
+                    // Answering from inside the callback is the streaming
+                    // path: the turn is still open. send_command, not invoke:
+                    // an invoke here would consume the event stream the turn is
+                    // flowing through, and the resolution would be swallowed.
+                    session
+                        .send_command(serde_json::json!({
+                            "kind": "interaction.respond",
+                            "interactionId": interaction_id,
+                            "commandId": request.get("commandId").and_then(|v| v.as_str()).unwrap_or(""),
+                            "decision": "submit",
+                            "value": true,
+                        }))
+                        .expect("the adapter accepted the answer frame");
                 }
+                Some("interaction.resolved") => {
+                    saw_resolved = true;
+                    assert_eq!(
+                        event.get("outcome").and_then(|o| o.as_str()),
+                        Some("submitted"),
+                        "a submitted answer must resolve the dialog"
+                    );
+                }
+                // The turn's own conversation events are expected. Anything
+                // else would be an invented kind: the fake also fires a
+                // setStatus, and fire-and-forget has no Studio kind to map to.
+                Some(other) if other.starts_with("conversation.") => {}
+                Some(other) => panic!("unexpected host event kind: {other}"),
+                None => {}
             },
         )
         .expect("the approval turn");
 
-    assert!(saw_notice, "the fire-and-forget request never reached the Host");
-    assert!(saw_required, "the dialog request never reached the Host");
-    assert!(answered, "the dialog was never answered");
+    assert!(saw_required, "the dialog never reached the Host");
+    assert!(saw_resolved, "the dialog was never resolved for the client");
     assert_eq!(
         receipt.get("status").and_then(|s| s.as_str()),
         Some("completed"),
@@ -279,9 +290,103 @@ fn an_approval_round_trips_through_the_rust_adapter() {
     );
 }
 
+/// A cancel decision reaches the CLI as `cancelled` and resolves the dialog
+/// as cancelled, which is how the CLI tells "denied" from "unanswered".
+#[test]
+fn a_cancelled_answer_reaches_the_cli_as_cancelled() {
+    if !has_node() {
+        eprintln!("skipping: no node for the fake CLI");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rust-cancel-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let (config, _dir) = config_in(&dir, fake_step_wrapper(&dir).to_string_lossy().to_string());
+
+    let runtime = Runtime::new(AdapterConfig {
+        endpoint: config.endpoint.clone(),
+        token: config.token.clone(),
+        runtime_epoch: config.runtime_epoch,
+        cwd: config.cwd.clone(),
+        step_command: config.step_command.clone(),
+        step_env: config.step_env.clone(),
+        continue_session: config.continue_session,
+    });
+    std::thread::spawn(move || {
+        let _ = runtime.serve();
+    });
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !std::path::Path::new(&config.endpoint).exists() {
+        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    let session = BridgeSession::connect(&AdapterLaunch {
+        node: String::new(),
+        adapter_script: String::new(),
+        socket_path: config.endpoint.clone(),
+        token_file: String::new(),
+        cwd: config.cwd.clone(),
+        runtime_epoch: config.runtime_epoch,
+        env: Vec::new(),
+        token: Some(config.token.clone()),
+        command: Vec::new(),
+    })
+    .expect("connect to the Rust adapter");
+
+    let mut saw_resolved = false;
+    let receipt = session
+        .invoke_with(
+            serde_json::json!({ "kind": "core.prompt", "text": "approve" }),
+            |event| {
+                if event.get("kind").and_then(|k| k.as_str()) == Some("interaction.required") {
+                    let interaction_id = event
+                        .pointer("/request/interactionId")
+                        .and_then(|v| v.as_str())
+                        .expect("interactionId")
+                        .to_string();
+                    let command_id = event
+                        .pointer("/request/commandId")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    session
+                        .send_command(serde_json::json!({
+                            "kind": "interaction.respond",
+                            "interactionId": interaction_id,
+                            "commandId": command_id,
+                            "decision": "cancel",
+                        }))
+                        .expect("the adapter accepted the cancel frame");
+                }
+                if event.get("kind").and_then(|k| k.as_str()) == Some("interaction.resolved") {
+                    saw_resolved = true;
+                    assert_eq!(event.get("outcome").and_then(|o| o.as_str()), Some("cancelled"));
+                }
+            },
+        )
+        .expect("the cancelled approval turn");
+
+    assert!(saw_resolved, "a cancelled dialog must still resolve");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed")
+    );
+    let page = session
+        .invoke(serde_json::json!({ "kind": "session.transcript.read" }))
+        .expect("transcript")
+        .0;
+    let items = page.pointer("/result/items").and_then(|i| i.as_array()).expect("items");
+    assert!(
+        items.iter().any(|item| item.to_string().contains("denied")),
+        "the CLI never saw the denial: {items:?}"
+    );
+}
+
 /// An answer for an interaction this connection never issued must fail closed:
 /// the id could belong to another client's dialog, and a stray frame into the
-/// CLI is worse than a rejected command.
+/// CLI is worse than a rejected command. The client still gets a resolution so
+/// its card does not hang.
 #[test]
 fn a_stale_interaction_answer_fails_closed() {
     if !has_node() {
@@ -324,12 +429,26 @@ fn a_stale_interaction_answer_fails_closed() {
     })
     .expect("connect to the Rust adapter");
 
-    let (receipt, _events) = session
-        .invoke(serde_json::json!({
-            "kind": "interaction.respond",
-            "interactionId": "never-issued",
-            "response": { "confirmed": true },
-        }))
+    let mut saw_resolved = false;
+    let receipt = session
+        .invoke_with(
+            serde_json::json!({
+                "kind": "interaction.respond",
+                "interactionId": "never-issued",
+                "commandId": "cmd-never-issued",
+                "decision": "submit",
+                "value": true,
+            }),
+            |event| {
+                if event.get("kind").and_then(|k| k.as_str()) == Some("interaction.resolved") {
+                    saw_resolved = true;
+                    assert_eq!(
+                        event.get("interactionId").and_then(|v| v.as_str()),
+                        Some("never-issued")
+                    );
+                }
+            },
+        )
         .expect("the adapter answered the stale request");
 
     assert_eq!(
@@ -342,6 +461,7 @@ fn a_stale_interaction_answer_fails_closed() {
         Some("INTERACTION_STALE"),
         "the stale answer must carry the stale code"
     );
+    assert!(saw_resolved, "a stale answer must still resolve the client's card");
 }
 
 #[test]

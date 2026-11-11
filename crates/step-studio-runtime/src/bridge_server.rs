@@ -33,21 +33,30 @@ const TERMINAL_HISTORY: usize = 64;
 /// push a stray frame into the CLI.
 #[derive(Default)]
 struct InteractionRegistry {
-    outstanding: Vec<String>,
+    /// (interaction id, method), so an answer can be translated into the
+    /// shape that method expects.
+    outstanding: Vec<(String, String)>,
 }
 
 impl InteractionRegistry {
-    fn open(&mut self, id: &str) {
+    fn open(&mut self, id: &str, method: &str) {
         if !id.is_empty() {
-            self.outstanding.push(id.to_string());
+            self.outstanding.push((id.to_string(), method.to_string()));
         }
     }
 
-    /// Forget an id, reporting whether it was outstanding.
-    fn close(&mut self, id: &str) -> bool {
-        let before = self.outstanding.len();
-        self.outstanding.retain(|open| open != id);
-        self.outstanding.len() != before
+    /// Forget an id, reporting the method it was issued for. The method has to
+    /// come back with the id: the answer is translated per method, and an empty
+    /// one silently sends the wrong shape to the CLI.
+    fn close(&mut self, id: &str) -> Option<String> {
+        let index = self.outstanding.iter().position(|open| open.0 == id)?;
+        Some(self.outstanding.remove(index).1)
+    }
+
+    /// Everything still open, for an abort or a shutdown: each one owes the
+    /// client a resolution, and each one is a frame the CLI will never answer.
+    fn drain(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.outstanding)
     }
 }
 
@@ -253,6 +262,30 @@ impl Session {
         self.receipt_with_error(request_id, "failed", None, Some((code, message)));
     }
 
+    /// Tell the client a dialog is over, whichever way it ended. The upstream
+    /// resolves a timeout without a word, so the only clear signals this
+    /// adapter can send are its own; without this a card outlives its dialog.
+    fn resolved(&mut self, interaction_id: &str, command_id: &str, outcome: &str) {
+        self.event(
+            json!({
+                "kind": "interaction.resolved",
+                "interactionId": interaction_id,
+                "commandId": command_id,
+                "leaseGeneration": 0,
+                "outcome": outcome,
+            }),
+            true,
+        );
+    }
+
+    /// Close out every dialog a dead turn was holding open.
+    fn resolve_outstanding(&mut self, outcome: &str) {
+        for (id, _method) in self.interactions.drain() {
+            let command_id = format!("cmd-{id}");
+            self.resolved(&id, &command_id, outcome);
+        }
+    }
+
     fn event(&mut self, event: Value, advances_state: bool) {
         self.seq += 1;
         let state_version = if advances_state {
@@ -303,6 +336,9 @@ impl Session {
             }
             "core.abort" => {
                 let _ = self.step.send("abort", json!({}));
+                // The turn is over, so every dialog it was holding is over:
+                // tell the client, and stop tracking ids the CLI will not answer.
+                self.resolve_outstanding("aborted");
                 if let Some(previous) = self.pending_prompt.take() {
                     let turn = self.context.turn_id();
                     self.event(json!({ "kind": "conversation.turn.aborted", "sessionId": self.session_id, "turnId": turn }), true);
@@ -325,6 +361,7 @@ impl Session {
                 }));
             }
             "runtime.shutdown" => {
+                self.resolve_outstanding("aborted");
                 self.receipt(&request_id, "completed", None);
                 let _ = self.send(&json!({ "kind": "runtime.shutdownComplete" }));
                 self.shutting_down = true;
@@ -445,26 +482,58 @@ impl Session {
                     Err(error) => self.failed(&request_id, error),
                 }
             }
-            // The client's answer to a dialog the CLI is holding open. An id
-            // this connection never issued is stale: answering it could reach a
-            // dialog that belongs to another client, so it fails closed.
+            // The client's answer to a dialog the CLI is holding open. The
+            // wire shape is the Studio contract's: decision submit/cancel plus
+            // an optional value, which is translated per method into what the
+            // CLI expects (confirmed for confirm, value for the rest).
             "interaction.respond" => {
                 let interaction_id = operation
                     .get("interactionId")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                if !self.interactions.close(&interaction_id) {
+                let command_id = operation
+                    .get("commandId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let decision = operation.get("decision").and_then(|v| v.as_str()).unwrap_or("");
+                let value = operation.get("value");
+                let Some(method) = self.interactions.close(&interaction_id) else {
+                    // The client is holding a card for a dialog that is already
+                    // over (the upstream resolved it, or a reconnect lost it).
+                    // Resolve first: a client that stops reading at the receipt
+                    // would otherwise never see the card clear.
+                    let command_id = if command_id.is_empty() {
+                        format!("cmd-{interaction_id}")
+                    } else {
+                        command_id
+                    };
+                    self.resolved(&interaction_id, &command_id, "aborted");
                     self.failed_with_code(
                         &request_id,
                         "INTERACTION_STALE",
                         format!("no outstanding interaction {interaction_id}"),
                     );
                     return;
-                }
-                let answer = operation.get("response").cloned().unwrap_or(json!({}));
+                };
+                let answer = match decision {
+                    "cancel" => json!({ "cancelled": true }),
+                    "submit" => match method.as_str() {
+                        "confirm" => json!({ "confirmed": is_affirmative(value) }),
+                        _ => json!({ "value": value.cloned().unwrap_or(Value::Null) }),
+                    },
+                    _ => {
+                        self.failed(&request_id, format!("unknown decision: {decision}"));
+                        return;
+                    }
+                };
                 match self.step.reply("extension_ui_response", &interaction_id, answer) {
-                    Ok(()) => self.receipt(&request_id, "completed", Some(json!({ "ok": true }))),
+                    Ok(()) => {
+                        let outcome = if decision == "cancel" { "cancelled" } else { "submitted" };
+                        self.resolved(&interaction_id, &command_id, outcome);
+                        self.receipt(&request_id, "completed", Some(json!({ "ok": true })));
+                    }
                     Err(error) => self.failed(&request_id, error.to_string()),
                 }
             }
@@ -497,7 +566,7 @@ impl Session {
                 let method = event.get("method").and_then(|v| v.as_str()).unwrap_or("");
                 if crate::conversation::is_dialog_method(method) {
                     if let Some(id) = event.get("id").and_then(|v| v.as_str()) {
-                        self.interactions.open(id);
+                        self.interactions.open(id, method);
                     }
                 }
             }
@@ -685,6 +754,17 @@ fn read_transcript(step: &mut StepRpc, cursor: Option<&str>) -> Result<Value, St
 
 fn step_epoch_placeholder() -> Value {
     json!(0)
+}
+
+/// Whether a confirm answer approves. The Studio contract's approval values
+/// are `true`, `"once"`, `"session"` or a grant object; anything else denies.
+fn is_affirmative(value: Option<&Value>) -> bool {
+    match value {
+        Some(Value::Bool(true)) => true,
+        Some(Value::String(choice)) => choice == "once" || choice == "session",
+        Some(Value::Object(_)) => true,
+        _ => false,
+    }
 }
 
 /// One decoded frame from the Host, or the reason the socket went away.

@@ -212,55 +212,73 @@ pub fn map_event(event: &Value, context: &MapContext) -> Option<Mapped> {
             }),
             advances_state: true,
         }),
-        // The extension UI sub-protocol. Dialog methods hold the agent open
-        // until the client answers; everything else lands in the UI without
-        // one. The client keeps no clock: the agent side resolves a timeout on
-        // its own, so timeoutMs is display only.
+        // The extension UI sub-protocol, mapped onto the Studio interaction
+        // contract (packages/studio-protocol/src/contracts/interactions.ts):
+        // a dialog becomes `interaction.required` with a nested request whose
+        // kind is confirm/select/input/editor. The client keeps no clock; the
+        // agent side resolves a timeout on its own.
         "extension_ui_request" => {
             let method = str_field(event, "method");
-            let interaction_id = str_field(event, "id");
-            if is_dialog_method(&method) {
-                Some(Mapped {
-                    event: json!({
-                        "kind": "conversation.interaction.required",
-                        "sessionId": context.session_id,
-                        "turnId": context.turn_id(),
-                        "interactionId": interaction_id,
-                        "method": method,
-                        "title": event.get("title"),
-                        "message": event.get("message"),
-                        "options": event.get("options"),
-                        "placeholder": event.get("placeholder"),
-                        "prefill": event.get("prefill"),
-                        "timeoutMs": event.get("timeout"),
-                        "requestedAt": now_iso(),
-                    }),
-                    // A lost dialog is a lost turn, so it moves the watermark.
-                    advances_state: true,
-                })
-            } else {
-                Some(Mapped {
-                    event: json!({
-                        "kind": "conversation.interaction.notice",
-                        "sessionId": context.session_id,
-                        "turnId": context.turn_id(),
-                        "interactionId": interaction_id,
-                        "method": method,
-                        "message": event.get("message"),
-                        "notifyType": event.get("notifyType"),
-                        "statusKey": event.get("statusKey"),
-                        "statusText": event.get("statusText"),
-                        "widgetKey": event.get("widgetKey"),
-                        "widgetLines": event.get("widgetLines"),
-                        "widgetPlacement": event.get("widgetPlacement"),
-                        "title": event.get("title"),
-                        "occurredAt": now_iso(),
-                    }),
-                    // Status and widget traffic is frequent and self-healing:
-                    // the next one restates it, so a gap here is noise.
-                    advances_state: false,
-                })
+            if !is_dialog_method(&method) {
+                // Fire-and-forget (notify/setStatus/setWidget/setTitle/
+                // set_editor_text) has no kind in the Studio contract: the
+                // Host's allowlist drops unknown kinds silently, and inventing
+                // one is how a mapping starts lying. v1 drops it in trace.
+                return None;
             }
+            let interaction_id = str_field(event, "id");
+            let command_id = format!("cmd-{interaction_id}");
+            let title = event.get("title").and_then(|v| v.as_str()).unwrap_or("");
+            let request = match method.as_str() {
+                "confirm" => json!({
+                    "kind": "confirm",
+                    "interactionId": interaction_id,
+                    "commandId": command_id,
+                    "title": title,
+                    "message": event.get("message"),
+                }),
+                "select" => json!({
+                    "kind": "select",
+                    "interactionId": interaction_id,
+                    "commandId": command_id,
+                    "title": title,
+                    // Step offers plain strings; the contract wants id/label pairs.
+                    "options": event.get("options").and_then(|o| o.as_array()).map(|list| {
+                        list.iter().map(|option| {
+                            let label = option.as_str().unwrap_or("");
+                            json!({ "id": label, "label": label })
+                        }).collect::<Vec<_>>()
+                    }).unwrap_or_default(),
+                }),
+                "input" => json!({
+                    "kind": "input",
+                    "interactionId": interaction_id,
+                    "commandId": command_id,
+                    "title": title,
+                    "placeholder": event.get("placeholder"),
+                }),
+                "editor" => json!({
+                    "kind": "editor",
+                    "interactionId": interaction_id,
+                    "commandId": command_id,
+                    "title": title,
+                    "content": event.get("prefill"),
+                }),
+                // is_dialog_method gates this arm to these four.
+                _ => return None,
+            };
+            Some(Mapped {
+                event: json!({
+                    "kind": "interaction.required",
+                    "request": request,
+                    // The adapter cannot know which surface asked; v1 has one
+                    // consumer, and the GUI lease is the only one defined.
+                    "owner": "gui",
+                    "leaseGeneration": 0,
+                }),
+                // A lost dialog is a lost turn, so it moves the watermark.
+                advances_state: true,
+            })
         }
         "compaction_start" => Some(Mapped {
             event: json!({

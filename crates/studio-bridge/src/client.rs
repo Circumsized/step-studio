@@ -246,6 +246,19 @@ impl BridgeSession {
         Ok((receipt, events))
     }
 
+    /// Send a command without waiting for its receipt. A streaming turn is
+    /// already consuming the event stream, so an answer sent mid-turn must not
+    /// compete for it: this writes the frame and returns.
+    pub fn send_command(&self, operation: Value) -> Result<(), BridgeError> {
+        let request_id = self.next_request_id();
+        self.send(&json!({
+            "type": "studio.request",
+            "requestId": request_id,
+            "runtimeEpoch": self.epoch,
+            "operation": operation,
+        }))
+    }
+
     /// Run a command, handing each event to `on_event` the moment it arrives,
     /// and return the terminal receipt.
     ///

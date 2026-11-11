@@ -28,6 +28,7 @@ Renderer → @omp-studio/client → transport-desktop → apps/desktop (IPC)
   `parseConversationRuntimeEvent` 校验
 - provider 报错时立刻返回 failed receipt 并带上 CLI 原始错误（Step 之后还会自动重试
   很久，不等它）
+- 审批环（`extension_ui_request` → `interaction.required` → `interaction.respond` → `interaction.resolved`）：dialog 类 4 个 method 全通，真实 CLI 往返实证；fire-and-forget 类 5 个暂无 Studio 事件 kind，v1 丢弃（trace 可见）
 - 通过 Host 的**真实探针**（hello + snapshot smoke + shutdown 后干净退出）；
   shutdown 失败会被判 rejected 而不是 limited，所以这条最硬
 - 整个 `npm run check` 门禁通过：架构约束、全部包编译（含 renderer）、核心测试
@@ -155,7 +156,11 @@ session。现在用 repo 根目录。
   `omp-studio`。包名（`@omp-studio/*`）不改——它们是复用的依赖，改名会破坏整个
   依赖图和架构约束
 - **其余命令映射**：`turn.retry`、`session.drop`、`session.clearContext`、
-  `session.handoff`、`mode.plan.*` 未实现
+  `session.handoff`、`mode.plan.*` 未实现；`switch_session`/`clone`/`get_tree`/
+  `get_messages`/`get_session_stats`/`compact`/`bash` 等未接（适配器缺口清单
+  见设计文档 11.4）
+- **审批 UI**：Rust 壳与 renderer 都还没有审批卡片界面，适配器侧契约已通、
+  界面侧未接（M1 起）
 - **Agent Hub 的子 agent 编排**：Step 有并行 subagent，但 RPC 没暴露列表与状态
 - **Step 没有的能力**：`tui.transfer`、`vibe.mode`、`omfg.commit`、`prewalk`、
   `operator`、`tan` 标为 `unavailable`，Renderer 会隐藏它们

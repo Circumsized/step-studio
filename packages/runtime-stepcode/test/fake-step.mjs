@@ -102,8 +102,11 @@ rl.on("line", line => {
       write({ type: "message_start", message: userMessage(text) });
       write({ type: "message_end", message: userMessage(text) });
       write({ type: "extension_ui_request", id: "fake-ui-status", method: "setStatus", statusKey: "fake", statusText: "waiting for approval" });
-      write({ type: "extension_ui_request", id: "fake-ui-1", method: "confirm", title: "Allow dangerous command?", message: "rm -rf /", timeout: 5000 });
-      waitForResponse("fake-ui-1").then((answer) => {
+      write({ type: "extension_ui_request", id: "fake-ui-1", method: "confirm", title: "Allow this command?", message: "delete the build directory", timeout: 5000 });
+      // The real CLI auto-resolves a timed-out dialog; the fake does the same
+      // after 10s so a broken answer path fails the test instead of hanging it.
+      const timedOut = new Promise((resolve) => setTimeout(() => resolve(null), 10000));
+      Promise.race([waitForResponse("fake-ui-1"), timedOut]).then((answer) => {
         const confirmed = answer?.confirmed === true;
         const verdict = confirmed ? "approved" : "denied";
         const assistantEntry = appendEntry("message", {

@@ -40,7 +40,11 @@ const CAPABILITIES: &[(&str, &str, &str)] = &[
         "limited",
         "forks at the latest entry only; the Studio tree/branch surface is not implemented",
     ),
-    ("interaction.respond", "stable", ""),
+    (
+        "interaction.respond",
+        "limited",
+        "dialog methods only (confirm/select/input/editor); fire-and-forget extension UI has no Studio event kind and is dropped",
+    ),
     (
         "conversation.compaction",
         "unavailable",
@@ -62,6 +66,9 @@ const COMMANDS: &[&str] = &[
     "session.commands.list",
     "session.fork",
     "session.models.list",
+    "session.state",
+    "session.history",
+    "session.transcript.read",
     "interaction.respond",
 ];
 
