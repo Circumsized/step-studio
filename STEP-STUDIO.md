@@ -105,7 +105,7 @@ challenge proof）。第一版我写成了小端 + 只含 body 的长度 + 两�
 | 适配器（Rust） | 2.8 MB |
 | step CLI（真实二进制） | 167.1 MB |
 | steppage-mcp（Step 自己拉的） | 84.9 MB |
-| **应用合计** | **372.8 MB** |
+| **应用合计** | **372.8 MB**（聊天子集口径：壳直连适配器，无 host、无 renderer、无 workspace/git/usage；不是全功能预算） |
 
 同一链路换回 TypeScript 适配器是 118 + 64.4 + 167 + 85 = **434 MB**，即 Rust 适配器
 省掉 61 MB（14%）。壳在 `target/{release,debug}/step-studio-runtime` 存在时优先用它，
@@ -123,7 +123,7 @@ challenge proof）。第一版我写成了小端 + 只含 body 的长度 + 两�
 > - **160 MB 才是官方安装的真实二进制**——打包成单文件可执行文件（114 MB），
 >   比 node + 一堆模块文件省 100 MB。
 
-Electron 那 280–470 MB 是实打实省掉了。剩下的 373 MB 里运行时占 68%，且已经榨到
+Electron 那 280–470 MB 是实打实省掉了。剩下的 372.8 MB 里运行时占 68%，且已经榨到
 底：
 
 - **适配器 2.8 MB**：原来是 64 MB 的 Node 进程，只做帧编解码 + JSONL 转发，约 600 行

@@ -47,6 +47,15 @@ fn fake_step_wrapper(dir: &std::path::Path) -> PathBuf {
     wrapper
 }
 
+/// The fake CLI runs under node, so the approval tests need it present.
+fn has_node() -> bool {
+    std::process::Command::new("node")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 fn launch(tag: &str) -> (AdapterConfig, PathBuf) {
     let dir = std::env::temp_dir().join(format!("rust-rt-{tag}-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&dir);
@@ -149,6 +158,189 @@ fn the_rust_adapter_drives_the_real_step_cli() {
     assert!(
         items.iter().any(|item| item.get("role") == Some(&serde_json::json!("assistant"))),
         "the transcript lost the assistant turn"
+    );
+}
+
+/// The approval loop end to end against the fake CLI: the dialog must reach
+/// the Host as `interaction.required`, the answer must reach the CLI as
+/// `extension_ui_response` carrying the id the CLI issued, and only then does
+/// the turn settle. The answer is sent from inside the event callback, which
+/// is how a shell answers while the turn is still streaming.
+#[test]
+fn an_approval_round_trips_through_the_rust_adapter() {
+    if !has_node() {
+        eprintln!("skipping: no node for the fake CLI");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rust-approve-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let (config, _dir) = config_in(&dir, fake_step_wrapper(&dir).to_string_lossy().to_string());
+
+    let runtime = Runtime::new(AdapterConfig {
+        endpoint: config.endpoint.clone(),
+        token: config.token.clone(),
+        runtime_epoch: config.runtime_epoch,
+        cwd: config.cwd.clone(),
+        step_command: config.step_command.clone(),
+        step_env: config.step_env.clone(),
+        continue_session: config.continue_session,
+    });
+    std::thread::spawn(move || {
+        let _ = runtime.serve();
+    });
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !std::path::Path::new(&config.endpoint).exists() {
+        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    let session = BridgeSession::connect(&AdapterLaunch {
+        node: String::new(),
+        adapter_script: String::new(),
+        socket_path: config.endpoint.clone(),
+        token_file: String::new(),
+        cwd: config.cwd.clone(),
+        runtime_epoch: config.runtime_epoch,
+        env: Vec::new(),
+        token: Some(config.token.clone()),
+        command: Vec::new(),
+    })
+    .expect("connect to the Rust adapter");
+
+    let mut saw_required = false;
+    let mut saw_notice = false;
+    let mut answered = false;
+    let receipt = session
+        .invoke_with(
+            serde_json::json!({ "kind": "core.prompt", "text": "approve" }),
+            |event| {
+                match event.get("kind").and_then(|k| k.as_str()) {
+                    Some("conversation.interaction.notice") => {
+                        saw_notice = true;
+                        assert_eq!(
+                            event.get("method").and_then(|m| m.as_str()),
+                            Some("setStatus"),
+                            "the fire-and-forget method must survive the mapping"
+                        );
+                    }
+                    Some("conversation.interaction.required") => {
+                        saw_required = true;
+                        let interaction_id = event
+                            .get("interactionId")
+                            .and_then(|v| v.as_str())
+                            .expect("interactionId")
+                            .to_string();
+                        // Answering from inside the callback is the streaming
+                        // path: the turn is still open when this runs.
+                        let (answer_receipt, _) = session
+                            .invoke(serde_json::json!({
+                                "kind": "interaction.respond",
+                                "interactionId": interaction_id,
+                                "response": { "confirmed": true },
+                            }))
+                            .expect("the adapter accepted the answer");
+                        assert_eq!(
+                            answer_receipt.get("status").and_then(|s| s.as_str()),
+                            Some("completed"),
+                            "the answer was not accepted: {answer_receipt}"
+                        );
+                        answered = true;
+                    }
+                    _ => {}
+                }
+            },
+        )
+        .expect("the approval turn");
+
+    assert!(saw_notice, "the fire-and-forget request never reached the Host");
+    assert!(saw_required, "the dialog request never reached the Host");
+    assert!(answered, "the dialog was never answered");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed"),
+        "the turn did not settle after the answer: {}",
+        receipt.pointer("/error/message").and_then(|m| m.as_str()).unwrap_or("unknown")
+    );
+
+    // The transcript proves the CLI saw the answer: it only writes the verdict
+    // once the response arrives.
+    let page = session
+        .invoke(serde_json::json!({ "kind": "session.transcript.read" }))
+        .expect("transcript")
+        .0;
+    let items = page.pointer("/result/items").and_then(|i| i.as_array()).expect("items");
+    assert!(
+        items.iter().any(|item| {
+            item.get("role") == Some(&serde_json::json!("assistant"))
+                && item.to_string().contains("approved")
+        }),
+        "the CLI never saw the answer: {items:?}"
+    );
+}
+
+/// An answer for an interaction this connection never issued must fail closed:
+/// the id could belong to another client's dialog, and a stray frame into the
+/// CLI is worse than a rejected command.
+#[test]
+fn a_stale_interaction_answer_fails_closed() {
+    if !has_node() {
+        eprintln!("skipping: no node for the fake CLI");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rust-stale-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let (config, _dir) = config_in(&dir, fake_step_wrapper(&dir).to_string_lossy().to_string());
+
+    let runtime = Runtime::new(AdapterConfig {
+        endpoint: config.endpoint.clone(),
+        token: config.token.clone(),
+        runtime_epoch: config.runtime_epoch,
+        cwd: config.cwd.clone(),
+        step_command: config.step_command.clone(),
+        step_env: config.step_env.clone(),
+        continue_session: config.continue_session,
+    });
+    std::thread::spawn(move || {
+        let _ = runtime.serve();
+    });
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !std::path::Path::new(&config.endpoint).exists() {
+        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    let session = BridgeSession::connect(&AdapterLaunch {
+        node: String::new(),
+        adapter_script: String::new(),
+        socket_path: config.endpoint.clone(),
+        token_file: String::new(),
+        cwd: config.cwd.clone(),
+        runtime_epoch: config.runtime_epoch,
+        env: Vec::new(),
+        token: Some(config.token.clone()),
+        command: Vec::new(),
+    })
+    .expect("connect to the Rust adapter");
+
+    let (receipt, _events) = session
+        .invoke(serde_json::json!({
+            "kind": "interaction.respond",
+            "interactionId": "never-issued",
+            "response": { "confirmed": true },
+        }))
+        .expect("the adapter answered the stale request");
+
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("failed"),
+        "a stale answer must not be accepted"
+    );
+    assert_eq!(
+        receipt.pointer("/error/code").and_then(|c| c.as_str()),
+        Some("INTERACTION_STALE"),
+        "the stale answer must carry the stale code"
     );
 }
 

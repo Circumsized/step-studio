@@ -199,6 +199,20 @@ impl StepRpc {
         }
     }
 
+    /// Send a reply correlated by a caller-owned id. `send` mints its own ids
+    /// for request/response correlation; a dialog answer must carry the id the
+    /// CLI issued with the request, so it cannot go through that path.
+    pub fn reply(&mut self, kind: &str, id: &str, mut payload: Value) -> Result<(), StepError> {
+        if self.exited {
+            return Err(StepError::Closed("process has exited".to_string()));
+        }
+        if let Value::Object(ref mut map) = payload {
+            map.insert("id".to_string(), json!(id));
+            map.insert("type".to_string(), json!(kind));
+        }
+        self.write(&payload)
+    }
+
     /// Fire a request without waiting for its response.
     pub fn send(&mut self, kind: &str, payload: Value) -> Result<(), StepError> {
         if self.exited {

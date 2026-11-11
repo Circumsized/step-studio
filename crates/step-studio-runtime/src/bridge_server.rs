@@ -24,6 +24,33 @@ const TERMINAL_STATUSES: [&str; 4] = ["completed", "failed", "rejected", "outcom
 /// Terminal outcomes a reconnect may have missed.
 const TERMINAL_HISTORY: usize = 64;
 
+/// Outstanding dialog requests, by the id the CLI issued.
+///
+/// The agent side resolves a timed-out dialog on its own and never says so,
+/// so this set is an upper bound: an id in it may already be answered
+/// upstream. What it does catch is answering an id this connection never
+/// issued, or issued before a reconnect, which must fail closed rather than
+/// push a stray frame into the CLI.
+#[derive(Default)]
+struct InteractionRegistry {
+    outstanding: Vec<String>,
+}
+
+impl InteractionRegistry {
+    fn open(&mut self, id: &str) {
+        if !id.is_empty() {
+            self.outstanding.push(id.to_string());
+        }
+    }
+
+    /// Forget an id, reporting whether it was outstanding.
+    fn close(&mut self, id: &str) -> bool {
+        let before = self.outstanding.len();
+        self.outstanding.retain(|open| open != id);
+        self.outstanding.len() != before
+    }
+}
+
 pub struct AdapterConfig {
     pub endpoint: String,
     pub token: String,
@@ -157,6 +184,7 @@ struct Session {
     state_version: u64,
     command_manifest_hash: String,
     pending_prompt: Option<String>,
+    interactions: InteractionRegistry,
 }
 
 impl Session {
@@ -184,7 +212,7 @@ impl Session {
         request_id: &str,
         status: &str,
         result: Option<Value>,
-        error: Option<String>,
+        error: Option<(&str, String)>,
     ) {
         // Built as a map because `json!` has no spread syntax and `result` is
         // only present on some statuses.
@@ -198,12 +226,12 @@ impl Session {
         if let Some(value) = result {
             receipt.insert("result".to_string(), value);
         }
-        if let Some(message) = error {
+        if let Some((code, message)) = error {
             // The Host and the shell both read the reason off the receipt; a
             // bare `failed` tells the user nothing.
             receipt.insert(
                 "error".to_string(),
-                json!({ "code": "INTERNAL_ERROR", "message": message, "retryable": false }),
+                json!({ "code": code, "message": message, "retryable": false }),
             );
         }
         let receipt = Value::Object(receipt);
@@ -216,7 +244,13 @@ impl Session {
 
     fn failed(&mut self, request_id: &str, message: String) {
         // The error rides on the receipt, not the result.
-        self.receipt_with_error(request_id, "failed", None, Some(message));
+        self.receipt_with_error(request_id, "failed", None, Some(("INTERNAL_ERROR", message)));
+    }
+
+    /// A failure with a code the client can branch on. The generic `failed`
+    /// reports INTERNAL_ERROR, which is wrong for a stale answer.
+    fn failed_with_code(&mut self, request_id: &str, code: &str, message: String) {
+        self.receipt_with_error(request_id, "failed", None, Some((code, message)));
     }
 
     fn event(&mut self, event: Value, advances_state: bool) {
@@ -411,6 +445,29 @@ impl Session {
                     Err(error) => self.failed(&request_id, error),
                 }
             }
+            // The client's answer to a dialog the CLI is holding open. An id
+            // this connection never issued is stale: answering it could reach a
+            // dialog that belongs to another client, so it fails closed.
+            "interaction.respond" => {
+                let interaction_id = operation
+                    .get("interactionId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if !self.interactions.close(&interaction_id) {
+                    self.failed_with_code(
+                        &request_id,
+                        "INTERACTION_STALE",
+                        format!("no outstanding interaction {interaction_id}"),
+                    );
+                    return;
+                }
+                let answer = operation.get("response").cloned().unwrap_or(json!({}));
+                match self.step.reply("extension_ui_response", &interaction_id, answer) {
+                    Ok(()) => self.receipt(&request_id, "completed", Some(json!({ "ok": true }))),
+                    Err(error) => self.failed(&request_id, error.to_string()),
+                }
+            }
             _ => self.receipt(&request_id, "rejected", None),
         }
     }
@@ -435,6 +492,14 @@ impl Session {
             let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
             if std::env::var_os("STEP_STUDIO_TRACE").is_some() {
                 eprintln!("[runtime] cli event {kind} {}", serde_json::to_string(&event).unwrap_or_default().chars().take(300).collect::<String>());
+            }
+            if kind == "extension_ui_request" {
+                let method = event.get("method").and_then(|v| v.as_str()).unwrap_or("");
+                if crate::conversation::is_dialog_method(method) {
+                    if let Some(id) = event.get("id").and_then(|v| v.as_str()) {
+                        self.interactions.open(id);
+                    }
+                }
             }
             if let Some(mapped) = map_event(&event, &self.context) {
                 self.event(mapped.event, mapped.advances_state);
@@ -656,6 +721,7 @@ fn serve_connection(
         state_version: 0,
         command_manifest_hash: command_hash,
         pending_prompt: None,
+        interactions: InteractionRegistry::default(),
     };
 
     // Handshake: the runtime must prove it holds the token before anything else

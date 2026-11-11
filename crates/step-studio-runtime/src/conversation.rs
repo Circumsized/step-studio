@@ -212,6 +212,56 @@ pub fn map_event(event: &Value, context: &MapContext) -> Option<Mapped> {
             }),
             advances_state: true,
         }),
+        // The extension UI sub-protocol. Dialog methods hold the agent open
+        // until the client answers; everything else lands in the UI without
+        // one. The client keeps no clock: the agent side resolves a timeout on
+        // its own, so timeoutMs is display only.
+        "extension_ui_request" => {
+            let method = str_field(event, "method");
+            let interaction_id = str_field(event, "id");
+            if is_dialog_method(&method) {
+                Some(Mapped {
+                    event: json!({
+                        "kind": "conversation.interaction.required",
+                        "sessionId": context.session_id,
+                        "turnId": context.turn_id(),
+                        "interactionId": interaction_id,
+                        "method": method,
+                        "title": event.get("title"),
+                        "message": event.get("message"),
+                        "options": event.get("options"),
+                        "placeholder": event.get("placeholder"),
+                        "prefill": event.get("prefill"),
+                        "timeoutMs": event.get("timeout"),
+                        "requestedAt": now_iso(),
+                    }),
+                    // A lost dialog is a lost turn, so it moves the watermark.
+                    advances_state: true,
+                })
+            } else {
+                Some(Mapped {
+                    event: json!({
+                        "kind": "conversation.interaction.notice",
+                        "sessionId": context.session_id,
+                        "turnId": context.turn_id(),
+                        "interactionId": interaction_id,
+                        "method": method,
+                        "message": event.get("message"),
+                        "notifyType": event.get("notifyType"),
+                        "statusKey": event.get("statusKey"),
+                        "statusText": event.get("statusText"),
+                        "widgetKey": event.get("widgetKey"),
+                        "widgetLines": event.get("widgetLines"),
+                        "widgetPlacement": event.get("widgetPlacement"),
+                        "title": event.get("title"),
+                        "occurredAt": now_iso(),
+                    }),
+                    // Status and widget traffic is frequent and self-healing:
+                    // the next one restates it, so a gap here is noise.
+                    advances_state: false,
+                })
+            }
+        }
         "compaction_start" => Some(Mapped {
             event: json!({
                 "kind": "conversation.compaction.started",
@@ -230,6 +280,13 @@ pub fn map_event(event: &Value, context: &MapContext) -> Option<Mapped> {
         }),
         _ => None,
     }
+}
+
+/// Dialog methods block the agent until the client answers; everything else is
+/// fire-and-forget. Kept beside the mapping so the dispatcher and the mapping
+/// cannot disagree about which is which.
+pub fn is_dialog_method(method: &str) -> bool {
+    matches!(method, "select" | "confirm" | "input" | "editor")
 }
 
 /// Step content blocks onto Studio content blocks.

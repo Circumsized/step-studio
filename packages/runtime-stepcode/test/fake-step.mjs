@@ -14,6 +14,12 @@ const CATALOG = {
   ],
 };
 
+// Dialogs the fake is holding open, keyed by the id it issued. The real CLI
+// blocks the agent on a dialog method until the client answers with the
+// matching id, so the fake has to wait the same way.
+const pendingResponses = new Map();
+const waitForResponse = id => new Promise(resolve => pendingResponses.set(id, resolve));
+
 const state = {
   sessionId: "fake-session",
   model: { provider: "local-gateway", modelId: "stepfun-cn/step-3.7-flash" },
@@ -88,6 +94,30 @@ rl.on("line", line => {
       setTimeout(() => write({ type: "agent_settled" }), 10);
       return;
     }
+    // An approval round trip: a status line that lands without blocking, then
+    // a confirm dialog that holds the turn open until the client answers it.
+    if (text === "approve") {
+      write({ type: "agent_start" });
+      const userEntry = appendEntry("message", { message: userMessage(text) });
+      write({ type: "message_start", message: userMessage(text) });
+      write({ type: "message_end", message: userMessage(text) });
+      write({ type: "extension_ui_request", id: "fake-ui-status", method: "setStatus", statusKey: "fake", statusText: "waiting for approval" });
+      write({ type: "extension_ui_request", id: "fake-ui-1", method: "confirm", title: "Allow dangerous command?", message: "rm -rf /", timeout: 5000 });
+      waitForResponse("fake-ui-1").then((answer) => {
+        const confirmed = answer?.confirmed === true;
+        const verdict = confirmed ? "approved" : "denied";
+        const assistantEntry = appendEntry("message", {
+          message: { role: "assistant", content: [{ type: "text", text: verdict }], stopReason: "stop", timestamp: Date.now() },
+        });
+        write({ type: "message_start", message: { role: "assistant", content: [], stopReason: "pending", timestamp: Date.now() } });
+        write({ type: "message_update", usage: {}, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: verdict } });
+        write({ type: "message_end", message: state.entries.find((entry) => entry.id === assistantEntry.id).message });
+        write({ type: "turn_end", messageRole: "assistant", toolResultCount: 0 });
+        write({ type: "agent_end", willRetry: false, messageCount: 3 });
+        write({ type: "agent_settled" });
+      });
+      return;
+    }
     // A long gap between the last delta and the receipt, so a test can tell
     // streaming from buffering without depending on machine speed.
     // `null` means the turn never settles on its own: only an abort ends it.
@@ -133,6 +163,13 @@ rl.on("line", line => {
         write({ type: "agent_end", willRetry: false, messageCount: 3 });
         write({ type: "agent_settled" });
       }, settleAfter);
+    }
+  }
+  if (message.type === "extension_ui_response") {
+    const resolve = pendingResponses.get(message.id);
+    if (resolve) {
+      pendingResponses.delete(message.id);
+      resolve(message);
     }
   }
   if (message.type === "abort") {

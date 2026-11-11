@@ -40,6 +40,7 @@ const CAPABILITIES: &[(&str, &str, &str)] = &[
         "limited",
         "forks at the latest entry only; the Studio tree/branch surface is not implemented",
     ),
+    ("interaction.respond", "stable", ""),
     (
         "conversation.compaction",
         "unavailable",
@@ -61,6 +62,7 @@ const COMMANDS: &[&str] = &[
     "session.commands.list",
     "session.fork",
     "session.models.list",
+    "interaction.respond",
 ];
 
 pub fn capability_manifest() -> Manifest {
