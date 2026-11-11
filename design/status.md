@@ -81,7 +81,18 @@ Host 直接 spawn 这个可执行文件并传 `--mode studio-host ...`，所以�
 
 不设该变量时行为与 OMP Studio 完全一致（仍走 managed 安装的 OMP 运行时）。
 
-## 原生 Rust 壳（无 webview）
+## 原生 Rust 壳（无 webview）——**已被 v5.0 架构决策取代**
+
+> 用户 2026-11-11 定「外壳使用纯 Tauri」，egui 与 gpui 两个原生面删除。本节描述的实现
+> （`crates/step-studio-shell`，1,993 行）随之成为**死代码，待删**。保留原文仅供删前参照
+> 与历史查证，不再代表产品形态。
+>
+> 删除前要注意的代价：该 crate 承载 **22 个 cargo 测试**（markdown 行分类 7、扩展面板 3、
+> 其余壳内逻辑），删后工作区测试从 41 降到 19。死代码的测试随代码一起消亡是正确的，
+> 但 `plan.md` 与本节里所有「41 个测试」的口径要在删除后同步修订。
+>
+> 它的一项职责已有替代：**无显示环境的 E2E 夹具**——M1.1 已实证 Xvfb + Tauri release
+> 二进制可跑通整链路（见下节），不再需要 egui 壳兜底。
 
 Electron 的 Chromium 进程占整个应用 280–470 MB。`crates/` 下新增 egui/winit 壳把它们
 全部去掉：无 webview、无 Electron，release 二进制 16 MB。
