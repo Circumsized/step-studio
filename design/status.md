@@ -276,9 +276,20 @@ cargo xwin build --release -p step-studio-desktop-tauri --target x86_64-pc-windo
    script 直接 panic：`NotAttempted("llvm-rc")`。
 4. **clang + lld-link**（本机已有 clang 18）。
 
-未解决/未验证：`tauri build` 的 npm CLI 链路（NSIS 安装包）**不能**从 Linux 交叉打包，
-Tauri 官方不支持。所以拿得到 exe 本体，拿不到安装程序——安装包要等 Windows 机器或 CI。
-exe 在目标机运行时需要 WebView2 Runtime（Windows 11 自带，Win10 需安装）。
+**分发不需要安装包**：Tauri 的 release exe 是自包含的（renderer dist 在编译期压进二进制，
+与平台无关），把 exe 拷到 Windows 机器即可直接运行。安装程序（setup.exe / msi）只是体验优化，
+不是分发前提。
+
+未验证项：`tauri build` 的 npm CLI 链路（NSIS 安装包）尚未跑通——需要让 `tauri build` 走
+xwin 的 clang-cl + lld-link 链接器，并把 `~/.cache/cargo-xwin` 里 MSVC CRT 的 include/lib
+路径配成持久化（cargo-xwin 自己是给子进程设环境变量，不写 `.cargo/config.toml`）。
+`makensis` 已装好（v3.09）。这条不影响 exe 产出，只影响"有没有安装向导"。
+
+exe 在目标机运行时需要 WebView2 Runtime（Windows 11 自带，Win10 需安装一次）。
+
+**尚未在 Windows 上运行验证**：exe 编译链接通过，但 init script 能否绕过 WebView2 的
+`script-src`、自定义协议在 WebView2 上提供内嵌资产、bridge 注入时序——这三条只在
+WebKitGTK 上实证过。要真正确认需要一台 Windows 机器或 CI。
 
 ## 尚未完成
 
