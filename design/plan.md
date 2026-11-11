@@ -1,9 +1,10 @@
-# Step Studio 设计开发方案 v4.9
+# Step Studio 设计开发方案 v4.10
 
 > 目标：以 omp-studio 为功能与 UI 基准，用 Rust + TypeScript 重新实现其桌面形态，运行时对接 Step Code CLI，产出 Windows 优先、高性能、低开销、低占用、低存储的可视化智能体平台。
 > **范围（用户 2026-11-11 确认）**：**功能与前端显示基本全复刻 omp-studio，仅把 omp 换成 step**。基准是 `docs/images/` 九张官方截图（README 第 30-86 行的功能说明段），§9.5 矩阵已逐模块对应到具体图片。版式照抄；数据来自 Step——凡 Step 拿不到的，按本节末的「数据源台账」记 unavailable 或自建，不静默留空。
 > 硬约束（用户指定）：**GUI 面板与 omp-studio 像素级一致复刻**；**TUI 做到产品级**；外壳 Tauri + egui + gpui 混合；**尽量减少 WebView 使用**（用户 2026-11-11 解除「禁用 WebView」禁令，收窄为「单实例、只承载 React 工作台」）。
 > 基线：omp-studio 0.1.17（MIT）、Step Code（stepfun-ai/Step-Code，MIT）、本机 step CLI 随附文档与实测探针（2026-11-11）、crates.io/GitHub/npm API 取数（2026-11-11）。
+> 本版相对 v4.9 的变化（slash 命令可经桥抵达，实测）：用户指出「桥上输 /usage 应与 CLI 输 /usage 等效」，实测成立——`/usage` 作为 prompt 发出后被按 slash 命令分发，渲染面板经 `notify` 回传（适配器已处理的 fire-and-forget 通道）。据此：用量面板的数据源从「待定路由」改为「桥上直接可用」，D-2 关闭；并新增通则——CLI 的 TUI 面板类 slash 命令大多可经 `prompt` 取到，不必等 RPC 暴露或自扫文件，代价是回传为 ANSI 文本。此前「`/usage` 不是 RPC 命令所以取不到」的判断据此作废。
 > 本版相对 v4.8 的变化（Agent Hub 数据源查实后修正）：原写「Step RPC 不暴露 subagent 列表与状态」 overstated——真相是子代理会话以 `origin: "subagent"` / id 前缀存在于 `<agentDir>/sessions`，Step 在 `session-index.md` 中**有意**将其排除出所有列表与搜索，故无枚举命令；数据可达，路径为自扫会话目录（Step 自己的 `/usage` 即如此）。D-3 随之定为自建扫描、不等上游，并要求与 `/usage` 共用同一套读取与缓存。
 > 本版相对 v4.7 的变化（范围确认 + 基准图台账）：用户确认「功能与前端显示基本全复刻 omp-studio，仅 omp→step」，写入目标声明；§9.5 增加「基准图」列并逐模块对应 `docs/images/` 九张官方截图；新增 §9.6 数据源台账，把九个基准面对到 Step 实际数据源，其中 Agent Hub（`hub.png`）经实测确认 Step RPC 不暴露 subagent 列表与状态，记为数据源缺失；列出的 D-1 worktree、D-2 用量路由、D-3 Agent Hub 数据源三条岔路待决策。
 > 本版相对 v4.6 的变化（M1.1 实施 + 专家团三路会审）：`apps/desktop-tauri` 落地（Tauri v2 壳、bridge init script、六个 Rust 命令 stub）；`createDesktopIpcBridge` 从 `apps/desktop/src/ipc-validation.ts` 移入 `packages/transport-desktop/src/ipc-validation.ts` 并再导出（M1.2「三桥重建」种子，Electron preload 与测试改为从包导入）；§19 新增 6 条 M1.1 决策（命令名去前缀、单 listen 扇出、双参事件派发、拒绝重包、桥工厂迁移、只注入 ompStudio）；§21 进展更新。修复 `package-lock.json` 缺 `packages/runtime-stepcode` 条目导致 `npm install` 全量失败的问题。
@@ -486,7 +487,7 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 | 工作台欢迎页 | `workbench.png` | 齐 | 无 |
 | 首页项目列表 | `home.png` | **部分** | 项目卡是 worktree 感知的（路径在 `worktrees/` 下）；本方案现行接法把适配器钉在单 repo 根目录（见 `status.md` 续接节）。冲突未解，见决策 D-1 |
 | Skills 侧栏 | `skills.png` | **部分** | 项目 / 全局 / 内置三分组的填充来源未定；Step 侧已声明 `session.extensions.list`、`session.commands.list`，但分组口径要实测 |
-| 对话顶栏用量 | `telemetry.png` | 齐（路由未定） | token、成本、缓存读写、子代理归属、余额百分比 Step 全有（`~/.stepcode/bin/docs/account-usage.md`）；TPS 需自算。但 `/usage` 是 TUI slash 命令不是 RPC，要定取自建扫描还是等上游，见决策 D-2 |
+| 对话顶栏用量 | `telemetry.png` | **齐，桥上直接可用** | 实测（2026-11-11）：把 `/usage` 当普通 prompt 从桥上发过去，CLI 按 slash 命令分发（`extensionPath: "command:usage"`），渲染好的面板经 `extension_ui_request` 的 `notify` 方法回来——走的正是适配器已处理的 fire-and-forget 通道。返回内容是 ANSI 渲染文本（热力图 + Activity insights：总 chats、活跃天、总 token、常用 reasoning、技能发现/使用数）。结构化数字另可从 `get_session_stats` 取；TPS 需自算。**不需要自扫会话文件，也不必等上游** |
 | 供应商管理 | `models.png` | **大幅缩减** | Step 单供应商；上游的多供应商列表、开关、端点、`modelProviderOrder` 大部分空置。版式保留，内容按 Step 实况 |
 | 角色配置 | `roles.png` | 缩减 | 「角色 × 模型 × thinking 档位」结构在；实测 Step 仅 2 个模型（上游 11 角色 × 多模型） |
 | 能力中心 | `capabilities.png` | 基本齐 | 三个 list 命令已声明为 stable |
@@ -496,7 +497,8 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 **三条待决策岔路**（都不阻塞 M1.1-M1.4 的脚手架与挂载，但分别在 M1 首页、M4 用量、M4 Agent Hub 动工前必须定）：
 
 - **D-1 worktree**：每个 worktree 作为独立 project 传给适配器（`--continue` 按 project 各自恢复），还是承认 Step 无 worktree 概念、首页退化为单项目 + 分支切换。判据：Step 的 session 存储键是否为 project 绝对路径。
-- **D-2 用量面板路由**：(a) 等 Step RPC 暴露；(b) 自扫会话 JSONL——Step 自己的 Overview 就是这么做的，且文档给了完整扫描预算（10,000 文件、25,000 条记录、每源行 16 MiB、解析 1s/次、扫描 30s/次，只保留统计与身份元数据的可重建缓存）。
+- **D-2 用量面板路由（已实测解决）**：把 `/usage` 当 prompt 从桥上发过去即得整块面板（`notify` 回来，ANSI 文本）。不等上游、不自扫文件。遗留一个呈现层选择：直接显示 ANSI 文本面板，还是解析出结构化数字后按 `home.png`/`telemetry.png` 的图表重绘——前者零成本但不像素级，后者要写 ANSI 解析。建议前者先落地、后者按需。**注意保持 stdin 不关**，否则活动扫描被取消，只收到 `extension_error`。
+- **通则（2026-11-11 实测）**：**slash 命令可经 `prompt` 抵达**。`rpc.md` 只承诺「extension command 立即执行」，实测内置命令同样被分发（`/usage` → `command:usage`），渲染结果经 `notify` 回传。这意味着 CLI 的 TUI 面板类命令（`/usage`、`/status`、`/models`、`/skills` 等）大多可从桥上直接取到，不必等 RPC 暴露，也不必自己复刻其数据来源。代价是回传为 ANSI 文本而非结构化数据。适配器需保证：发这类 prompt 时不占用会话轮次、且进程 stdin 常开。
 - **D-3 Agent Hub 数据源**：已查实——子代理会话在 `<agentDir>/sessions` 下以 `origin: "subagent"` 或 id 前缀标识，Step 有意将其排除出列表与搜索，故无 RPC 枚举。取自建扫描（读 session 目录 + 识别子代理标记 + `get_session_stats` 取每会话数字），不等上游。扫描时注意：这些文件同时是 `/usage` 的数据源，两边要共用同一套读取与缓存，不要各写一份。
 
 ### 9.6 M3 go/no-go 判据（AT-1 二审，五项全过才原生化）
