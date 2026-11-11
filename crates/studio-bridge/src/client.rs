@@ -235,6 +235,18 @@ impl BridgeSession {
         self.await_reply(&request_id, |_| {})
     }
 
+    /// Take every event that arrived while no command was waiting for them.
+    ///
+    /// Events are broadcast, not addressed: they queue in the inbox and are
+    /// drained by whichever command is awaiting a reply. Between commands
+    /// nothing drains, so a long-lived consumer that also issues commands has
+    /// to empty the queue itself — otherwise a turn's events sit in the inbox
+    /// until the next command happens to collect them.
+    pub fn drain_events(&self) -> Vec<Value> {
+        let mut inbox = self.shared.lock_inbox();
+        inbox.events.drain(..).collect()
+    }
+
     /// Run a command and collect events until its terminal receipt.
     ///
     /// Every event is buffered, so the caller sees the turn only once it is

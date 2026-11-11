@@ -851,6 +851,15 @@ flowchart LR
 | Tauri 依赖显式开 `custom-protocol` | `tauri-build` 的 `is_dev()` 以该 feature 缺失为 dev，裸 `cargo build` 会走 `devUrl` 连不上 localhost；`tauri build` 才隐式传它 | 只依赖 `tauri build` | 不改 |
 | 不开 `security.freezePrototype` | 开了它 renderer bundle 在 import 阶段抛 `Attempted to assign to readonly property`，整个 module 不执行、页面全白；Tauri 文档明示它会打断 polyfill 与部分框架，方案 §8 也从未要求这层硬化 | 开启（脚手架初版），Xvfb 实证推翻 | 若将来要开，先定位是哪个 polyfill 再定向修，不要全局冻结 |
 
+| 泵独占 `BridgeSession`，不用 `Mutex<BridgeSession>` | 事件是广播不是寻址，一个会话上同时只能有一个消费事件的在飞命令；mutex 挡不住两条 Tauri 命令把一路流劈成两半。走同一个线程后这条不变量是结构性的，且 `core.abort` 因此能在回合流式期间照样打到会话——mutex + 计数器方案给不了 | 共享 session + 在飞计数器 | 不改 |
+| `core.prompt` 是唯一的 `Dispatch::Turn`，走 `send_command` 不等回执 | 适配器对它立即回 `accepted`、终态回执等回合结束（`main.ts:603-611`）；等它就把泵占住整个回合，abort 永远进不来。终态回执由 `conversation.turn.completed` 反推合成（该事件不带 requestId，配对只能由泵自记） | 等终态回执再返回 ack（abort 失效） | 适配器补 turn 失败事件后复议 |
+| `conversation.changed` 的 `update` 原样透传 | 适配器事件 payload 本就是 `ConversationRuntimeEvent`，桥只补信封与 `streamSeq`。实测不需要移植 `studio-host` 的事件投影（`conversation-events.ts` / `runtime-projection.ts`），工作量小一个数量级 | 移植 studio-host 的 fanout 与投影 | 不改 |
+| 能力清单由派发表派生，不手写 | renderer 的 `can()`（`App.tsx:3831`）对未声明能力一律 false，空清单让 composer 永久禁用；手写清单会和 `resolve_operation` 静默漂移（界面给一个壳必然拒绝的动作）。单测双向夹住：声明的必须能 resolve，能 resolve 的必须已声明 | 手写一份清单 | 不改 |
+| bootstrap 必须带 `snapshot` | `reduceBootstrap` 把 `bootstrap.snapshot` 放入 `entities.snapshot`，缺了它 `snapshotReady` 永假（`App.tsx:4205`），composer 不启用。编译过、单测过，只有看界面才发现 | 只带 `selected` 的瘦 bootstrap | 不改 |
+| Tauri 壳不复刻 Host，`resolve_operation` 之外一律 `CAPABILITY_UNAVAILABLE` | Electron 主进程组合约 160 个操作，背后是 git / archive / residents / models / workspace 一整套服务（`host-composition.ts` 1556 行），移植不可行也不是本壳职责。renderer 对不可用画诚实空态（AGENTS.md 预览模式同一条纪律） | 把 Host 移植进 Rust | M1.2c-M1.7 复刻阶段重新评估：改为起一个 Node Host 边车、Tauri 壳只做转发（`transport-web` 的 `WebAdapterHost` 已是同一套五方法面），可一次拿到全部 160 个操作 |
+| 新增 `BridgeSession::drain_events()` | 事件只在有命令 await 时被取走，两条命令之间没人取，回合事件会堆到 inbox 里直到下一条命令碰巧取走 | 让每次命令都顺带清空（丢事件或重复） | 不改 |
+| `EventSink` 是可注入闭包而非 `WebviewWindow` | 泵因此能在无窗口下被驱动，`STEP_STUDIO_SELF_CHECK` 靠它在无显示、无法操作 composer 的机器上证明整条回合链路；顺带让泵可测 | 直接持 `WebviewWindow` | 不改 |
+| 状态版本不随 delta 前进 | 适配器只对改变状态的事件递增 `stateVersion`（`main.ts:162-167`），`runtime-projection.ts:38-50` 记了每 token 重发未变 read model 是成本不是功能；镜像它，renderer 的 `advanceConnection` 取最大值才不失真 | 每事件递增（触发 renderer 全量重算） | 不改 |
 **待用户签字项（AT-1 二审要求）**：像素级复刻的范围是否包含窗口拓扑。当前文档口径：像素级 = WebView 承载面的逐页比对，窗口拓扑不在内（终端/diff 若回 WebView 则拓扑也一致，此项自然消解；若 go/no-go 通过走原生独立窗，则必须重新签字）。
 
 可推翻上述任一条的条件：新的实测数据，或用户明确的方向变更。

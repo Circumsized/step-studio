@@ -244,6 +244,87 @@ DPI 150%/200%、IME、xterm.js 帧时与 RSS）；`cargo test --workspace` 并�
 单独跑 8/8 过、复跑两次全绿，未定位到具体用例（最可能是打真实 CLI 与模型 API 的那个在并行
 负载下超时），记为已知抖动。
 
+### M1.2b：query / command 接真实会话 + 事件泵（2026-11-11 完成）
+
+`query` 与 `command` 从 stub 改为走 `src-tauri/src/pump.rs`：一个独占 `BridgeSession` 的
+线程，把 renderer 的 facade 词表翻译成适配器的 operation kind，并把适配器事件包成
+`ClientEvent` 送回。**Xvfb 下真机跑完一整个回合**：用户消息与助手回复都渲染进转写，
+流式逐字到达，回执在回合结束后落地。
+
+自检输出（`STEP_STUDIO_SELF_CHECK=1`，stderr 逐条打印）：
+
+```
+[self-check] prompt accepted
+[self-check] #1  conversation.message.started
+[self-check] #2  conversation.message.completed
+[self-check] #3  conversation.message.started
+[self-check] #4  conversation.message.delta The
+...
+[self-check] #11 conversation.message.delta ONG
+[self-check] #12 conversation.message.completed
+[self-check] receipt core.prompt -> completed
+[self-check] #13 conversation.turn.completed
+[self-check] receipt conversation.open -> completed
+```
+
+设计与实现上的六个决定，每条都由一个具体的约束逼出来：
+
+1. **泵独占会话，不用 `Mutex<BridgeSession>`**。事件是广播不是寻址，所以一个会话上同时只能有
+   一个消费事件的在飞命令；mutex 挡不住两条 Tauri 命令同时 await 两个回执、把一路流劈成两半。
+   所有操作走同一个线程，这条不变量是结构性的，也正因为如此 `core.abort` 能在回合流式期间
+   照样打到会话——这是 mutex + 计数器方案给不了的。
+2. **`core.prompt` 是唯一的 `Dispatch::Turn`**。适配器对它立即回 `accepted`，终态回执要等回合
+   结束（`main.ts:603-611`）。等它就会把泵占住整个回合，abort 永远进不来，所以它走
+   `send_command` 直接放行，终态回执由 `conversation.turn.completed` 反推合成——适配器在那个
+   事件里不报 requestId，配对关系只能由泵自己记。其余操作都是秒回终态，走 `invoke_with`，
+   期间到达的事件由同一个回调转发，模型切换不会吞掉流式。
+3. **`conversation.changed` 的 `update` 原样透传**。适配器事件的 payload 本来就是
+   `ConversationRuntimeEvent`，不需要翻译；桥只补信封与 `streamSeq`。这是 M1.2b 工作量比预期小
+   一个数量级的原因——原先以为要移植 `studio-host` 的事件投影，实测不需要。
+4. **能力清单由派发表派生**。renderer 的 `can()`（`App.tsx:3831`）对未声明的能力一律返回 false，
+   而空清单会让 composer 永远禁用。清单若手写就会和 `resolve_operation` 漂移，且漂移是静默的
+   （界面给一个壳必然拒绝的动作）。所以它由同一张表生成，并有单测双向夹住：声明的必须能
+   resolve，能 resolve 的必须已声明。
+5. **bootstrap 必须带 `snapshot`**。`reduceBootstrap` 把 `bootstrap.snapshot` 放进
+   `entities.snapshot`，缺了它 `snapshotReady` 永远是 false（`App.tsx:4205`），composer 不启用。
+   这一项编译过、单测过，只有看界面才发现。
+6. **不移植 Host**。Electron 主进程组合了约 160 个操作，背后是 git / archive / residents /
+   models / workspace 一整套服务（`apps/desktop/src/host-composition.ts`，1556 行）。这些都不在
+   Tauri 壳里，所以 `resolve_operation` 之外的名字一律返回 `CAPABILITY_UNAVAILABLE`，renderer
+   画诚实空态。复用整个 Host 而不是移植它是另一个决定，已记入方案 §19 决策日志。
+
+途中修掉的与新增的原语：
+
+- **`BridgeSession::drain_events()`**（`crates/studio-bridge/src/client.rs`）。事件只在有命令
+  await 时被取走；两条命令之间没人取，回合的事件会一直堆在 inbox 里直到下一条命令碰巧取走。
+  泵空闲时（`recv_timeout` 50ms）必须自己清空队列。
+- **`EventSink` 是可注入的闭包**，不是 `WebviewWindow`。这样泵能在没有窗口的情况下被驱动——
+  `STEP_STUDIO_SELF_CHECK` 就是靠它在无显示、无法操作 composer 的机器上证明整条回合链路。
+  顺带让泵可测。
+- **状态版本不随 delta 前进**。适配器只对改变状态的事件递增 `stateVersion`（`main.ts:162-167`），
+  `runtime-projection.ts:38-50` 记了为什么每个 token 重发一次未变的 read model 是成本不是功能。
+  镜像这个行为，renderer 的 `advanceConnection` 取最大值才不会失真。
+- **`iso_utc`**：`std` 没有民用日期格式化，workspace 也没有 time crate。内联了 Hinnant 的
+  `civil_from_days`（每个日期库都在用的同一个算法），配四个已知时刻的单测，含闰年与世纪边界。
+
+自检之外，UI 侧证据：Output 面板显示 `conversation.open` 完成；模型选择器解析出
+`step-3.7-flash`；转写里用户消息与助手回复都在。
+
+已知上限（`ponytail:` 注释同级，如实记）：
+
+- **prompt 失败没有终态回执**。适配器的 `core.prompt` catch 只发 `failedReceipt`，那不是事件，
+  泵看不到；只有 `turn.completed` / `turn.aborted` 会合成回执。所以模型侧失败会让 composer
+  停在「运行中」。升级路径：给适配器加一个 turn 失败事件，或让泵对 `core.prompt` 也 await 回执
+  （代价是放弃 abort 能在回合中进入）。用户可手动 abort。
+- **不产 `snapshot` 事件**。`entities.snapshot` 停留在 bootstrap 时的那份，`isStreaming` 等状态
+  在回合中不刷新。选这个方向是因为反方向（snapshot 里 stateVersion 比 bootstrap 旧）会被
+  `reduceSnapshot` 当陈旧丢弃，需要额外对齐。升级路径：回合结束时读一次 `session.state` 再发
+  `snapshot` 事件。
+- **GTK 菜单栏（File / Edit / View / Help）还在**。Linux 上 Tauri 默认带上，omp-studio 没有这一条，
+  属 M1.3 窗口铬的范围。
+- **界面文案仍是 OMP**。侧栏 logo 与状态写的是 "OMP Studio" / "OMP Ready"，窗口标题才是
+  "Step Studio"。用户要求除 omp 改 step 之外基本复刻，这属于待办的改名项，不属 M1.2b 功能范围。
+
 ### 续接是怎么接上的
 
 Step 按 project 存 session，所以壳传给 agent 的工作目录**必须跨启动稳定**——

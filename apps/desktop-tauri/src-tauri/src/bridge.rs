@@ -1,22 +1,33 @@
 //! The Desktop IPC bridge, wired to a real Studio Bridge session.
 //!
-//! M1.2 replaces the M1.1 stubs. The session wiring is ported from
-//! `crates/step-studio-shell/src/bridge_client.rs`, which already drove the
-//! adapter; the difference is only where the event stream goes — that shell
-//! sent over an mpsc channel to its own view, this one emits on the Tauri event
-//! channel the renderer already listens to.
+//! M1.2 wires the Desktop IPC bridge to a real Studio Bridge session. The
+//! session wiring is ported from `crates/step-studio-shell/src/bridge_client.rs`,
+//! which already drove the adapter; the difference is where the event stream
+//! goes — that shell sent over an mpsc channel to its own view, this one emits
+//! on the Tauri event channel the renderer already listens to.
 //!
-//! **M1.2a lands `bootstrap` and `subscribe`.** `query` and `command` stay
-//! stubs until M1.2b, which is where the renderer's `{name, input}` envelope
-//! gets mapped onto Studio operations and the turn's event pump is built —
-//! together, because a turn's events have to be emitted from the same place
-//! that awaits its receipt.
+//! M1.2b added the working half: `query` and `command` are routed through
+//! `pump`, the one thread that owns the session and translates between the
+//! renderer's facade vocabulary and the adapter's operation kinds.
+//!
+//! What this shell does NOT do is reimplement the Host. The Electron main
+//! process composes ~160 operations across github, archive, residents, models
+//! and workspace services that live in `apps/desktop/src/host-composition.ts`;
+//! none of that is here, so anything outside `pump::resolve_operation` returns
+//! an honest unavailable and the renderer draws its empty state. Reusing the
+//! whole Host instead of porting it is a separate decision — see
+//! `design/plan.md` §19.
 
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
+use serde_json::{json, Value};
 use step_studio_bridge::{AdapterLaunch, BridgeSession};
+
+use crate::pump::{self, Job};
 
 /// Rejection payload. Tauri hands the deserialized error to JS, where the
 /// sender re-wraps it as an `Error` so the UI sees a transport failure rather
@@ -28,10 +39,28 @@ pub struct IpcError {
 }
 
 impl IpcError {
-    fn not_migrated(operation: &str) -> Self {
+    /// The renderer re-wraps this as a plain `Error`, so the message is what
+    /// reaches the user. Name the operation and say why it is missing.
+    fn unavailable(operation: &str) -> Self {
         Self {
-            code: "DESKTOP_BRIDGE_NOT_MIGRATED".to_string(),
-            message: format!("desktop bridge: {operation} is not migrated yet (M1.2b)"),
+            code: "CAPABILITY_UNAVAILABLE".to_string(),
+            message: format!(
+                "{operation} 在当前外壳不可用：Tauri 壳只桥接 Step 会话本身，Host 服务（Git / 模型配置 / 归档）尚未接入。"
+            ),
+        }
+    }
+
+    fn gone() -> Self {
+        Self {
+            code: "DESKTOP_BRIDGE_CLOSED".to_string(),
+            message: "desktop bridge: the session has been closed".to_string(),
+        }
+    }
+
+    fn raw(message: String) -> Self {
+        Self {
+            code: "DESKTOP_BRIDGE_ERROR".to_string(),
+            message,
         }
     }
 }
@@ -130,9 +159,27 @@ pub struct SessionState {
     /// The real snapshot once a session is established. Cached because the
     /// webview's `bootstrap` must not block on a socket round-trip.
     pub bootstrap: Mutex<Option<serde_json::Value>>,
-    /// Where events go, set by `subscribe` — the renderer telling us which
-    /// window is listening.
-    pub window: Mutex<Option<tauri::WebviewWindow>>,
+    /// Where events go. Shared with the pump rather than owned by a command,
+    /// because the pump emits from its own thread for the whole turn.
+    pub window: Arc<Mutex<Option<tauri::WebviewWindow>>>,
+    /// The pump's inbox. `close` takes the sender, which ends the pump.
+    pub jobs: Mutex<Option<mpsc::Sender<Job>>>,
+}
+
+/// A live session: the bootstrap the renderer asked for, plus the pump's
+/// identity for the event envelope.
+pub struct Connected {
+    pub bootstrap: serde_json::Value,
+    pub session: BridgeSession,
+    pub runtime_epoch: u64,
+    pub authority_epoch: u64,
+    pub state_version: u64,
+}
+
+/// Query envelopes carry no `requestId`, but the pump correlates by one.
+fn next_query_id() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    format!("tauri-query-{}", COUNTER.fetch_add(1, Ordering::Relaxed))
 }
 
 /// Where the adapter lives. Packaged builds ship the native runtime beside the
@@ -183,7 +230,10 @@ fn env_or(name: &str, fallback: &str) -> String {
 /// shell keeps reporting the unavailable shape. Every failure is printed: a
 /// silent fallback would look identical to a working shell with nothing to
 /// show.
-pub fn connect_session() -> Option<serde_json::Value> {
+///
+/// The session is returned rather than dropped: dropping it would shut the
+/// adapter down, and the pump needs it for the process lifetime.
+pub fn connect_session() -> Option<Connected> {
     let cwd = PathBuf::from(env_or("STEP_STUDIO_CWD", "."));
     let repo_root = find_repo_root(
         &std::env::var_os("STEP_STUDIO_REPO_ROOT")
@@ -235,19 +285,22 @@ pub fn connect_session() -> Option<serde_json::Value> {
         }
     };
 
-    match session.snapshot() {
-        Ok(snapshot) => {
-            // The session is dropped here on purpose in M1.2a: keeping it would
-            // need the command pump, which lands with M1.2b. Reconnecting per
-            // bootstrap is wasteful but honest about where the boundary is.
-            drop(session);
-            Some(bootstrap_from_snapshot(&snapshot))
-        }
+    let snapshot = match session.snapshot() {
+        Ok(snapshot) => snapshot,
         Err(error) => {
             eprintln!("[bridge] snapshot failed: {error}");
-            None
+            return None;
         }
-    }
+    };
+    let bootstrap = bootstrap_from_snapshot(&snapshot);
+    let inner = snapshot.get("snapshot").unwrap_or(&snapshot);
+    Some(Connected {
+        bootstrap,
+        runtime_epoch: session.epoch(),
+        authority_epoch: inner.get("runtimeEpoch").and_then(Value::as_u64).unwrap_or(1),
+        state_version: inner.get("stateVersion").and_then(Value::as_u64).unwrap_or(0),
+        session,
+    })
 }
 
 /// Translate a Studio snapshot into the client contract's `ClientBootstrap`.
@@ -263,6 +316,11 @@ pub fn connect_session() -> Option<serde_json::Value> {
 /// claiming them now would make the renderer offer actions that fail.
 fn bootstrap_from_snapshot(response: &serde_json::Value) -> serde_json::Value {
     let snapshot = response.get("snapshot").unwrap_or(response);
+    // The Studio snapshot IS the OperatorStateSnapshot the renderer keeps in
+    // `entities.snapshot`. Leaving it out is not a smaller payload: with
+    // `snapshot` absent the client holds null forever, `snapshotReady` stays
+    // false (`App.tsx:4205`) and the composer never enables.
+    let state_version = snapshot.get("stateVersion").and_then(Value::as_u64).unwrap_or(0);
     let runtime_id = snapshot
         .get("runtimeId")
         .and_then(|v| v.as_str())
@@ -299,16 +357,20 @@ fn bootstrap_from_snapshot(response: &serde_json::Value) -> serde_json::Value {
             "previewInput": false,
             "openExternal": false,
         },
-        // Empty until M1.2b reads the adapter's declared capability list; the
-        // renderer hides what is not declared, which is the honest state.
-        "capabilityManifest": {
-            "profile": "limited",
-            "generatedAt": "1970-01-01T00:00:00.000Z",
-            "hash": format!("step-studio-{runtime_epoch}"),
-            "capabilities": [],
-        },
-        "commandManifestHash": format!("step-studio-{runtime_epoch}"),
+        // Derived from the dispatch table, so the manifest and what the shell
+        // can actually do cannot disagree. An empty list would leave the
+        // renderer's `can()` false for everything and the composer dead.
+        "capabilityManifest": pump::capability_manifest(),
+        "commandManifestHash": pump::capability_manifest()["hash"]
+            .as_str()
+            .unwrap_or("step-studio")
+            .to_string(),
         "selected": selected,
+        "snapshot": snapshot,
+        "stateVersion": state_version,
+        // The subscription resume point. The pump's first event carries cursor
+        // 1, so starting here leaves no gap for the client to resync on.
+        "cursor": 0,
         "sessionId": session_id,
     })
 }
@@ -330,16 +392,95 @@ pub fn bootstrap(state: tauri::State<'_, SessionState>) -> serde_json::Value {
     }
 }
 
-#[tauri::command]
-pub fn query(request: serde_json::Value) -> Result<serde_json::Value, IpcError> {
-    let _ = request;
-    Err(IpcError::not_migrated("query"))
+/// Send one operation to the pump and wait for its answer.
+///
+/// The wait is bounded by the operation itself: a turn is `Dispatch::Turn`, so
+/// it is answered the moment the adapter accepts it and never blocks here.
+fn round_trip(
+    state: &SessionState,
+    name: &str,
+    input: Value,
+    request_id: &str,
+    want: pump::Want,
+) -> Result<Value, IpcError> {
+    let (operation, dispatch) =
+        pump::resolve_operation(name, &input).ok_or_else(|| IpcError::unavailable(name))?;
+    let sender = state
+        .jobs
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+        .ok_or_else(IpcError::gone)?;
+    let (reply, inbox) = mpsc::channel();
+    sender
+        .send(Job {
+            request_id: request_id.to_string(),
+            command_name: name.to_string(),
+            operation,
+            dispatch,
+            want,
+            reply,
+        })
+        .map_err(|_| IpcError::gone())?;
+    let answer = inbox.recv().map_err(|_| IpcError::gone())?;
+    answer.map_err(IpcError::raw)
 }
 
 #[tauri::command]
-pub fn command(request: serde_json::Value) -> Result<serde_json::Value, IpcError> {
-    let _ = request;
-    Err(IpcError::not_migrated("command"))
+pub fn query(
+    state: tauri::State<'_, SessionState>,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, IpcError> {
+    let name = request.get("queryName").and_then(Value::as_str).unwrap_or_default();
+    let input = request.get("input").cloned().unwrap_or(Value::Null);
+    let payload = round_trip(&state, name, input, &next_query_id(), pump::Want::Result)?;
+    Ok(json!({ "ok": true, "queryName": name, "result": shape_query_result(name, payload) }))
+}
+
+/// Give a query the result shape the facade would have returned.
+///
+/// Two queries need it. `session.state` answers `{snapshot}` while the facade
+/// hands back the snapshot itself. `conversation.open` is the only query whose
+/// result is assembled rather than passed through: the adapter reads a
+/// transcript page, and the renderer also needs the resolved target and the
+/// live-replay watermark.
+fn shape_query_result(name: &str, payload: Value) -> Value {
+    if name == "session.state" {
+        return payload.get("snapshot").cloned().unwrap_or(payload);
+    }
+    if name != "conversation.open" {
+        return payload;
+    }
+    // The adapter reports one session per process, so the page's own id is the
+    // conversation id. The renderer drops live events whose sessionId differs
+    // from `target.conversationSessionId`, so these must agree.
+    let session_id = payload
+        .get("sessionId")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    json!({
+        "target": {
+            "kind": "session",
+            "sessionId": session_id,
+            "conversationSessionId": session_id,
+        },
+        "page": payload,
+        // No replay: the page was just read from the live session, so starting
+        // the watermark at 0 lets every subsequent event apply.
+        "live": { "status": "complete", "watermark": 0, "events": [] },
+    })
+}
+
+#[tauri::command]
+pub fn command(
+    state: tauri::State<'_, SessionState>,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, IpcError> {
+    let name = request.get("commandName").and_then(Value::as_str).unwrap_or_default();
+    let input = request.get("input").cloned().unwrap_or(Value::Null);
+    let request_id = request.get("requestId").and_then(Value::as_str).unwrap_or_default();
+    round_trip(&state, name, input, request_id, pump::Want::Ack)
 }
 
 #[tauri::command]
@@ -356,6 +497,15 @@ pub fn subscribe(
 }
 
 #[tauri::command]
-pub fn close() -> Result<(), IpcError> {
+pub fn close(state: tauri::State<'_, SessionState>) -> Result<(), IpcError> {
+    // Dropping the sender is what ends the pump: its `recv_timeout` then sees a
+    // disconnected channel and returns, which drops the session and with it the
+    // adapter child process.
+    let sender = state
+        .jobs
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .take();
+    drop(sender);
     Ok(())
 }
