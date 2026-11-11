@@ -1,8 +1,9 @@
-# Step Studio 设计开发方案 v4.6
+# Step Studio 设计开发方案 v4.7
 
 > 目标：以 omp-studio 为功能与 UI 基准，用 Rust + TypeScript 重新实现其桌面形态，运行时对接 Step Code CLI，产出 Windows 优先、高性能、低开销、低占用、低存储的可视化智能体平台。
 > 硬约束（用户指定）：**GUI 面板与 omp-studio 像素级一致复刻**；**TUI 做到产品级**；外壳 Tauri + egui + gpui 混合；**尽量减少 WebView 使用**（用户 2026-11-11 解除「禁用 WebView」禁令，收窄为「单实例、只承载 React 工作台」）。
 > 基线：omp-studio 0.1.17（MIT）、Step Code（stepfun-ai/Step-Code，MIT）、本机 step CLI 随附文档与实测探针（2026-11-11）、crates.io/GitHub/npm API 取数（2026-11-11）。
+> 本版相对 v4.6 的变化（M1.1 实施 + 专家团三路会审）：`apps/desktop-tauri` 落地（Tauri v2 壳、bridge init script、六个 Rust 命令 stub）；`createDesktopIpcBridge` 从 `apps/desktop/src/ipc-validation.ts` 移入 `packages/transport-desktop/src/ipc-validation.ts` 并再导出（M1.2「三桥重建」种子，Electron preload 与测试改为从包导入）；§19 新增 6 条 M1.1 决策（命令名去前缀、单 listen 扇出、双参事件派发、拒绝重包、桥工厂迁移、只注入 ompStudio）；§21 进展更新。修复 `package-lock.json` 缺 `packages/runtime-stepcode` 条目导致 `npm install` 全量失败的问题。
 > 本版相对 v4.5 的变化（文档归并，GAP-16）：全部 Step Studio 设计文档迁入仓库内 `design/` 单一目录（`plan.md` 研发方案 + `status.md` 实现状态 + `reference/` 参考资料 + `README.md` 索引与维护纪律）。此前方案放在仓库外，代码提交不带文档，方案与代码各自漂移；本版起 24 节规定「设计与代码同一个提交」修复该问题。内容无实质变更，仅路径引用与维护规则。
 > 本版相对 v4.4 的变化（M0.4 对抗评审后修订，重要）：M0 首版实现对准了自创契约而非 Studio 真实契约，评审抓出后已修正：`interaction.respond` 的线上形状是 `{interactionId, commandId, decision: submit|cancel, value?}`（不是自创的 `response` 对象），按 method 翻译为 CLI 的 `confirmed`/`value`/`cancelled`；dialog 事件改为契约的 `interaction.required`（嵌套 request，kind 为 confirm/select/input/editor，owner/leaseGeneration），fire-and-forget 因契约里没有对应 kind 而 v1 丢弃（不再发明 `conversation.interaction.notice`）；新增 `interaction.resolved`（submitted/cancelled/aborted）并在 stale、abort、shutdown 三条路径发出；bridge 客户端新增 `send_command`（发命令不消费事件流，生产路径的应答方式）；`interaction.respond` capability 降为 limited 并写明限制；COMMANDS 表补齐既有 capability。测试全部改用契约真实形状重写。
 > 本版相对 v4.3 的变化（M0 里程碑完成）：审批环在 Rust 适配器侧落地（9 个 extension_ui method + interaction.respond + INTERACTION_STALE 失败关闭）；真实 CLI 往返实证 dialog 类请求到达 RPC 客户端且应答后 turn 继续（3.3 末新增实测段）；B4 与第 8 节的 profile 隔离假设被实测推翻并修正（隔离 STEP_CODING_AGENT_DIR 会导致 models.json 不被解析、模型 2 变 0、turn 失败，故不隔离 step 自身 profile）；第 21 节进展更新。M0.3 的 Windows 冒烟因无真机阻塞，M0.4 对抗评审进行中。
@@ -807,6 +808,14 @@ flowchart LR
 | egui 不承担终端面板 | 退路 16-24 人日是成本黑洞 | egui 终端退路（v4.2 风险表） | 不改 |
 | 30 天 MVP = M0 + M1.1-M1.4 | 可验证的像素级 dev build | 无 MVP 定义（v4.2） | M1' 后 |
 | 每会话一 step 进程 + 惰性激活 | 上游实测约束 | 进程内切会话（上游不支持） | M2 重入实测后 |
+| Tauri 命令名去掉 `omp-studio:desktop:` 家族前缀 | Tauri 插件命令按 `plugin:name\|cmd` 命名空间化，带冒号的命令名要逐个 rename | 直接用 channel 串作命令名（v4.2 §5.2 原述，不可达） | 不改 |
+| sender 用「单 listen 扇出到 Set」 | Tauri `listen` 返回 Promise，逐订阅注册会让早于 resolve 的 `removeListener` 找不到目标，监听活到窗口生命周期结束 | 每订阅一个 listen + `Map<listener, UnlistenFn>` | M1.2 三桥重建时 |
+| 事件派发传 `(event, payload)` 两个参数 | `subscribeChannel`（`apps/desktop/src/chrome-api.ts:81-93`）解构第二个参数 | 只传 payload：M1.2 所有 chrome/terminal 监听会收到 undefined | 不改 |
+| Tauri 拒绝统一重包为 `Error` | Tauri 拒绝时是 Rust 错误的裸序列化（struct Err 即 `{code, message}`），透传会让真实 ClientErrorCode 泄漏到 UI；Electron 下统一是 TRANSPORT_ERROR | 原样透传 | 不改 |
+| `createDesktopIpcBridge` 移入 `packages/transport-desktop` | `apps/desktop-tauri` 不能跨 app 相对导入（破坏 `rootDir`）；依赖 `desktop/dist` 会在 M5.6 删除 apps/desktop 时断 | 从 `../../desktop/src/ipc-validation.ts` 相对导入（esbuild 能解析，但是把 M1.2 的债提前背） | M1.2 |
+| M1.1 只注入 `ompStudio` | renderer 对另三个 global 全部是可选调用，缺省即降级不白屏 | 同时做 chrome/terminal/remote 三桥（超出 M1.1 的 3-5 人日） | M1.2 |
+| Tauri 依赖显式开 `custom-protocol` | `tauri-build` 的 `is_dev()` 以该 feature 缺失为 dev，裸 `cargo build` 会走 `devUrl` 连不上 localhost；`tauri build` 才隐式传它 | 只依赖 `tauri build` | 不改 |
+| 不开 `security.freezePrototype` | 开了它 renderer bundle 在 import 阶段抛 `Attempted to assign to readonly property`，整个 module 不执行、页面全白；Tauri 文档明示它会打断 polyfill 与部分框架，方案 §8 也从未要求这层硬化 | 开启（脚手架初版），Xvfb 实证推翻 | 若将来要开，先定位是哪个 polyfill 再定向修，不要全局冻结 |
 
 **待用户签字项（AT-1 二审要求）**：像素级复刻的范围是否包含窗口拓扑。当前文档口径：像素级 = WebView 承载面的逐页比对，窗口拓扑不在内（终端/diff 若回 WebView 则拓扑也一致，此项自然消解；若 go/no-go 通过走原生独立窗，则必须重新签字）。
 
@@ -824,11 +833,12 @@ flowchart LR
 
 | 项 | 状态 |
 |---|---|
-| 设计文档 | v4.6 落盘于 `design/plan.md`；两轮专家团 73 条 finding 处置台账见 26 节 |
-| Rust 桥与适配器 | 已跑通真实 Step CLI 与真实模型（25 个 cargo 测试） |
-| egui 壳 | 核心对话链路端到端，egui 0.31；双模式定位 |
-| React renderer | 产品本体，待 Tauri 化（M1） |
-| 审批环 | **M0.1/M0.2 完成**：Rust 适配器 9 method + `interaction.respond` + stale 失败关闭；真实 CLI dialog 往返实证（3.3 末）；e2e 新增 fake 往返与 stale 两测试全绿 |
+| 设计文档 | v4.7 落盘于 `design/plan.md`（v4.7 = M1.1 实施 + 三路专家会审的 6 条决策）；两轮专家团 73 条 finding 处置台账见 26 节 |
+| Rust 桥与适配器 | 已跑通真实 Step CLI 与真实模型（41 个 cargo 测试） |
+| egui 壳 | 核心对话链路端到端 + Catalog 抽屉（扩展/MCP/命令），egui 0.31；双模式定位 |
+| React renderer | 产品本体，已挂载进 Tauri 壳（M1.1）：renderer 零改动，`globalThis.ompStudio` 注入即建 client |
+| Tauri 壳 | **M1.1 完成并实证**：`apps/desktop-tauri` 脚手架 + init script 注入 + 六个命令 stub；clippy 干净、18 个无头单测进核心门禁；Xvfb 下 release 二进制跑通整链路（窗口约 30 秒映射，首屏是完整工作台 + stub 的诚实降级态）。窗口铬/DPI/IME 在 M1.3，WebView2 兼容矩阵在 M1.4 |
+| 审批环 | **M0.1-M0.4 完成**：Rust 适配器 9 method；M0.4 对抗评审后改为对准契约真实形状（`interaction.required` 嵌套 request + `interaction.respond` 的 `{interactionId, commandId, decision, value}` + `interaction.resolved` 三路径 + `send_command`）；真实 CLI dialog 往返实证（3.3 末） |
 | host daemon 化 / gpui 面板 / HQTUI | 未开始 |
 | 性能 harness / Windows 真机 / 双口径实测 | 零实测；M0.3 Windows 冒烟因无真机阻塞（egui 真实 GPU RSS / WebView2 单页 RSS / ConPTY 往返待硬件） |
 

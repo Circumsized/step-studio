@@ -1,0 +1,34 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Step Studio",
+  "version": "0.1.0",
+  "identifier": "com.snowpear.omp-studio",
+  "build": {
+    "frontendDist": "../../renderer/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run build:bridge && npm run dev -w @omp-studio/renderer -- --strictPort",
+    "beforeBuildCommand": "npm run build:bridge && npm run build -w @omp-studio/renderer"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": null,
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: omp-artifact:; media-src 'self' blob: omp-artifact:; font-src 'self' data:; connect-src 'self' omp-artifact: http://localhost:5173 ws://localhost:5173; frame-src 'self' http://127.0.0.1:3847; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "assetProtocol": {
+        "enable": false,
+        "scope": []
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Main window: the fixed desktop-bridge IPC surface only.",
+  "windows": ["main"],
+  "permissions": ["core:event:default"]
+}

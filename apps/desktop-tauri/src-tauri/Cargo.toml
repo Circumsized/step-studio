@@ -1,0 +1,20 @@
+[package]
+name = "step-studio-desktop-tauri"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# `custom-protocol` is NOT in tauri's default feature set, and without it the
+# built binary stays in dev mode: it loads `build.devUrl` instead of the
+# embedded `frontendDist`. `tauri build` passes this feature for you; a plain
+# `cargo build` does not, so it is declared here.
+tauri = { version = "2", features = ["custom-protocol"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+tauri-build = "2"

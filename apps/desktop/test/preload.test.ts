@@ -14,13 +14,12 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import type { ClientEvent, SubscriptionScope } from "@omp-studio/client-contract";
-import { DESKTOP_IPC_CHANNELS } from "@omp-studio/transport-desktop";
-
 import {
   createDesktopIpcBridge,
   DESKTOP_BRIDGE_GLOBAL,
+  DESKTOP_IPC_CHANNELS,
   type DesktopIpcBridge,
-} from "../src/ipc-validation.js";
+} from "@omp-studio/transport-desktop";
 import type { OmpStudioDesktopApi } from "@omp-studio/transport-desktop";
 import { createOmpStudioChromeApi } from "../src/chrome-api.js";
 

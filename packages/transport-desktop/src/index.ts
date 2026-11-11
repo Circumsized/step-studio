@@ -10,6 +10,11 @@ export { createDesktopTransport } from "./desktop-transport.js";
 
 export { DESKTOP_IPC_CHANNELS, type DesktopIpcChannel } from "./channels.js";
 export {
+  createDesktopIpcBridge,
+  DESKTOP_BRIDGE_GLOBAL,
+  type DesktopIpcBridge,
+} from "./ipc-validation.js";
+export {
   ValidationError,
   isPlainObject,
   parseClientQueryRequest,

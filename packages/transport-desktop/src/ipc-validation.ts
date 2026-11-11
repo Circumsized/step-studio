@@ -27,8 +27,8 @@ import type {
 } from "@omp-studio/client-contract";
 // Keep the sandboxed preload on the Node-free client dependency graph.
 import { eventMatchesScope } from "@omp-studio/client";
-import { DESKTOP_IPC_CHANNELS } from "@omp-studio/transport-desktop";
-import type { OmpStudioDesktopApi } from "@omp-studio/transport-desktop";
+import { DESKTOP_IPC_CHANNELS } from "./channels.js";
+import type { OmpStudioDesktopApi } from "./desktop-api.js";
 
 /**
  * Fixed window global under which the preload exposes the Desktop bridge.

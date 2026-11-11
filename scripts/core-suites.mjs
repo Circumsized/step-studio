@@ -37,6 +37,10 @@ export const CORE_NODE_SUITES = [
   "apps/desktop/dist/test/workspace-files.test.js",
   "apps/desktop/dist/test/security.test.js",
   "apps/desktop/dist/test/update-v2.test.js",
+  // The Tauri shell's IPC sender: command mapping, the single shared event
+  // listener, and the rejection re-wrap that keeps Electron's error shape.
+  "apps/desktop-tauri/dist/test/tauri-sender.test.js",
+  "apps/desktop-tauri/dist/test/command-table.test.js",
   "packages/runtime-installer/dist/test/installer.test.js",
   "packages/runtime-installer/dist/test/update-v2.test.js",
 ];

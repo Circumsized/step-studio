@@ -26,7 +26,7 @@ import {
   createDesktopIpcBridge,
   DESKTOP_BRIDGE_GLOBAL,
   type DesktopIpcBridge,
-} from "./ipc-validation.js";
+} from "@omp-studio/transport-desktop";
 import {
   TERMINAL_IPC_CHANNELS,
   type OmpStudioTerminalApi,

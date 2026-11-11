@@ -49,6 +49,28 @@ cd packages/runtime-stepcode && npm run demo -- "hello"
 [`packages/runtime-stepcode/README.md`](packages/runtime-stepcode/README.md)，
 坑点记录在 [`packages/runtime-stepcode/docs/step-rpc-integration.md`](packages/runtime-stepcode/docs/step-rpc-integration.md)。
 
+Tauri 壳（M1.1，dev 模式自带 Vite dev server）：
+
+```bash
+npm run tauri:dev -w @step-studio/desktop-tauri     # 等价 tauri dev
+```
+
+跑内嵌产物的 release 二进制（不需要 dev server）：
+
+```bash
+cargo build --release -p step-studio-desktop-tauri
+./target/release/step-studio-desktop-tauri
+```
+
+注意 **`custom-protocol` feature**：`tauri-build` 的 `is_dev()` 读 `DEP_TAURI_DEV`，而它在
+`tauri` crate 没带 `custom-protocol` feature 时为 true——此时二进制走 `build.devUrl` 而不是
+内嵌的 `frontendDist`，webview 会报 "Could not connect to localhost"。`tauri build` 会替我们
+加这个 feature，裸 `cargo build` 不会，所以 `src-tauri/Cargo.toml` 里显式声明了它。
+
+Xvfb 下首帧慢（实测窗口约 30 秒后才映射），需要 `WEBKIT_DISABLE_COMPOSITING_MODE=1` 与
+`WEBKIT_DISABLE_DMABUF_RENDERER=1`，且 Xvfb 要带 `-ac`（否则 GTK 报
+"Authorization required"）。
+
 桌面壳启动适配器：
 
 ```bash
@@ -92,7 +114,7 @@ cargo build --release
 |  thinking 档位 | **没有 UI**：当前模型只报 `off` 一个档位，manifest 里已如实标 limited |
 | 扩展 / MCP / 命令 | 顶栏 `Catalog` 抽屉：读 `step.plugin.json` 的 `mcpServers` + 一次 `get_commands` RPC |
 
-`cargo test` 25 个测试，含对真实适配器与真实 CLI 的端到端。
+`cargo test` 41 个测试，含对真实适配器与真实 CLI 的端到端。
 
 帧编解码与 `@omp-studio/studio-protocol` 逐字节兼容（大端长度前缀、五键帧头、HMAC
 challenge proof）。第一版我写成了小端 + 只含 body 的长度 + 两键头——对着 mock 全能过，
@@ -139,6 +161,60 @@ Unix domain socket / Windows 命名管道。两个目标都过 `clippy --all-tar
 **Windows 上的运行时行为仍未验证**——没有真机，交叉编译证明不了握手、帧编解码和
 `--continue` 在管道上真的能跑。这一条从「编译不过」变成了「编译过但没跑过」。
 
+## Tauri 壳（M1.1）
+
+`apps/desktop-tauri/` 是替代 `apps/desktop/` 的 Tauri v2 主壳：单个 WebView 承载既有的
+React renderer，进程内直连（M1.2 起接 `studio-bridge` facade）。M1.1 只做「脚手架 +
+renderer 挂载 + bridge 注入」，不含任何面板迁移。
+
+```
+apps/desktop-tauri/
+├── src/preload.ts              init script：createDesktopIpcBridge(tauriSender) → window.ompStudio
+├── src/tauri-sender.ts         Tauri invoke/listen → DesktopIpcBridge sender
+├── test/                       18 个无头测试（无 Tauri 运行时、无 WebView）
+└── src-tauri/                  Cargo.toml、main.rs、bridge.rs（六个 stub）、capabilities、icons
+```
+
+三个关键点：
+
+- **renderer 零改动**。`apps/renderer/src/main.tsx:74` 本来就读 `globalThis.ompStudio` 自己建
+  client，所以壳唯一的任务是注入那个 global。`createDesktopIpcBridge` 已从
+  `apps/desktop/src/ipc-validation.ts` 移进 `packages/transport-desktop/src/ipc-validation.ts`
+  并再导出——Electron preload 与它的测试都改为从包里导入，桥本身一行未改。
+- **init script 走 initialization_script，不走 renderer 侧 import**。让 renderer 直接
+  `import { invoke } from "@tauri-apps/api/core"` 会同时破坏 preload 声明的三条不变量
+  （无通用 invoke、无 IPC 泄漏、桥是唯一桌面 API）。代价是 Tauri 没有 contextBridge，
+  init script 跑在主世界，所以 `Object.defineProperty` 显式设为不可写——这是加固不是边界，
+  真正的不变量按方案 §8 放在 Rust facade。
+- **M1.1 只注入 `ompStudio`**。`ompStudioChrome`/`ompStudioTerminal`/`ompStudioRemote`
+  三个 global 留给 M1.2；renderer 对三者全是可选调用，缺省即降级（性能上报变 no-op、
+  平台改从 UA 推断、终端面板禁用、remote 面板进入本地模式）。
+
+已验证：`cargo check` / `cargo clippy --all-targets -D warnings` 干净（`[lints] workspace = true`
+没有触发 `unsafe_code = "forbid"`）；18 个单测全绿并进了 `scripts/core-suites.mjs`；全量
+`npm run check` 绿（新增 `build:desktop-tauri` 与 `test:desktop-tauri` 两项）；Xvfb 下
+release 二进制跑通了整条链路：窗口约 30 秒后映射，首屏是完整的工作台（侧栏、Composer、
+底部面板、顶部 "Runtime 不可用" 横幅与 "Failed to load usage"——stub 返回的诚实降级态）。
+工作台而非 `<Unavailable />`，证明 init script 先于 renderer bundle 执行、bridge 打通。
+
+ smoke 抓出两个只有真机能发现的问题，都已修：
+
+- **`custom-protocol` feature**：`tauri-build` 的 `is_dev()` 读 `DEP_TAURI_DEV`，而它在
+  `tauri` crate 没带 `custom-protocol` 时为 true——二进制会走 `build.devUrl` 去连 Vite，
+  webview 报 "Could not connect to localhost"。`tauri build` 会替我们加这个 feature，
+  裸 `cargo build` 不会。
+- **`security.freezePrototype`**：开了它，renderer bundle 在 import 阶段就抛
+  `Attempted to assign to readonly property`（ES module 严格模式下直接让整个 module
+  不执行），页面全白。Tauri 自己的文档就写着它会让 polyfills 与部分框架失效。方案 §8
+  从没要求这层硬化，已移除。
+
+init script 先于 renderer bundle 执行这一点已由上面的 smoke 实证（WebKitGTK 口径）。
+
+未验证（按方案 §16.4 口径如实记）：WebView2 上的行为（init script 是否同样绕过 `script-src`、
+DPI 150%/200%、IME、xterm.js 帧时与 RSS）；`cargo test --workspace` 并行跑时 e2e 偶发一失败，
+单独跑 8/8 过、复跑两次全绿，未定位到具体用例（最可能是打真实 CLI 与模型 API 的那个在并行
+负载下超时），记为已知抖动。
+
 ### 续接是怎么接上的
 
 Step 按 project 存 session，所以壳传给 agent 的工作目录**必须跨启动稳定**——
@@ -174,5 +250,11 @@ session。现在用 repo 根目录。
 | `crates/step-studio-runtime/` | 新增：同一适配器的 Rust 实现，壳优先使用 |
 | `crates/step-studio-shell/src/markdown.rs` | 新增：markdown 行分类，与渲染分开以便无窗口测试 |
 | `apps/desktop/src/host-composition.ts` | 改：`STUDIO_RUNTIME_EXECUTABLE` 选择 custom runtime 源，并让显式指定的 limited 运行时获得 session controller |
+| `apps/desktop-tauri/` | 新增：Tauri v2 主壳（M1.1 脚手架 + bridge 注入 + 六个命令 stub） |
+| `packages/transport-desktop/src/ipc-validation.ts` | 新增：`createDesktopIpcBridge` 等从 `apps/desktop/src/` 迁入，桥本身零改动 |
+| `apps/desktop/src/preload.ts` | 改：桥工厂三件套改为从 `@omp-studio/transport-desktop` 导入 |
+| `scripts/architecture.test.mjs` | 改：`transport-desktop` 允许依赖 `client`；`sourceFiles` 跳过 `target`；electron 豁免按路径而非 key 判定 |
+| `scripts/core-suites.mjs` | 改：登记 desktop-tauri 两个测试 |
+| `package-lock.json` | 修：补回缺失的 `packages/runtime-stepcode` 条目（此前任何 `npm install` 都会失败） |
 | `package-lock.json` | 改：登记 `@step-studio/runtime-stepcode` workspace 链接 |
 | 其余 | 与上游一致 |

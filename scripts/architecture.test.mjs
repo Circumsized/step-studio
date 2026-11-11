@@ -22,7 +22,7 @@ const ALLOWED_INTERNAL_DEPS = {
   "studio-protocol": [],
   "client-contract": ["studio-protocol"],
   client: ["client-contract", "studio-protocol"],
-  "transport-desktop": ["client-contract"],
+  "transport-desktop": ["client-contract", "client"],
   "transport-web": ["client-contract"],
   platform: [],
   "platform-win32": ["platform"],
@@ -69,7 +69,9 @@ function sourceFiles(dir) {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const path = join(current, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === "node_modules" || entry.name === "dist") continue;
+        // `target` is a Tauri app's Rust build dir (`src-tauri/target`): hundreds
+        // of thousands of files, none of them TypeScript.
+        if (entry.name === "node_modules" || entry.name === "dist" || entry.name === "target") continue;
         walk(path);
       } else if (/\.[cm]?[jt]sx?$/.test(entry.name) && !/\.test\.[cm]?[jt]sx?$/.test(entry.name)) {
         files.push(path);
@@ -129,16 +131,18 @@ test("packages keep the declared one-way layering", () => {
 test("only the desktop app depends on electron", () => {
   const violations = [];
   for (const unit of units) {
-    if (unit.declared.includes("electron") && unit.key !== "desktop") {
+    if (unit.declared.includes("electron") && unit.relativeDir !== "apps/desktop") {
       violations.push(`${unit.key} declares electron`);
     }
     for (const file of sourceFiles(join(unit.dir, "src"))) {
       for (const specifier of importsOf(file)) {
-        if (specifier === "electron" && unit.key !== "desktop") violations.push(`${name(file)} imports electron`);
+        if (specifier === "electron" && unit.relativeDir !== "apps/desktop") {
+          violations.push(`${name(file)} imports electron`);
+        }
       }
     }
   }
-  assert.deepEqual(violations, [], "electron leaked outside the desktop app");
+  assert.deepEqual(violations, [], "electron leaked outside apps/desktop");
 });
 
 test("only the renderer depends on react", () => {
