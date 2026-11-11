@@ -1,8 +1,10 @@
-# Step Studio 设计开发方案 v4.7
+# Step Studio 设计开发方案 v4.8
 
 > 目标：以 omp-studio 为功能与 UI 基准，用 Rust + TypeScript 重新实现其桌面形态，运行时对接 Step Code CLI，产出 Windows 优先、高性能、低开销、低占用、低存储的可视化智能体平台。
+> **范围（用户 2026-11-11 确认）**：**功能与前端显示基本全复刻 omp-studio，仅把 omp 换成 step**。基准是 `docs/images/` 九张官方截图（README 第 30-86 行的功能说明段），§9.5 矩阵已逐模块对应到具体图片。版式照抄；数据来自 Step——凡 Step 拿不到的，按本节末的「数据源台账」记 unavailable 或自建，不静默留空。
 > 硬约束（用户指定）：**GUI 面板与 omp-studio 像素级一致复刻**；**TUI 做到产品级**；外壳 Tauri + egui + gpui 混合；**尽量减少 WebView 使用**（用户 2026-11-11 解除「禁用 WebView」禁令，收窄为「单实例、只承载 React 工作台」）。
 > 基线：omp-studio 0.1.17（MIT）、Step Code（stepfun-ai/Step-Code，MIT）、本机 step CLI 随附文档与实测探针（2026-11-11）、crates.io/GitHub/npm API 取数（2026-11-11）。
+> 本版相对 v4.7 的变化（范围确认 + 基准图台账）：用户确认「功能与前端显示基本全复刻 omp-studio，仅 omp→step」，写入目标声明；§9.5 增加「基准图」列并逐模块对应 `docs/images/` 九张官方截图；新增 §9.6 数据源台账，把九个基准面对到 Step 实际数据源，其中 Agent Hub（`hub.png`）经实测确认 Step RPC 不暴露 subagent 列表与状态，记为数据源缺失；列出的 D-1 worktree、D-2 用量路由、D-3 Agent Hub 数据源三条岔路待决策。
 > 本版相对 v4.6 的变化（M1.1 实施 + 专家团三路会审）：`apps/desktop-tauri` 落地（Tauri v2 壳、bridge init script、六个 Rust 命令 stub）；`createDesktopIpcBridge` 从 `apps/desktop/src/ipc-validation.ts` 移入 `packages/transport-desktop/src/ipc-validation.ts` 并再导出（M1.2「三桥重建」种子，Electron preload 与测试改为从包导入）；§19 新增 6 条 M1.1 决策（命令名去前缀、单 listen 扇出、双参事件派发、拒绝重包、桥工厂迁移、只注入 ompStudio）；§21 进展更新。修复 `package-lock.json` 缺 `packages/runtime-stepcode` 条目导致 `npm install` 全量失败的问题。
 > 本版相对 v4.5 的变化（文档归并，GAP-16）：全部 Step Studio 设计文档迁入仓库内 `design/` 单一目录（`plan.md` 研发方案 + `status.md` 实现状态 + `reference/` 参考资料 + `README.md` 索引与维护纪律）。此前方案放在仓库外，代码提交不带文档，方案与代码各自漂移；本版起 24 节规定「设计与代码同一个提交」修复该问题。内容无实质变更，仅路径引用与维护规则。
 > 本版相对 v4.4 的变化（M0.4 对抗评审后修订，重要）：M0 首版实现对准了自创契约而非 Studio 真实契约，评审抓出后已修正：`interaction.respond` 的线上形状是 `{interactionId, commandId, decision: submit|cancel, value?}`（不是自创的 `response` 对象），按 method 翻译为 CLI 的 `confirmed`/`value`/`cancelled`；dialog 事件改为契约的 `interaction.required`（嵌套 request，kind 为 confirm/select/input/editor，owner/leaseGeneration），fire-and-forget 因契约里没有对应 kind 而 v1 丢弃（不再发明 `conversation.interaction.notice`）；新增 `interaction.resolved`（submitted/cancelled/aborted）并在 stale、abort、shutdown 三条路径发出；bridge 客户端新增 `send_command`（发命令不消费事件流，生产路径的应答方式）；`interaction.respond` capability 降为 limited 并写明限制；COMMANDS 表补齐既有 capability。测试全部改用契约真实形状重写。
@@ -449,30 +451,52 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 
 ### 9.5 功能模块等价矩阵（按承载面分）
 
-| 模块 | 参照（React） | v4.3 形态 | 承载面 | 期次 |
-|---|---|---|---|---|
-| 工作台壳 / 窗口铬 | renderer 外壳 | 原样 + 几何重校 | WebView | M1 |
-| 首页 / 工作区选择 | HomePage | 原样 | WebView | M1 |
-| 对话流（正文/思考/工具卡） | 对话页 | 原样 | WebView | M1 |
-| Composer | Composer 系列 | 原样 | WebView | M1 |
-| 审批交互 | interaction 卡片 | 原样（9 method） | WebView | M0/M1 |
-| 模型选择 / thinking 档位 | 模型页 | 原样（7 档） | WebView | M1 |
-| 会话管理 | 会话页 | 原样 + daemon 惰性激活 | WebView | M2 |
-| Agent Hub / Skills / MCP / 设置 | 对应页面 | 原样 | WebView | M4 |
-| 用量面板 | 用量页 | 原样（耗时自计） | WebView | M4 |
-| Git / GitHub 面板 | Git 面板 | 原样（gix 读 + CLI 写） | WebView | M3 |
-| 工作区文件树 | 文件树 | 原样（ignore 遍历） | WebView | M3 |
-| 终端 | xterm.js + node-pty | **原样（WebView，AT-1 二审默认）** | WebView | M1/M3 |
-| diff 审查 | diff 面板 | **原样（WebView，AT-1 二审默认）** | WebView | M3 |
-| 进程树监控 | 诊断页 | go/no-go：gpui 原生或 WebView 实现 + TUI 双呈现 | gpui 或 WebView + TUI | M3/M4 |
-| Agent 状态监控 | 工具卡 + 诊断 | WebView 卡片 + TUI 仪表盘 | WebView + TUI | M4 |
-| 诊断 / 日志 | 诊断页 | 原样 | WebView | M4 |
-| 预览模式 | preview fixtures | 原样 | WebView | M4 |
-| 托盘 / 菜单 / 单实例 | tray/app-menu | Tauri 插件 + 自研权威锁 | Tauri 壳 | M5 |
-| 轻量对话模式 | 无（新增） | 纯对话最低内存壳 | egui | M5 |
-| 终端仪表盘 | 无（新增） | 产品级 TUI | HQTUI | M6a |
+| 模块 | 参照（React） | 基准图（`docs/images/`） | v4.3 形态 | 承载面 | 期次 |
+|---|---|---|---|---|---|
+| 工作台壳 / 窗口铬 | renderer 外壳 | `workbench.png` | 原样 + 几何重校 | WebView | M1 |
+| 首页 / 工作区选择 | HomePage | `home.png` | 原样（worktree 项目列表见下） | WebView | M1 |
+| 对话流（正文/思考/工具卡） | 对话页 | 无对应图 | 原样 | WebView | M1 |
+| Composer | Composer 系列 | 无对应图 | 原样 | WebView | M1 |
+| 审批交互 | interaction 卡片 | 无对应图 | 原样（9 method） | WebView | M0/M1 |
+| 模型选择 / thinking 档位 | 模型页 | `models.png` `roles.png` | 原样；供应商仅 Step 一家、角色数以 Step 实测为准 | WebView | M1 |
+| 会话管理 | 会话页 | 无对应图 | 原样 + daemon 惰性激活 | WebView | M2 |
+| Agent Hub / Skills / MCP / 设置 | 对应页面 | `hub.png` `capabilities.png` `skills.png` | 原样；Agent Hub 数据源见下 | WebView | M4 |
+| 用量面板 | 用量页 | `telemetry.png` `home.png` | 原样（耗时自计；Step `/usage` 已有 token/成本/缓存/子代理归属/余额百分比） | WebView | M4 |
+| Git / GitHub 面板 | Git 面板 | `git.png` | 原样（gix 读 + CLI 写） | WebView | M3 |
+| 工作区文件树 | 文件树 | 无对应图 | 原样（ignore 遍历） | WebView | M3 |
+| 终端 | xterm.js + node-pty | 无对应图 | **原样（WebView，AT-1 二审默认）** | WebView | M1/M3 |
+| diff 审查 | diff 面板 | 无对应图 | **原样（WebView，AT-1 二审默认）** | WebView | M3 |
+| 进程树监控 | 诊断页 | 无对应图 | go/no-go：gpui 原生或 WebView 实现 + TUI 双呈现 | gpui 或 WebView + TUI | M3/M4 |
+| Agent 状态监控 | 工具卡 + 诊断 | 无对应图 | WebView 卡片 + TUI 仪表盘 | WebView + TUI | M4 |
+| 诊断 / 日志 | 诊断页 | 无对应图 | 原样 | WebView | M4 |
+| 预览模式 | preview fixtures | 无对应图 | 原样 | WebView | M4 |
+| 托盘 / 菜单 / 单实例 | tray/app-menu | 无对应图 | Tauri 插件 + 自研权威锁 | Tauri 壳 | M5 |
+| 轻量对话模式 | 无（新增） | 无对应图 | 纯对话最低内存壳 | egui | M5 |
+| 终端仪表盘 | 无（新增） | 无对应图 | 产品级 TUI | HQTUI | M6a |
 
 像素签收按本矩阵逐模块估（约 1-2 人日/模块，19 个 WebView 模块合计估 20-38 人日，摊到 M1 至 M4），替代原打包估算（IM-4）。
+
+### 9.6 九张基准图的数据源台账（v4.8 新增）
+
+按用户 2026-11-11 的范围要求（功能与前端显示基本全复刻，仅 omp→step），把九个基准面逐一对到 Step 的实际数据源。**版式一律照抄；此表只记数据从哪来、缺多少。**
+
+| 基准面 | 图 | 数据源状态 | 差距与处置 |
+|---|---|---|---|
+| 工作台欢迎页 | `workbench.png` | 齐 | 无 |
+| 首页项目列表 | `home.png` | **部分** | 项目卡是 worktree 感知的（路径在 `worktrees/` 下）；本方案现行接法把适配器钉在单 repo 根目录（见 `status.md` 续接节）。冲突未解，见决策 D-1 |
+| Skills 侧栏 | `skills.png` | **部分** | 项目 / 全局 / 内置三分组的填充来源未定；Step 侧已声明 `session.extensions.list`、`session.commands.list`，但分组口径要实测 |
+| 对话顶栏用量 | `telemetry.png` | 齐（路由未定） | token、成本、缓存读写、子代理归属、余额百分比 Step 全有（`~/.stepcode/bin/docs/account-usage.md`）；TPS 需自算。但 `/usage` 是 TUI slash 命令不是 RPC，要定取自建扫描还是等上游，见决策 D-2 |
+| 供应商管理 | `models.png` | **大幅缩减** | Step 单供应商；上游的多供应商列表、开关、端点、`modelProviderOrder` 大部分空置。版式保留，内容按 Step 实况 |
+| 角色配置 | `roles.png` | 缩减 | 「角色 × 模型 × thinking 档位」结构在；实测 Step 仅 2 个模型（上游 11 角色 × 多模型） |
+| 能力中心 | `capabilities.png` | 基本齐 | 三个 list 命令已声明为 stable |
+| Agent Hub | `hub.png` | **缺** | Step RPC **不暴露 subagent 列表与状态**（`session.state` 只返回当前分支快照，capability 面无任何枚举命令）。子代理的 token/成本归属只在会话 JSONL 里。要复刻此面必须自扫会话文件或推动上游补 RPC，见决策 D-3 |
+| Git 面板 | `git.png` | 齐（自建） | gix 读 + CLI 写，M3 已排 |
+
+**三条待决策岔路**（都不阻塞 M1.1-M1.4 的脚手架与挂载，但分别在 M1 首页、M4 用量、M4 Agent Hub 动工前必须定）：
+
+- **D-1 worktree**：每个 worktree 作为独立 project 传给适配器（`--continue` 按 project 各自恢复），还是承认 Step 无 worktree 概念、首页退化为单项目 + 分支切换。判据：Step 的 session 存储键是否为 project 绝对路径。
+- **D-2 用量面板路由**：(a) 等 Step RPC 暴露；(b) 自扫会话 JSONL——Step 自己的 Overview 就是这么做的，且文档给了完整扫描预算（10,000 文件、25,000 条记录、每源行 16 MiB、解析 1s/次、扫描 30s/次，只保留统计与身份元数据的可重建缓存）。
+- **D-3 Agent Hub 数据源**：同 (b) 的自扫路线（子代理归属已在会话文件里），或推动上游补 RPC。若两条都不走，此面按 unavailable 处理并在界面明示。
 
 ### 9.6 M3 go/no-go 判据（AT-1 二审，五项全过才原生化）
 
