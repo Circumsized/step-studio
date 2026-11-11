@@ -205,8 +205,26 @@ apps/desktop-tauri/
 没有触发 `unsafe_code = "forbid"`）；18 个单测全绿并进了 `scripts/core-suites.mjs`；全量
 `npm run check` 绿（新增 `build:desktop-tauri` 与 `test:desktop-tauri` 两项）；Xvfb 下
 release 二进制跑通了整条链路：窗口约 30 秒后映射，首屏是完整的工作台（侧栏、Composer、
-底部面板、顶部 "Runtime 不可用" 横幅与 "Failed to load usage"——stub 返回的诚实降级态）。
-工作台而非 `<Unavailable />`，证明 init script 先于 renderer bundle 执行、bridge 打通。
+底部面板）。工作台而非 `<Unavailable />`，证明 init script 先于 renderer bundle 执行。
+
+### M1.2a：bootstrap 接真实会话（2026-11-11 完成）
+
+`bootstrap` 从 stub 改为接真实 `BridgeSession`：连接适配器、取 snapshot、翻译成
+`ClientBootstrap`。**Xvfb 下状态栏从「Studio ● Unavailable」变成「Studio ● OMP Ready」**，
+两条错误横幅消失，工作台完整渲染（usage 与麦克风两项仍报不可用，属 M1.2b/c）。
+
+途中修掉三个只有真机能抓的问题：
+
+1. **`native_runtime_command` 重复候选污染 argv**：原版 egui 壳是「首个匹配即返回」，我移植时
+   "简化"成 `.filter().map().collect()`，而 beside_exe 与 `target/release/` 命中同一个文件，
+   于是 `AdapterLaunch.command` 有两个元素，`spawn` 把第二份当成参数传给适配器，报
+   `unknown argument <自身路径>`。
+2. **`app.manage()` 存了 `Arc<SessionState>` 而命令要 `State<SessionState>`**：Tauri 按类型存取，
+   包装一层就全部 miss，renderer 收到 "state not managed"。
+3. **Studio snapshot ≠ ClientBootstrap**：直接把 snapshot 返给 renderer 会得到
+   "Client contract mismatch: expected 2, received undefined"——两者形状不同，必须翻译。
+
+这三个都能编译过、都能被单测漏掉，只有跑起来才暴露。
 
  smoke 抓出两个只有真机能发现的问题，都已修：
 

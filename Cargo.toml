@@ -21,3 +21,4 @@ serde_json = "1"
 hmac = "0.12"
 sha2 = "0.10"
 base64 = "0.22"
+step-studio-bridge = { path = "crates/studio-bridge" }

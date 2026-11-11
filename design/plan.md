@@ -1,9 +1,10 @@
-# Step Studio 设计开发方案 v5.0
+# Step Studio 设计开发方案 v5.1
 
 > 目标：以 omp-studio 为功能与 UI 基准，用 Rust + TypeScript 重新实现其桌面形态，运行时对接 Step Code CLI，产出 Windows 优先、高性能、低开销、低占用、低存储的可视化智能体平台。
 > **范围（用户 2026-11-11 确认）**：**功能与前端显示基本全复刻 omp-studio，仅把 omp 换成 step**。基准是 `docs/images/` 九张官方截图（README 第 30-86 行的功能说明段），§9.5 矩阵已逐模块对应到具体图片。版式照抄；数据来自 Step——凡 Step 拿不到的，按本节末的「数据源台账」记 unavailable 或自建，不静默留空。
 > 硬约束（用户指定）：**GUI 面板与 omp-studio 像素级一致复刻**；**TUI 做到产品级**；**外壳纯 Tauri**：单个 WebView 承载全部面板（用户 2026-11-11 定，推翻此前的「Tauri + egui + gpui 混合」与「尽量减少 WebView」）。
 > 基线：omp-studio 0.1.17（MIT）、Step Code（stepfun-ai/Step-Code，MIT）、本机 step CLI 随附文档与实测探针（2026-11-11）、crates.io/GitHub/npm API 取数（2026-11-11）。
+> 本版相对 v5.0 的变化（M1.2a 实施）：`bootstrap` 从 stub 改为接真实 `BridgeSession`（连接适配器→取 snapshot→翻译成 `ClientBootstrap`），Xvfb 实证状态栏由「Unavailable」变「OMP Ready」。`step-studio-bridge` 加入 workspace.dependencies 与 Tauri crate 依赖。新增一条实施纪律：移植既有代码时不得把「首个匹配即返回」的循环改写成收集式迭代——本次正因此把适配器自身路径当成参数传了进去。
 > 本版相对 v4.10 的变化（**外壳纯 Tauri，架构级变更**）：用户定「外壳使用纯 Tauri」，删除 egui 与 gpui 两个原生面——FR-2 由四表面收窄为二表面（Tauri + HQTUI TUI），§0 结论摘要、架构图、Rust 职责、目录树同步更新；`crates/step-studio-shell` 标记为死代码待删（其无头夹具职责已由 Xvfb + Tauri release 二进制承接，M1.1 实证）；M3 的终端/diff go/no-go 与 gpui 五项 go/no-go 全部关闭；新增两条决策记录——纯 Tauri 的理由与代价、以及内存代价改由 G-1 单独承担（失去 egui 118 MB 低开销模式兜底）。
 > 本版相对 v4.9 的变化（slash 命令可经桥抵达，实测）：用户指出「桥上输 /usage 应与 CLI 输 /usage 等效」，实测成立——`/usage` 作为 prompt 发出后被按 slash 命令分发，渲染面板经 `notify` 回传（适配器已处理的 fire-and-forget 通道）。据此：用量面板的数据源从「待定路由」改为「桥上直接可用」，D-2 关闭；并新增通则——CLI 的 TUI 面板类 slash 命令大多可经 `prompt` 取到，不必等 RPC 暴露或自扫文件，代价是回传为 ANSI 文本。此前「`/usage` 不是 RPC 命令所以取不到」的判断据此作废。
 > 本版相对 v4.8 的变化（Agent Hub 数据源查实后修正）：原写「Step RPC 不暴露 subagent 列表与状态」 overstated——真相是子代理会话以 `origin: "subagent"` / id 前缀存在于 `<agentDir>/sessions`，Step 在 `session-index.md` 中**有意**将其排除出所有列表与搜索，故无枚举命令；数据可达，路径为自扫会话目录（Step 自己的 `/usage` 即如此）。D-3 随之定为自建扫描、不等上游，并要求与 `/usage` 共用同一套读取与缓存。
@@ -870,7 +871,7 @@ flowchart LR
 | Rust 桥与适配器 | 已跑通真实 Step CLI 与真实模型（41 个 cargo 测试） |
 | egui 壳 | 核心对话链路端到端 + Catalog 抽屉（扩展/MCP/命令），egui 0.31；双模式定位 |
 | React renderer | 产品本体，已挂载进 Tauri 壳（M1.1）：renderer 零改动，`globalThis.ompStudio` 注入即建 client |
-| Tauri 壳 | **M1.1 完成并实证**：`apps/desktop-tauri` 脚手架 + init script 注入 + 六个命令 stub；clippy 干净、18 个无头单测进核心门禁；Xvfb 下 release 二进制跑通整链路（窗口约 30 秒映射，首屏是完整工作台 + stub 的诚实降级态）。窗口铬/DPI/IME 在 M1.3，WebView2 兼容矩阵在 M1.4 |
+| Tauri 壳 | **M1.1 完成并实证**，M1.2a（bootstrap 接真实会话）已完成：状态栏由「Unavailable」变「OMP Ready」；`apps/desktop-tauri` 脚手架 + init script 注入 + 六个命令 stub；clippy 干净、18 个无头单测进核心门禁；Xvfb 下 release 二进制跑通整链路（窗口约 30 秒映射，首屏是完整工作台 + stub 的诚实降级态）。窗口铬/DPI/IME 在 M1.3，WebView2 兼容矩阵在 M1.4 |
 | 审批环 | **M0.1-M0.4 完成**：Rust 适配器 9 method；M0.4 对抗评审后改为对准契约真实形状（`interaction.required` 嵌套 request + `interaction.respond` 的 `{interactionId, commandId, decision, value}` + `interaction.resolved` 三路径 + `send_command`）；真实 CLI dialog 往返实证（3.3 末） |
 | host daemon 化 / gpui 面板 / HQTUI | 未开始 |
 | 性能 harness / Windows 真机 / 双口径实测 | 零实测；M0.3 Windows 冒烟因无真机阻塞（egui 真实 GPU RSS / WebView2 单页 RSS / ConPTY 往返待硬件） |
