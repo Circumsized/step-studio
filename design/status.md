@@ -158,7 +158,7 @@ session。现在用 repo 根目录。
 - **其余命令映射**：`turn.retry`、`session.drop`、`session.clearContext`、
   `session.handoff`、`mode.plan.*` 未实现；`switch_session`/`clone`/`get_tree`/
   `get_messages`/`get_session_stats`/`compact`/`bash` 等未接（适配器缺口清单
-  见设计文档 11.4）
+  见 [`design/plan.md`](plan.md) 11.4）
 - **审批 UI**：Rust 壳与 renderer 都还没有审批卡片界面，适配器侧契约已通、
   界面侧未接（M1 起）
 - **Agent Hub 的子 agent 编排**：Step 有并行 subagent，但 RPC 没暴露列表与状态

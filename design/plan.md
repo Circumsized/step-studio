@@ -1,0 +1,897 @@
+# Step Studio 设计开发方案 v4.6
+
+> 目标：以 omp-studio 为功能与 UI 基准，用 Rust + TypeScript 重新实现其桌面形态，运行时对接 Step Code CLI，产出 Windows 优先、高性能、低开销、低占用、低存储的可视化智能体平台。
+> 硬约束（用户指定）：**GUI 面板与 omp-studio 像素级一致复刻**；**TUI 做到产品级**；外壳 Tauri + egui + gpui 混合；**尽量减少 WebView 使用**（用户 2026-11-11 解除「禁用 WebView」禁令，收窄为「单实例、只承载 React 工作台」）。
+> 基线：omp-studio 0.1.17（MIT）、Step Code（stepfun-ai/Step-Code，MIT）、本机 step CLI 随附文档与实测探针（2026-11-11）、crates.io/GitHub/npm API 取数（2026-11-11）。
+> 本版相对 v4.5 的变化（文档归并，GAP-16）：全部 Step Studio 设计文档迁入仓库内 `design/` 单一目录（`plan.md` 研发方案 + `status.md` 实现状态 + `reference/` 参考资料 + `README.md` 索引与维护纪律）。此前方案放在仓库外，代码提交不带文档，方案与代码各自漂移；本版起 24 节规定「设计与代码同一个提交」修复该问题。内容无实质变更，仅路径引用与维护规则。
+> 本版相对 v4.4 的变化（M0.4 对抗评审后修订，重要）：M0 首版实现对准了自创契约而非 Studio 真实契约，评审抓出后已修正：`interaction.respond` 的线上形状是 `{interactionId, commandId, decision: submit|cancel, value?}`（不是自创的 `response` 对象），按 method 翻译为 CLI 的 `confirmed`/`value`/`cancelled`；dialog 事件改为契约的 `interaction.required`（嵌套 request，kind 为 confirm/select/input/editor，owner/leaseGeneration），fire-and-forget 因契约里没有对应 kind 而 v1 丢弃（不再发明 `conversation.interaction.notice`）；新增 `interaction.resolved`（submitted/cancelled/aborted）并在 stale、abort、shutdown 三条路径发出；bridge 客户端新增 `send_command`（发命令不消费事件流，生产路径的应答方式）；`interaction.respond` capability 降为 limited 并写明限制；COMMANDS 表补齐既有 capability。测试全部改用契约真实形状重写。
+> 本版相对 v4.3 的变化（M0 里程碑完成）：审批环在 Rust 适配器侧落地（9 个 extension_ui method + interaction.respond + INTERACTION_STALE 失败关闭）；真实 CLI 往返实证 dialog 类请求到达 RPC 客户端且应答后 turn 继续（3.3 末新增实测段）；B4 与第 8 节的 profile 隔离假设被实测推翻并修正（隔离 STEP_CODING_AGENT_DIR 会导致 models.json 不被解析、模型 2 变 0、turn 失败，故不隔离 step 自身 profile）；第 21 节进展更新。M0.3 的 Windows 冒烟因无真机阻塞，M0.4 对抗评审进行中。
+> 本版相对 v4.2 的变化（两轮专家团交叉审计后修订）：5 路审计 + 3 路二审共 73 条 finding，处置台账见第 26 节。要点：M1 接法定为进程内 facade 过渡（IM-3）；终端/diff 承载默认回 WebView 并设 M3 go/no-go（AT-1 二审）；内存预算改增量式、门禁改 G-1/G-2/G-3 三结构且「应用自身 < 200 MB」降级为待判决（PV 二审）；M0 改分支式验收并砍 TS 侧重复实现（IM-1/2）；定义 30 天 MVP（IM-9）；M6 拆 M6a/M6b；新增升级迁移回滚、可访问性与本地化、许可合规三章；修正环境变量名、WBS 加总、追溯闭合等 23 处内部不一致。
+
+---
+
+## 0. 结论摘要
+
+| 项 | 决策 | 一行理由 |
+|---|---|---|
+| 主外壳 | Tauri v2 + **单一 WebView** + React renderer 原样复用 | 像素级复刻 omp-studio 的唯一路径 |
+| 终端 / diff 承载 | **默认 WebView（xterm.js/CodeMirror 在库）**，M3 go/no-go 不过关则维持 | 二审判决：拓扑像素级是第一门禁约束，原生化收益未实测且落在 WebView2 不确定带内；gpui Windows 浮动子窗能力上游缺失 |
+| gpui 原表面板 | 范围收缩为「进程树监控」一个候选（htop 式新形态，无像素级义务），go/no-go 不过则整体推迟 | 同一协调成本只换一个面板时收益需单独论证 |
+| egui 轻量壳 | 双模式（直连适配器 / 经 daemon）+ 无头夹具 + gpui 失效退路 | 在库 1,993 行资产；**不承担终端面板实现**（退路成本 16-24 人日是黑洞） |
+| TUI | HQTUI Rust 移植版 fork 自管，产品级 | 用户定向；TS 版需 JS 运行时或 88 MB 编译产物 |
+| M1 接法 | Tauri 壳进程内 facade 直连 Rust 适配器（复现 3.4 实测路径），`HostTransport` trait 双实现，M2.4 删过渡 | studio-host 是无 bin 的库，(a) 要么嵌 JS 运行时要么新写第三条协议面；(c) 复用已验证事实 |
+| Host | 常驻 daemon（Rust/tokio），壳是客户端；壳重启不杀会话 | tty7 模式 |
+| 内存门禁 | G-1 壳底座（绑 N=0/S=1，前置条件 WebView2+renderer 实测 ≤165 MB）/ G-2 每面板增量 / G-3 全树（绑 N≤1/S=1） | 原「应用自身 < 200 MB」不可辩护：阈值落在 WebView2 不确定带内且未绑 N |
+| 杠杆归因 | 应用自身口径第一杠杆是终端原生化（若 go/no-go 通过）；全树口径第一杠杆是惰性激活；MemoryHints 退出杠杆表降为卫生默认 | MemoryHints 对 WebView 无效；200 MB 是第三方差值禁入预算行 |
+| 更新机制 | ed25519 签名清单 + 公钥 bake + daemon 热替换序列（排空→换包→重启） | daemon 常驻决定升级时旧进程必然在跑 |
+| 30 天 MVP | M0 + M1.1-M1.4，dev build，明确不得对外分发 | 第一个可分发里程碑是 M5 |
+| 插件沙箱 | rquickjs 单轨 + Bun 逃生舱（M6b） | deno_core 的 V8 约 21 MB 二进制不相容 |
+| 规模量级 | MVP 17-29 人日；全量估算见 16.3（按 2-3 人并行给日历） | 像素签收按 9.5 矩阵逐模块估，不打折 |
+
+---
+
+## 1. 背景与目标
+
+### 1.1 目标
+
+- Windows 10/11 x64 桌面应用；主链路：登录 → 工作区 → 会话 → 流式对话 → 工具审批 → 会话恢复。
+- GUI 面板与 omp-studio **像素级一致复刻**（WebView 承载面；窗口拓扑是否在像素级范围内见 19 节待签字项）。
+- 四表面同一核心：Tauri 桌面壳（像素级）、gpui 原表面板（候选，go/no-go 约束）、egui 轻量壳（低开销）、HQTUI TUI（产品级终端）。
+- 计算全部下沉 Rust，UI 只做纯视图投影。
+
+### 1.2 约束演变记录
+
+- 2026-11-11 早前：用户指令「不使用任何 WebView」，v3.0 至 v3.2 按 egui 单壳设计。
+- 2026-11-11 当日：用户解除禁令，改为「Tauri + egui + gpui 混合、像素级复刻、尽量减少 WebView 使用」。
+- 现行约束：WebView **允许但最小化**：全局单实例、只承载 React 工作台。面板移出 WebView 的判定标准（v4.3 收紧）：**先实测该面板在 WebView 内成为瓶颈，且协调原型通过 go/no-go，两个条件同时满足才迁移**。
+
+### 1.3 非目标（v4.3）
+
+- 多 WebView 实例（标签页/面板一律前端组件化管理）。
+- 不打补丁改 Step Code 上游；cron/plan/subagents/btw/goal/ultracode 等留 v2 补丁路线（命令面权威清单见 5.3 未接项）。
+- 不做 `session.openInTui` 会话交接；TUI 是独立表面。
+- 不做 macOS / Linux；`platform-darwin` 弃用并同步改架构门禁表。PDEATHSIG 等 POSIX 专有机制留档不用。
+- 不做远程工作区、手机连接、插件市场、delta 更新。
+- 不复制 Step 会话文件到自有存储（SQLite 只放索引与用量）。
+- gpui 不承担 WebView 能像素级完成的面板；egui 不承担终端面板实现。
+- 机密项目纪律：不向任何外部仓库提交 PR/issue。
+- i18n 非 v1 目标（v1 中文界面；英文与 RTL 后续），但高 DPI 与键盘可达是 v1 要求（见第 24 节）。
+- 屏幕阅读器语义支持非 v1 目标，诚实记账（第 24 节）。
+- 不追求「比 Rust 更快」式叙事：投影链路微秒级，瓶颈在等模型与进程启动。
+
+---
+
+## 2. 需求规格
+
+### 2.1 功能需求
+
+| 编号 | 需求 | 来源 |
+|---|---|---|
+| FR-1 | 运行时对接 Step Code CLI：复用 Studio Bridge 协议，零上游补丁，版本下限探测 | v1.0 延续 |
+| FR-2 | 四表面：Tauri 主壳（单 WebView 像素级）、gpui 原表面板（go/no-go 约束）、egui 轻量壳、HQTUI TUI | 用户指定 |
+| FR-3 | omp-studio 功能模块全量等价（矩阵见 9.5） | 用户指定 |
+| FR-4 | 审批交互：9 个 `extension_ui_request` method 全处理，Full Access 二次确认，plan 提案 UI | 3.3 实测 |
+| FR-5 | 会话管理：创建/恢复/树/归档/惰性激活/热进程窗口 | 3.3 实测 |
+| FR-6 | 工作台能力：git（gix 读 + CLI 写）、文件树、终端、diff 审查、进程树监控、Agent 状态监控、用量 | omp-studio 等价 |
+| FR-7 | 插件系统：rquickjs 沙箱 + 白名单能力 + TS 类型剥离 + Bun 逃生舱 | 预算约束推导 |
+| FR-8 | MCP：rmcp client + TS server 按 stdio 托管 + 纳入进程树 | 组件选型 |
+| FR-9 | TUI 四仪表盘（进程树/Agent 状态/用量/会话树）产品级，键位体系对标 tuicr | 用户指定 |
+| FR-10 | 预览/演示数据模式（fixture 与真实双轨） | 继承 |
+| FR-11 | 升级与回滚：v1 到 v2 的数据迁移、daemon 热替换、失败回退 | 审计 GAP-1/2 |
+
+### 2.2 非功能需求
+
+| 编号 | 需求 | 门禁/判据 |
+|---|---|---|
+| NFR-1 | 像素级复刻（WebView 承载面） | `ui_reference/` 逐页比对 + vitest 快照 + WebView2 兼容矩阵；窗口拓扑范围见 19 节待签字项 |
+| NFR-2 | 低开销 | 14.7 启动门禁（只含应用自身可归因段） |
+| NFR-3 | 低占用 | 14.7 三结构门禁 G-1/G-2/G-3（绑 N 与 S，G-1 带 WebView2 实测前置条件） |
+| NFR-4 | 低存储 | 安装包 < 45 MB（估算上限 47.6，M5 校准）；不捆绑我方 Node 运行时；上游 step CLI 运行时含在其 167.1 MB 内 |
+| NFR-5 | 崩溃安全 | Job Object 杀树零残留；panic 三件套；epoch 失效 + 未决标 `outcome_unknown`；daemon 崩溃熔断 |
+| NFR-6 | 壳可重启会话存活 | daemon 常驻；杀壳不杀会话；重连全量刷新一致 |
+| NFR-7 | 安全不变量 | renderer 不接触 token/进程句柄/会话文件路径（**允许工作区路径**）；帧与日志按值脱敏；DPAPI 用户级 |
+| NFR-8 | 协议兼容 | TS 契约为权威源；fixture 对拍 53 kind；版本下限 + 能力探测 |
+| NFR-9 | 可观测性 | tracing span；puffin 帧剖析；panic hook 崩溃日志；崩溃上报策略与诊断包（第 8 节） |
+| NFR-10 | 性能可回归 | 微基准进 CI（防抖阈值）；场景基准 M1/M3/M5 建基线复测；测量配方见 14.6 |
+| NFR-11 | 可访问性与高 DPI | 键盘全可达 + 焦点可见 + WCAG AA 对比度；150%/200% 两档 DPI 进像素级验收口径；屏幕阅读器语义非 v1（记账） |
+| NFR-12 | 数据迁移 | v1→v2 凭据/设置/索引迁移有路径有回滚；升级不丢数据 | 第 23 节 |
+
+### 2.3 约束
+
+| 编号 | 约束 |
+|---|---|
+| C-1 | WebView 全局单实例；面板迁出需同时满足「实测瓶颈」与「协调 go/no-go 通过」 |
+| C-2 | Windows 10/11 x64（版本下限 22H2，WebView2 Evergreen 最低版本，arm64 立场见 12 节支持矩阵） |
+| C-3 | 机密项目：不向外部仓库提交任何 PR/issue；fork 自管第三方依赖 |
+| C-4 | 会话文件格式以上游为准，host 只读不写 |
+| C-5 | 已知事实与估算必须分级标注（实测/参考口径/估算/未知），禁止把估算或待确认当结论 |
+| C-6 | 优化必须经测量确认；每个优化项登记预期效果与测量方法（14.3 开关表）；**先测量再破坏**（原生化收益未实测前不破坏拓扑） |
+
+---
+
+## 3. 事实基线
+
+### 3.1 omp-studio 架构与规模（2026-11-11 仓库清点）
+
+| 部分 | 语言 | 位置 | 行数（清点） |
+|---|---|---|---|
+| Renderer | TS | `apps/renderer` | 112,376（279 个 tsx） |
+| Electron 主进程 | TS | `apps/desktop` | 21,901 |
+| Host facade | TS | `packages/host-client-api` | 13,946 |
+| Host 实现 | TS | `packages/studio-host` | 10,179（**无 bin 入口的库**，由 Electron 主进程进程内组合） |
+| 契约 | TS | `studio-protocol` + `client-contract` | 12,552（53 个命令 kind） |
+| 其余 | TS | client / installer / platform / transport / testkit / runtime-stepcode | 9,072 |
+
+### 3.2 React renderer 的角色：产品本体
+
+v4.0 起 renderer 是产品本体（Tauri 单 WebView 承载），等价性验收为像素级比对签收。`ui_reference/` 为比对基准。终端与 diff 面板在库（xterm.js + diff 组件），默认承载回 WebView 后它们是还原而非新写（AT-1 二审）。
+
+### 3.3 Step Code 运行时事实（2026-11-11，来源：本机 `~/.stepcode/bin/docs/` 随附文档 + 实测探针）
+
+**会话模型（实测确认）：一个 `step --mode rpc` 进程同时只有一个活动会话。** `get_state` 只返回一个 `sessionFile` + `sessionId`；实测两次 `new_session` 得到不同 id，是替换不是新增；`prompt`/`steer`/`follow_up`/`abort`/`get_entries`/`fork`/`clone` 均无 session 参数。**推论：N 个并发会话 = N 个 `step` 进程**，上游约束不可合并。
+
+**会话文件**：`~/.stepcode/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl` 多文件、懒创建；首行 session header `{"type":"session","version":3,…}`；条目类型含 `session`/`message`/`model_change`/`thinking_level_change`/`compaction`/`branch_summary`/`custom`/`custom_message`/`label`/`session_info`；`custom` 占比极高（实测一条真实会话 31 行里 27 行是遥测），host 直读必须过滤；append-only 可并发读；`get_entries {since?}` 的 `since` 是跨重启持久游标。
+
+**审批面**：`extension_ui_request` 共 9 个 method，dialog 类 `select`/`confirm`/`input`/`editor`（阻塞，按 `id` 回 `extension_ui_response`），fire-and-forget 类 `notify`/`setStatus`/`setWidget`/`setTitle`/`set_editor_text`。**超时由上游 agent 端自动 resolve 为默认值**（`select`→`undefined`，`confirm`→`false`），客户端无计时职责。**Step 核心没有内置权限弹窗**，审批来自扩展；实测启动只见到 `setStatus`，dialog 类是否到达 RPC 客户端需构造触发实测（M0）。`--plan-review-surface` 让 `exit_plan_mode` 保持 plan mode 并由客户端画提案。
+
+**模型与 thinking**：`models.json` 为 providers 结构；thinking 共 7 档，`get_available_thinking_levels` 驱动 UI 可选集。
+
+**认证优先级**：① CLI `--api-key` ② `auth.json` ③ 环境变量（含 `STEP_API_KEY`）④ `models.json` 自定义 provider keys。**`STEP_API_KEY` 排第三，登录用户会被静默忽略**。OAuth 只有交互式 `/login`，无 headless 登录命令。
+
+**环境变量（2026-11-11 本地文档核实，修正 v4.2 错误命名）**：agent 目录隔离用 `STEP_CODING_AGENT_DIR`（默认 `~/.stepcode/agent`）；会话存储隔离用 `STEP_CODING_AGENT_SESSION_DIR`（`--session-dir` 优先）。**`STEPCODE_CONFIG_DIR` 不存在**（v4.2 B4 误写，已改）。另有 `STEPCODE_CONFIG_PATH`、`STEPCODE_DISABLE_TELEMETRY`（遥测开关，第 8 节采用）、`STEPCODE_SUBAGENT_CHILD` 等。`STEPCODE_AUTH_PATH` 存在性未核实（22 节）。
+
+**统计**：`get_session_stats` 返回 tokens/cost/contextUsage 与消息计数；**无耗时字段**，usage 面板耗时客户端自计。
+
+**审批环实测（2026-11-11 M0，真实 CLI 往返）**：dialog 类 `extension_ui_request`（`confirm`，带 id/title/message）**确实到达 RPC 客户端 stdout**；客户端回 `extension_ui_response`（同 id + `confirmed`）后 turn 继续并 settle，扩展的后置 notify 证明 CLI 收到了答复。触发条件：扩展放全局 `~/.stepcode/agent/extensions/`，`agent_start` 事件触发（`turn_start` 不触发）；**项目级 `.stepcode/extensions/` 在非交互模式不加载**（信任门）。
+
+**其他**：`bash` 无上游沙箱；前台 `run_command` 默认 120s 超时、输出上限 50KiB/2000 行；RPC `bash` 输出在**下一次 prompt** 才进上下文；`--include-live-events` 才有 `message_update`/`tool_execution_update`（后者上限 256KiB）；**`entry_appended` 事件实测稳定出现但文档未收录**，用作会话目录增量同步信号；Windows shell 解析 Git Bash 优先、不自动选 WSL；帧格式严格 JSONL；Smallstep 的 `step` 重名靠安装目录与 `--version` 识别；CLI 透传环境变量给 shell 命令，**所有帧和日志按值脱敏**；遥测默认开启（`~/.stepcode/config.toml` 或 `STEPCODE_DISABLE_TELEMETRY` 可关）；官方二进制只走 CDN，可审计需源码构建（Node ≥ 22.19）。
+
+### 3.4 本仓实测数字（status.md，Linux release，step 0.1.7）
+
+| 项 | 数值 | 口径 |
+|---|---|---|
+| egui 壳 | 118.0 MB | Linux Xvfb + Mesa 软栅；疑含 `MemoryHints::Performance` 预分配；无 WebView 无 daemon |
+| Rust 适配器 | 2.8 MB | 对比 Node 适配器 64.4 MB：**相对适配器省 96%（61.6 MB），占含 Node 适配器的假想全树 434.4 MB 的 14.2%**（v4.2 的「14%」分母未注明，已补） |
+| step CLI | 167.1 MB | 上游固定；**每并发会话一份** |
+| steppage-mcp | 84.9 MB | 仅 MCP 活动时存在；随 step 退出而释放 |
+| 链路合计 | 372.8 MB | 单会话聊天子集（egui 壳直连适配器，无 host、无 WebView） |
+| release 二进制 | 16 MB | egui 壳磁盘体积 |
+| 冷启动到首快照 | 3.4 秒 | 绝大部分是 step 启动；壳进程→窗口段未分离 |
+| 回合 CPU | 5.7 秒回合内全树 0.2 秒（单核 3%） | 瓶颈在等模型 |
+
+### 3.5 参考资料口径（非本仓实测，仅作量级参照）
+
+Electron 安装包 100 MB 以上；Tauri 单窗口空闲 20 至 80 MB、6 窗口约 170 MB；**重 React 工作台（本项目属此类）空闲 RSS 120 至 200 MB**（对照 Electron 250 至 500 MB）；WebView2 冷启动额外 2 至 3 秒（tauri#10822）；xterm.js 每面板 30 至 50 MB、按键延迟 15 至 30 ms，原生 Rust 终端 2 至 5 MB、1 至 2 ms；egui issue #8453（第三方应用 Windows 同配置 MemoryHints 差约 200 MB）。正式宣称以 M5 实测为准。
+
+---
+
+## 4. 总体架构
+
+### 4.1 四表面同一核心
+
+```
+                 ┌────────────────────────────┐
+                 │  studio-host (Rust 常驻 daemon) │
+                 │  会话目录/workspace/models/usage/  │
+                 │  skills/git/诊断/PTY 池/插件沙箱   │
+                 └───────┬────────────────────┘
+                         │ Studio Bridge（HMAC 帧）
+        ┌────────────────┼────────────────┬──────────────┐
+        │                │                │              │
+  Tauri 主壳        gpui 原表面板      egui 轻量壳     HQTUI TUI
+  (单 WebView       (候选：进程树      (纯对话/       (产品级
+   + React 像素级)    监控，go/no-go)     无头夹具)       终端仪表盘)
+```
+
+所有表面都是 host daemon 的客户端。两个例外：
+
+- **例外一（常态）**：egui 轻量壳双模式（C-E），纯对话模式直连适配器，复现 3.4 实测路径。
+- **例外二（过渡形态，M2.4 删除）**：M1 期间 Tauri 主壳以进程内 facade 直连 Rust 适配器（复用 3.4 实测路径与 `crates/studio-bridge` 已支持的「spawn 适配器」模式）；daemon 就绪后改为经 daemon。过渡期内两种后端由壳侧 `HostTransport` trait 共存（`InProcessFacade` / `DaemonClient` 两实现），CI 双后端回归，切换成本 3-5 人日含在 M2.2。
+
+### 4.2 语言职责
+
+| 语言 | 承担 | 不承担 |
+|---|---|---|
+| Rust | host daemon、桥、适配器、gpui 面板（若过 go/no-go）、egui 轻量壳、平台原语、插件沙箱宿主 | 无 |
+| TypeScript | React renderer（WebView 内）、HQTUI 上游参考、插件脚本、上游 step CLI、开发工具链 | host 运行时 |
+
+### 4.3 进程模型
+
+```mermaid
+flowchart TD
+    subgraph Clients["表面（随开随关）"]
+        T["Tauri 主壳 (Rust + WebView + React)"]
+        G["gpui 面板 (Rust，go/no-go 约束)"]
+        E["egui 轻量壳 (Rust，双模式)"]
+        H["HQTUI TUI (Rust)"]
+    end
+    T --> D
+    G --> D
+    E --> D
+    H --> D
+    E -.直连模式.-> A1
+    D["studio-host (Rust/tokio 常驻 daemon)"] --> A1["runtime 适配器 #1"]
+    D --> A2["runtime 适配器 #N"]
+    A1 --> S1["step --mode rpc"]
+    A2 --> SN["step --mode rpc"]
+    S1 --> M1["steppage-mcp"]
+    Job["Job Object<br/>KILL_ON_JOB_CLOSE"] -.全树.-> D
+    Job -.继承.-> A1
+    Job -.继承.-> S1
+    Job -.继承.-> M1
+```
+
+- daemon 生命周期：首个表面连接时拉起，之后常驻；全部表面断开后宽限期（初定 10 分钟）退出；**升级场景宽限期强制为 0**（见 12.4）。
+- **窗口生命周期（v4.3 新增，GAP-3）**：Tauri 主壳是窗口树的根；gpui 子窗（若存在）owner 为主窗，主窗最小化时子窗跟随最小化、主窗关闭时子窗关闭（不等宽限期）；杀壳重连时子窗先消失，重连成功后按保存布局恢复。第二个 Tauri 实例被单实例锁拦下时唤醒已有窗口并转发参数（打开工作区/会话）。
+- 会话激活：活跃会话持有 step 进程；切后台热窗口（初定 60 秒）后退出；会话状态以磁盘文件为准。
+- daemon 持 Job Object 全树杀（只设 `KILL_ON_JOB_CLOSE`）；目标 Win10+。
+- panic 三件套 + **daemon 监督者带指数退避与熔断**：连续失败 N 次（初定 5 次）停止自启并留痕，表面显示「守护进程无法启动」终态与手动重试入口，不无限重启刷屏（AT-11）。
+- 重连协议终态（AT-12）：3 次失败后进入 giving-up 态，UI 给出一键重试；不无限转圈。
+- 所有 Windows 子进程统一 `creation_flags(0x08000000)`（CREATE_NO_WINDOW）。
+
+### 4.4 目标目录结构（v4.3）
+
+```
+step-studio/
+├── Cargo.toml                    # Rust workspace（edition 2021，rust-version 1.85）
+├── crates/
+│   ├── studio-bridge/            # 帧协议 + HMAC + UDS/命名管道 + host 客户端（在用）
+│   ├── step-studio-runtime/      # Step CLI 适配器（在用）
+│   ├── step-studio-shell/        # egui 轻量壳 + 无头夹具（在用，M5 定型）
+│   ├── studio-host/              # 常驻 daemon：服务层 + 会话多路复用（M2 起）
+│   ├── studio-native-panels/     # gpui 面板：进程树监控（go/no-go 约束，M3）
+│   └── hqtui/                    # HQTUI fork 的唯一实体位置（vendored path，M6）
+├── apps/
+│   ├── renderer/                 # React renderer，产品本体（M1 Tauri 化）
+│   └── desktop-tauri/            # Tauri v2 主壳（M1 新建；替代 apps/desktop）
+├── packages/                     # TS 契约与工具（host 侧随绞杀退役）
+├── packaging/                    # NSIS 资产（复用）
+└── scripts/                      # 门禁、fixture 导出、架构约束、基准脚本
+```
+
+删除计划：`apps/desktop`（M5 后，4-6 人日）、`packages/platform-darwin` 与 `transport-web`（M7）、host 侧 TS 模块随绞杀逐块删。
+
+### 4.5 信任边界总表
+
+| # | 边界 | 跨越物 | 允许 | 禁止 |
+|---|---|---|---|---|
+| B1 | renderer ↔ Tauri 壳 | Tauri IPC（JSON） | 命令/查询/订阅；投影数据；**工作区路径** | token、进程句柄、会话文件路径、bridge token |
+| B2 | Tauri 壳 ↔ daemon | 二进制 channel | 命令/查询/事件 | 凭据、环境变量原样透传 |
+| B3 | daemon ↔ adapter | Studio Bridge 帧 | token-file 握手后的会话帧 | token 进日志、进 WebView |
+| B4 | adapter ↔ step | 环境变量 + stdio | 用户自己的 `~/.stepcode` profile（**不隔离**，实测见 3.3 末） | 继承的**其他** provider 凭据（如 `ANTHROPIC_API_KEY`）泄漏进 step 子进程 |
+| B5 | daemon ↔ 插件沙箱 | rquickjs 白名单函数 | 显式授予的能力 | 默认 fs/net、进程、环境读取 |
+| B6 | 任意 ↔ 日志 | 日志出口 | 键名 + 长度 + 类型 | 按值的 key/token/路径 |
+
+### 4.6 crate 依赖规则（CI 强制）
+
+| 规则 | 内容 |
+|---|---|
+| C-B | `studio-bridge`（含 host 客户端）零内部依赖 |
+| C-R | `step-studio-runtime` 仅依赖 `studio-bridge` |
+| C-H | `studio-host` 依赖 `studio-bridge`；不得依赖任何壳 crate |
+| C-E | `step-studio-shell` 仅依赖 `studio-bridge`；双模式；不得依赖 `studio-host` 内部模块 |
+| C-G | `studio-native-panels` 依赖 `studio-bridge` 与 host 客户端；不得依赖 egui/tauri |
+| C-T | `apps/desktop-tauri` 是唯一可依赖 `tauri` 的 crate |
+| C-Q | `hqtui` fork 保持零依赖；变更必须过 13 组 golden fixtures |
+| 门禁 | cargo-deny + 自研依赖规则测试；破规则同一次提交改表和代码 |
+
+---
+
+## 5. 接口契约
+
+### 5.0 帧协议字节级规格
+
+```
+帧 = [4 字节大端长度 N][1 字节类型][N-1 字节 payload]
+类型：0x01 hello / 0x02 command / 0x03 query / 0x04 event / 0x05 receipt / 0x06 close
+hello：协议版本(u16) + 角色(u8) + challenge(32B) + HMAC-SHA256 proof(32B)
+command/query：id(u64) + kind(u16) + payload
+event：seq(u64) + stateVersion(u64) + kind(u16) + payload
+receipt：id(u64) + grade(u8) + payload
+grade（receipt 专用）：0=accepted 1=completed 2=rejected 3=failed 4=outcome_unknown
+close：reason(u16)
+约束：单帧上限 8 MiB（与上游 StepFrame 一致）；hello 未通过前拒收一切业务帧
+payload 编解码（v4.3 补，AT-14）：JSON（serde_json）为默认；热路径大对象（PTY 字节流、长文本增量）走 raw 字节段，禁止逐条 JSON 序列化；超过 8 MiB 的对象（大 diff、完整转录）改走「引用 + 分页拉取」，不进帧
+capability 等级（v4.3 改名以示区分）：stable / limited / unavailable，字段名改 support 或 level，不复用 grade
+```
+
+历史教训：小端 + 只含 body 的长度 + 两键头曾对着 mock 全过、对着真实适配器失败；大端、五键头、HMAC challenge proof 与 payload 编解码规则同为字节级契约，改任何一项双实现对拍。
+
+### 5.1 daemon ↔ surface 契约
+
+- 传输：本地二进制 channel（命名管道/UDS），帧格式同 5.0；握手复用 HMAC challenge proof。
+- 表面启动：connect → hello（协议版本、表面类型、能力集）→ ready；**daemon 拒绝版本过低表面并给出最低版本号；hello 带 daemon 构建号，供升级 skew 判定（12.4）**。
+- 三类消息：`command`（有回执）、`query`（有响应）、`event`（广播，带 `eventSeq` 与 `stateVersion`）。
+- 热路径合帧：daemon 侧 16 ms 环形缓冲，同 topic 丢旧保新；必达流（turn 文本）用有界 channel + `try_send` 失败即累加。
+- 重连协议（对应 6.4）：断开 → 指数退避重连（上限 3 次）→ hello 带本地 `stateVersion` → stale 则全量刷新 → 3 次仍失败进 giving-up 态 + 一键重试（AT-12）。
+- 表面断开不终止任何会话；宽限期内无表面则排空退出。
+
+### 5.2 renderer ↔ Tauri 壳契约
+
+- 5 方法（`bootstrap/query/command/subscribe/close`），`transport-desktop` 传输实现一行不改；6 个 channel 字符串变 `#[tauri::command]` 名；`initialization_script` 包 `invoke`/`listen` 挂 `window.ompStudio` 并 `Object.freeze`。
+- 三座桥：`ompStudioChrome`（`IpcRendererLike` + `WebUtilsLike` 抽象已就绪）、`ompStudioTerminal`（PTY 状态通道，数据面走 daemon→壳→WebView 二进制帧）、`ompStudioRemote`（SSH，v4 留桩）。
+
+### 5.3 daemon ↔ adapter 命令映射
+
+（表同 v4.2：19 条 Studio kind → Step RPC 映射，Step 侧事实以 3.3 为准；`turn.retry` 语义近似、`session.tree.navigate` 切回一致性待确认。）
+
+未接命令与优先级见 11.4。v1.1/v2 再补：`mode.plan.*`、`goal.*`、`btw.*`、`session.prewalk.*`、`omfg.*`、`vibe.*`、`operator.*`、`tan.start`、`tui.transfer`（后六项标 unavailable）。
+
+### 5.4 事件映射
+
+（表同 v4.2：message/tool/turn/interaction/context/`entry_appended`→`session.catalog.changed`/exit/unknown→raw。）
+
+### 5.5 插件 API 契约（M6b）
+
+白名单能力面；schemars 导出 JSON Schema（Rust 为唯一真源）；rquickjs 引擎级 memory limit + interrupt handler 熔断；oxc/swc 安装期剥离 TS；Bun 逃生舱按需下载、**固定版本 + ed25519 签名清单内或随包**（AT-13：不得裸下载执行）。
+
+### 5.6 TUI 数据面（M6a）
+
+四仪表盘共用 daemon query 面；键位对标 tuicr；帧率 30（SSH 降 15）。
+
+### 5.7 并发模型规格（daemon）
+
+- task topology：1 个 tokio runtime；每适配器连接 1 task；**每 PTY 2 个专用线程（或 `spawn_blocking`），不用 tokio task 跑阻塞读**（IC-13）；文件监听 1 task + debounce；广播 1 bus task；每表面 1 连接 task。
+- channel 选型：命令/查询 oneshot；内部投递有界 mpsc；广播 `broadcast`（lagged 丢旧保新）；必达流有界 mpsc + `try_send` 累加。
+- 背压策略：turn 文本必达累加；工具 delta 丢旧保新；PTY 16 ms 合帧；git status/文件树丢旧保新 + debounce；审批请求必达。
+- `spawn_blocking` 只给偶发重活（大文件读取、首次索引）。
+
+---
+
+## 6. 状态机
+
+### 6.1 daemon 生命周期
+
+```mermaid
+stateDiagram-v2
+    [*] --> Absent
+    Absent --> Starting : 首个表面连接
+    Starting --> Ready : hello 通过
+    Ready --> Ready : 表面 attach/detach
+    Ready --> Draining : 全部表面断开
+    Draining --> Ready : 新表面连接
+    Draining --> Exited : 宽限期到
+    Ready --> Upgrading : 更新通知（宽限期强制 0）
+    Upgrading --> Exited : 排空完成，换包
+    Exited --> Starting : 新版本首表拉起
+    Ready --> Crashed : panic/致命错误
+    Crashed --> Backoff : 指数退避
+    Backoff --> Starting : 重试（上限 5 次）
+    Backoff --> Failed : 熔断，停止自启
+```
+
+### 6.2 会话生命周期
+
+```mermaid
+stateDiagram-v2
+    [*] --> Cold : 目录扫描发现
+    Cold --> Activating : 用户选中
+    Activating --> Active : 适配器 + step 就绪
+    Active --> Warm : 切走（热窗口计时）
+    Warm --> Active : 切回
+    Warm --> Cold : 热窗口超时
+    Active --> Failed : step 崩溃/适配器失败
+    Failed --> Activating : 退避重启（上限 3 次）
+    Active --> Archived : 用户归档
+    Archived --> Cold : 取消归档
+```
+
+### 6.3 turn 与审批
+
+turn：`idle → streaming → (awaiting_approval) → settling → settled`（completed/failed，附 CLI 原始错误；桥接线程消失立即 failed）。审批：`requested → responded` ｜ `auto_resolved`（上游超时）｜ `stale`（回 `INTERACTION_STALE`）。epoch：运行时丢失则自增，旧 epoch 未决标 `outcome_unknown`。
+
+### 6.4 表面重连
+
+`connected → disconnected → reconnecting（指数退避，上限 3 次）→ hello 比对 stateVersion →（stale）full_refresh → connected`；3 次失败进 giving-up + 一键重试。重连后全量刷新，不沿用陈旧状态。
+
+---
+
+## 7. 错误处理体系
+
+### 7.1 错误码与处理策略
+
+（表同 v4.2：十类错误码及策略，`UNKNOWN_MUTATION` 失败关闭。）
+
+### 7.2 文案与日志纪律
+
+- 用户可见错误三要素：发生了什么、影响、怎么恢复。
+- 日志：结构化（tracing）+ 按值脱敏；stderr 上限 40 行 + 正则过滤。
+- **日志落盘（v4.3 补，GAP-12）**：`%LOCALAPPDATA%\Step Studio\logs\`；daemon 与各表面各写一个文件（`daemon-YYYY-MM-DD.log` 等）；单文件上限 10 MB、总量上限 200 MB，超限轮转（保留 7 天）；崩溃日志单独目录不轮转。
+- receipt 五态语义不变。
+
+---
+
+## 8. 安全模型
+
+- B1 至 B6 按 4.5 执行；Tauri ACL 不视为安全边界，不变量全在 daemon facade。
+- bridge token 只在 daemon 内，经 token-file 注入子进程。
+- 凭据只在 daemon，DPAPI 用户级（不设 `CRYPTPROTECT_LOCAL_MACHINE`），原子 rename，卸载默认保留。
+- 子进程环境隔离（2026-11-11 M0 实测修正）：**不隔离 step 自身 profile**。实测 `STEP_CODING_AGENT_DIR` 指向空目录时 models.json 不被解析，模型列表 2 个变 0 个、turn 直接失败（No API key found）。隔离语义收窄为：剥离继承的**其他** provider 凭据（如 `ANTHROPIC_API_KEY`），step 用用户自己的 `~/.stepcode`。
+- 认证优先级如实处理（`auth.json` 高于 `STEP_API_KEY`）；登录引导开一次 TUI 或自建 OAuth。
+- 按值脱敏（CLI 透传 env 给 shell 命令）。
+- **崩溃上报策略（v4.3 补，GAP-7）**：v1 **不上报**，只本地落盘；用户可一键导出诊断包（版本 + 日志 + 环境信息，**明确排除凭据、会话正文、工作区文件内容**）；将来若启上报：opt-in、字段白名单（版本/OS/GPU/后端/错误码/堆栈）、无会话正文无路径无 token、保留期 90 天。理由：崩溃转储是最易泄漏用户代码与凭据的通道，v1 不做。
+- **遥测（v4.3 补）**：本端不收集；提示用户上游遥测默认开启，关法：`~/.stepcode/config.toml` 或 `STEPCODE_DISABLE_TELEMETRY`（本地文档已核实存在）。
+- bash 无上游沙箱，审批 UI 是权限控制主界面；插件沙箱白名单默认拒绝。
+- 更新：ed25519 清单 + 公钥 bake + 版本签入防降级；Bun 逃生舱固定版本 + 签名（AT-13）。
+- **隐私清单（v4.3 补，GAP-11）**：本端留存物仅三样：DPAPI 凭据（用户级）、SQLite 索引与用量（本地）、日志（本地，按值脱敏）；无云端账号、无行为上报。
+
+---
+
+## 9. UI 层：四表面分工
+
+### 9.1 表面 A：Tauri 主壳（单 WebView，像素级）
+
+- 构成：Tauri v2 + WebView2 + React renderer 原样；像素级来源是同一份代码与 CSS，差异只剩 WebView2 与 Electron 内嵌 Chromium 的版本差（M1 建兼容矩阵）。
+- IPC 迁移、三座桥、窗口铬（`decorations(false)` + `titleBarStyle: Overlay` + 几何重校）、预览模式零改动：见 5.2。
+- 验收：`ui_reference/` 逐页并排比对 + vitest 快照 + 兼容矩阵；**高 DPI 150%/200% 两档进比对口径**（NFR-11）。
+- **终端与 diff 面板默认在本表面**（AT-1 二审）：xterm.js（WebGL 渲染器）与 diff 组件已在库，数据面改走 daemon→壳→WebView 二进制帧；「xterm 相关面板因终端原生化而移除」一句废止。
+
+### 9.2 表面 B：gpui 原表面板（go/no-go 约束）
+
+- 范围收缩：**唯一候选是进程树监控面板**（htop 式新形态，omp-studio 无 dock 像素级义务）；终端与 diff 的迁移权收回到 9.1 默认，除非 9.6 go/no-go 五项全过。
+- 构成（若过）：gpui + gpui-component + `NativePanel` trait；独立无边框 owner 窗，主窗最小化/关闭时跟随（4.3 窗口生命周期）。
+- 依赖风险：锁 git rev；**gpui Windows 后端 `WindowKind::Floating` 目前是空操作，Zed PR #63277（2026-08-27 开，未合）补的正是 WS_POPUPWINDOW + parent_hwnd**。若选独立窗形态，要么自带 patch（fork 维护税 +1）要么等合入；进程树面板若无浮空需求可避开。
+- 降级梯（AT-6 二审）：L1 go/no-go 不过 → 进程树监控也回 WebView（htop 式用 canvas/SVG 实现，renderer 内新增，估 3-5 人日），gpui 线整体关闭；L2 gpui 全败（rev 构建不过/trait 覆盖不了）→ 原生的线推迟至 M5 后重评。**egui 终端面板不再作为退路选项**（16-24 人日成本黑洞，且 egui 三角色不含此）。
+
+### 9.3 表面 C：egui 轻量壳（双模式 + 无头夹具 + 退路）
+
+- 三角色：纯对话低开销模式（直连适配器）；无显示环境的 host 协议 E2E 夹具（25 个 cargo 测试）；gpui 整体失效时的面板退路（**不含终端面板实现**）。
+- 配置：`MemoryHints::MemoryUsage` 为卫生默认（第三方同配置差值约 200 MB 仅作存在性证据，禁入预算行）；GPU 降级链 DX12→Vulkan→GL + `gpu.json`；托盘跳帧；自建内存 GC 插件。
+- 版本：M1 评估升 0.32/0.33；0.34+ 需 MSRV 1.92，显式决策点排在中文输入法验收前。
+
+### 9.4 表面 D：HQTUI TUI（产品级）
+
+- 选型：`ports/rust` crate `hqtui` 0.2.0（约 1.82 万行零依赖）fork 自管 + vendored path；TS 包需 Bun/Node 或 88 MB 编译产物，不采用。
+- 能力面：真彩色 + 自动降级；Braille 2×4 像素/格 + block/ASCII 模式 + 渐变 + alpha；CSS Grid 风格约束布局；约 30 组件；30fps（SSH 降 15）+ 差分渲染；SGR 鼠标 + Tab 焦点 + OSC 52；headless 渲染器**待 M6a.1 spike 确认**（v4.2 误列为既有能力，IC-9 已改）；13 组 golden fixtures 作对拍门禁。
+- 形态：进程树监控 + Agent 状态监控 + 用量 + 会话树四仪表盘，键位对标 tuicr。
+- 风险：0.2.0、无生产先例、单人维护、未上 crates.io；fork 终身维护估 1-2 人日/月（C-3 禁上游 PR）；失败退 ratatui 0.30.2（MSRV 1.88 已记）。
+
+### 9.5 功能模块等价矩阵（按承载面分）
+
+| 模块 | 参照（React） | v4.3 形态 | 承载面 | 期次 |
+|---|---|---|---|---|
+| 工作台壳 / 窗口铬 | renderer 外壳 | 原样 + 几何重校 | WebView | M1 |
+| 首页 / 工作区选择 | HomePage | 原样 | WebView | M1 |
+| 对话流（正文/思考/工具卡） | 对话页 | 原样 | WebView | M1 |
+| Composer | Composer 系列 | 原样 | WebView | M1 |
+| 审批交互 | interaction 卡片 | 原样（9 method） | WebView | M0/M1 |
+| 模型选择 / thinking 档位 | 模型页 | 原样（7 档） | WebView | M1 |
+| 会话管理 | 会话页 | 原样 + daemon 惰性激活 | WebView | M2 |
+| Agent Hub / Skills / MCP / 设置 | 对应页面 | 原样 | WebView | M4 |
+| 用量面板 | 用量页 | 原样（耗时自计） | WebView | M4 |
+| Git / GitHub 面板 | Git 面板 | 原样（gix 读 + CLI 写） | WebView | M3 |
+| 工作区文件树 | 文件树 | 原样（ignore 遍历） | WebView | M3 |
+| 终端 | xterm.js + node-pty | **原样（WebView，AT-1 二审默认）** | WebView | M1/M3 |
+| diff 审查 | diff 面板 | **原样（WebView，AT-1 二审默认）** | WebView | M3 |
+| 进程树监控 | 诊断页 | go/no-go：gpui 原生或 WebView 实现 + TUI 双呈现 | gpui 或 WebView + TUI | M3/M4 |
+| Agent 状态监控 | 工具卡 + 诊断 | WebView 卡片 + TUI 仪表盘 | WebView + TUI | M4 |
+| 诊断 / 日志 | 诊断页 | 原样 | WebView | M4 |
+| 预览模式 | preview fixtures | 原样 | WebView | M4 |
+| 托盘 / 菜单 / 单实例 | tray/app-menu | Tauri 插件 + 自研权威锁 | Tauri 壳 | M5 |
+| 轻量对话模式 | 无（新增） | 纯对话最低内存壳 | egui | M5 |
+| 终端仪表盘 | 无（新增） | 产品级 TUI | HQTUI | M6a |
+
+像素签收按本矩阵逐模块估（约 1-2 人日/模块，19 个 WebView 模块合计估 20-38 人日，摊到 M1 至 M4），替代原打包估算（IM-4）。
+
+### 9.6 M3 go/no-go 判据（AT-1 二审，五项全过才原生化）
+
+1. **窗口协调原型**：主窗移动/跨屏/per-monitor DPI 变化/最小化/alt-tab/任务栏/杀壳重连七场景，任一子窗脱根或错位 → no-go；
+2. **WebView 终端实测**：xterm.js（WebGL）+ 长输出 soak 帧时直方图与面板 RSS；若最长帧 < 16 ms 且增量 < 25 MB，原生化收益前提消失，定案 WebView；
+3. **diff 大 diff 滚动 CPU 实测**（similar 收益在 CPU 侧）；
+4. **gpui rev Windows DX11 可构建** + `NativePanel` trait 覆盖 + gpui-terminal 跑真实 shell；
+5. **收益前提**：G-1 前置条件（WebView2+renderer 实测 ≤ 165 MB）已回填，且终端面板实测增量确认超 25 MB。
+
+默认结论从「原生」翻转为「**回 WebView，除非五项全过**」。进程树监控作为独立候选单独过 1/4/5 三项（无像素级义务，但协调成本相同需单独收益论证）。
+
+### 9.7 可访问性与本地化（v4.3 新增，GAP-5/6）
+
+- 键盘：全部交互可 Tab 到达、Enter/Space 激活、Escape 关对话框；焦点指示可见；renderer 侧既有实现需逐页核对（对照 omp-studio 行为）。
+- 对比度：WCAG AA（正文 4.5:1、大字 3:1），三表面各自口径；TUI 的 16/256 色降级路径一并验。
+- 高 DPI：150%/200% 两档进像素级验收；gpui 子窗（若存在）per-monitor DPI 各自处理 WM_DPICHANGED。
+- IME：中文输入法最早测（三表面各自路径：WebView 随 WebView2、egui 0.31 已知弱项、gpui 自兜）。
+- 诚实记账：屏幕阅读器语义（AccessKit/UI Automation）**非 v1 目标**；像素级复刻会连带继承 omp-studio 既有的 a11y 缺陷，v1 只承诺「不新增缺陷 + 键盘可达 + 对比度」。
+- i18n：v1 中文界面；英文与 RTL 非目标（后续）；OMP 遗留的 i18n 资源文件随 renderer 复用，不新增语言。
+
+---
+
+## 10. Host 层：daemon 化
+
+### 10.1 判决与理由
+
+（同 v4.2：tty7 模式 + goal/cron 保活需求；daemon 捆绑 Node 不可接受。）
+
+### 10.2 绞杀顺序（v4.3 补插件沙箱项）
+
+会话目录（读 3.3 格式、过滤 custom、`entry_appended` 同步）→ models → usage → 设置与诊断 → workspace 文件树与搜索 → git 读类（gix）与写类（CLI）→ skills 扫描 → PTY 池（portable-pty）→ MCP（rmcp + 读配置）→ **插件沙箱（rquickjs + schemars 导出，FR-7 落点，M6b）**。facade 端口注入不移植，Rust 侧 enum 分发。SQLite 只放索引与用量。
+
+### 10.3 保留 TS 的条件
+
+模块强依赖 Node 生态且无 Rust 等价物，或实测移植收益低于认证成本时留 sidecar，逐个案上报。
+
+---
+
+## 11. 运行时层：OMP 到 Step CLI 的切换
+
+### 11.1 已完成
+
+（同 v4.2。）
+
+### 11.2 缺口：审批环（Blocker，M0，范围按 v4.3 收紧）
+
+- **只实现 Rust 适配器侧**：TS 回退适配器不单列实现（它将在 M2-M5 绞杀删除，TS 侧审批环是纯丢弃工作，IM-1）。
+- 9 个 method 处理；不实现客户端计时；实测 dialog 到达性。
+- **分支式验收**：dialog 到达 → mock 表面 9 method 收发通过；不到达 → 扩展注入（permission-gate 模式）方案验证通过。两者都出结论记录；扩展注入单列 2-4 人日或设 go/no-go。
+- **「审批卡可展示」移交 M1**（M0 结束时 renderer 未挂载，IM-2）。
+
+### 11.3 双协议漂移治理与版本探测
+
+（同 v4.2：TS 权威源 + fixture 门禁 + 版本下限 0.1.4 + 录制回放 mock。）
+
+### 11.4 适配器缺口清单
+
+（同 v4.2：已接 12 项，未接 20 项按优先级。）
+
+---
+
+## 12. 平台能力与 Windows 工程
+
+（表同 v4.2，另加/改：）
+
+- **多窗口语义**：见 4.3 窗口生命周期段；单实例拦下第二实例时唤醒主窗并转发参数。
+- **多用户/多 daemon**：daemon 按用户运行（每用户一份，命名管道带用户 SID 隔离）；Windows 快速用户切换下各用户 daemon 独立，会话文件按用户 `~/.stepcode` 隔离（GAP-4）。
+- **安装/卸载**：每用户（`perMachine:false`）、可改目录、卸载默认不删数据；**静默安装（`/S`）与企业每机器安装（`/ALLUSERS`）与「每用户」设计冲突，v1 不做每机器，静默安装支持每用户形态**（GAP-8 决策）；便携版（zip 即用）非 v1 目标。
+- **卸载残留清单（明列）**：删除：应用二进制、开始菜单项、`%LOCALAPPDATA%\Step Studio\bin`；保留：`%LOCALAPPDATA%\Step Studio\logs`（除非勾选）、DPAPI 凭据、SQLite 索引、设置；明确提示用户 step CLI 与 `~/.stepcode` 是上游数据不随本应用卸载。
+- **支持矩阵（GAP-13）**：Windows 10/11 x64，版本下限 22H2；WebView2 Evergreen 最低版本随 M5 实测定（缺失降级路径见 15.1）；arm64 非 v1 目标（Tauri/egui/wgpu 均支持，缺真机与签名矩阵，记账）。
+
+### 12.4 升级、数据迁移与回滚（v4.3 新增，GAP-1/2）
+
+- **daemon 热替换序列**：更新启动 → 通知 daemon 立即排空（**升级场景宽限期强制 0**）→ daemon 退出 → 换包（先 rename 旧再 move 新，失败回滚）→ 首个表面拉起新版本 daemon。新壳 connect 时若 daemon 是旧构建号，**不拒绝而是提示需要重启更新**（避免「更新后打不开」，AT-3）。
+- **v1→v2 数据迁移**：迁移范围仅本方数据：DPAPI 凭据（格式版本号，不变则透传）、设置项（版本化映射表，未知项保留不删）、SQLite schema（版本号 + 迁移步进，无版本号则拒绝启动并提示）。**omp-studio 用户数据不在迁移范围**（产品是 fork 不是升级替代，配置目录不同）。
+- **回滚**：保留上一版本安装包（`%LOCALAPPDATA%\Step Studio\updates\previous`）；新版本启动失败（连续崩溃或 daemon 熔断）时提供「回退到上一版本」入口；回滚不碰凭据与索引（向前兼容）。
+- 验收（M5）：升级中 daemon 在跑、降级攻击（旧版清单）、迁移后凭据可用、回滚后数据完好，各一个真机用例。
+
+---
+
+## 13. 组件选型（分层栈）
+
+（表同 v4.2，变更：L2 范围注记为「进程树监控（go/no-go）」；L11 VT 解析状态改「go/no-go 后待引入」；L18 插件落点补 10.2。）
+
+明确不引入（同 v4.2，加）：egui 终端面板实现；裸下载执行 Bun sidecar。
+
+---
+
+## 14. 性能工程专章（v4.3 重写预算与门禁）
+
+### 14.1 性能模型
+
+（实测口径表同 v4.2：回合 CPU 3%、冷启动大头是 step、上游占 68%。）
+
+**优化优先级（m10）**：算法 > 数据结构 > 分配 > 缓存。经确认的杠杆按口径归因（v4.3 重排）：
+
+| 杠杆 | 作用口径 | 可归属收益 | 证据级 | 里程碑 |
+|---|---|---|---|---|
+| 终端原生化 | **应用自身（唯一）** | 每终端面板净 −20 至 −43 MB（WebView 线减 25-45 加 gpui 线 2-5，两边不得同时计入） | 参考口径，M3 实测 | go/no-go 后 |
+| 惰性激活 + 热窗口 | 全树（对应用自身为 0） | 每非活跃会话 −167.1 MB | 分量实测 / 策略效果估算，M5 | M2 |
+| MemoryHints::MemoryUsage | 仅 eframe 进程（egui 壳）；对 Tauri 壳的 WebView2 无效 | 本仓未测；**禁止从 118 MB 减 200** | 第三方口径，M5 测 | 卫生默认 |
+| 虚拟列表 + 16 ms 合帧 | CPU/帧时 | 10 万行 60fps | 估算 / 门禁 | M1 |
+
+结论：应用自身口径的第一杠杆是终端原生化（若 go/no-go 过），全树口径的第一杠杆是惰性激活；MemoryHints 是卫生默认不是杠杆。
+
+### 14.2 启动工程（只对应用自身可归因段设门禁）
+
+| 表面 | 门禁段（可归因） | 阈值 | 单列实测段（不设门禁） |
+|---|---|---|---|
+| daemon | connect 就绪 < 200 ms | 未知，M2 回填 | 无 |
+| egui 壳 | 进程启动→窗口出现 < 0.5 s | 未知（3.4 s 基线中此段未分离，需重测） | 窗口→首快照 e2e：基线 3.4 s，大头是 step 启动（不承诺） |
+| Tauri 壳 | 窗口出现 < 0.5 s | 未知 | WebView2 初始化 2-3 s 参考口径（tauri#10822），同机实测前不判决 |
+| Tauri 壳 | webview 就绪→可交互（renderer 侧）< 1.0 s | 估算（延迟初始化 + 骨架屏后） | e2e 冷启动到可交互：记录值，按段分解汇报 |
+| TUI | 首帧 < 0.5 s | 未知 | 无 |
+
+### 14.3 内存工程（增量式预算）
+
+| 分量 | N=0（底座） | 每 +1 面板 | N=1 | N=3 | 证据级 |
+|---|---|---|---|---|---|
+| WebView2 + renderer | 120-200 | 无 | 同左 | 同左 | 参考口径（重 React 工作台类） |
+| daemon（Rust） | 10-30 | 无 | 同左 | 同左 | 估算 |
+| 适配器（Rust） | 2.8 | 无 | 同左 | 同左 | 实测 |
+| gpui 面板 ×N | 0 | +10-40（终端 2-5） | +10-40 | +30-120 | 估算 + 参考口径 |
+| **应用自身合计** | **132.8-232.8** | 无 | **142.8-272.8** | **162.8-352.8** | 推导 |
+| 上游地板（S=1） | +252.0 | 无 | +252.0 | +252.0 | 实测 |
+| **全树合计** | **384.8-484.8** | 无 | **394.8-524.8** | **414.8-604.8** | 推导 |
+
+取数注记：WebView2 取 120-200（本项目 renderer 是产品本体、IDE 级功能面），不取 50-170（两类参考的中间值、两类都不对应）；N（面板数）与 S（会话数）是两个乘数，本表固定 S=1，S=3 全树再加 2×167.1；唯一应用自身实测 118 MB 是 egui 单壳/Linux 软栅口径，对本表既非下界也非上界；终端原生化后 WebView2 行应重新取基（终端内容移除，幅度未量化），禁止与面板行重复计入。
+
+**常驻 vs 按需**：daemon 常驻；step 按会话惰性；MCP 随 step；Bun 逃生舱按需下载；conpty 随包（+0.6 MB）。
+
+**优化开关表**（每项登记预期效果与测量方法）：MemoryHints（M1 应用，M5 测）、GPU 降级链（M1）、惰性激活（M2，−167.1 MB/非活跃会话）、终端原生化（go/no-go 后）、renderer 虚拟列表（M1）、egui 内存 GC（M3）、托盘跳帧（M5）、工具输出截断（M3）、编辑器池化（M3）、markdown 只重解析最后一块（M1）。
+
+### 14.4 热路径纪律
+
+（HP-1 至 HP-11 同 v4.2。）
+
+### 14.5 反模式清单
+
+（同 v4.2 十二条，加：先破坏拓扑再承诺测量；把第三方差值当本仓预算。）
+
+### 14.6 基准与回归门禁（v4.3 补测量配方）
+
+- 微基准（criterion，release）：帧编解码、事件投影、jsonl 会话解析、diff、目录扫描；**补渲染侧轻量无头场景基准**（markdown 增量解析帧时、虚拟列表窗口边界、PTY 合帧抖动，puffin 采样，可进 CI）。
+- 场景基准（M1/M3/M5 建基线复测）：各表面冷启动分段计时；10 万行滚动帧时直方图（bin 10 ms，报 p50/p99/p99.9/max）；PTY 满速（定义：持续 10 MB/s 输出）最长帧；RSS 曲线（采样 1 Hz，稳态定义：60 秒斜率 < 1 MB/min，报稳态均值与峰值）；60 分钟 soak（通过判据：RSS 增长斜率 < 5 MB/h）。
+- 工具：perf/flamegraph、heaptrack、puffin、任务管理器（Windows RSS 用「专用工作集」口径，记录采集方式）。
+- 口径纪律：记录机器、GPU 后端（真实/软栅）、构建配置；不同口径不进同一张表。
+- **门禁统计量**：帧时类门禁用 p99.9 + 掉帧计数（连续两帧 > 33 ms），max 仅记录不用作门禁（Windows ConPTY + GC 下单帧超限概率不低，易 flaky）。
+- CI：微基准 + 渲染轻量基准进每次 push（阈值防抖，超阈重跑一次）；重场景基准只进夜间/发布前。
+
+### 14.7 验收门禁（v4.3 重写为三结构）
+
+| 门禁 | 绑定条件 | 阈值 | 状态 |
+|---|---|---|---|
+| G-1 壳底座 | N=0，S=1 | ≤ 200 MB；**前置条件：WebView2+renderer 实测 ≤ 165 MB**（= 200 − daemon 上界 30 − 适配器 2.8） | **未判决**：分项未知，M5 回填后才可宣称 |
+| G-2 每面板增量 | 单面板 RSS 对比 | gpui 面板 ≤ 40 MB；原生化终端 ≤ 5 MB（若 go/no-go 过） | M3 回填 |
+| G-3 全树 | N≤1，S=1 | ≤ 500 MB | 估算，M5 校准；N=3/S=3 不设门禁（上界 604.8 已超），登记为已知量级 |
+| 启动分段 | 见 14.2 | 各段阈值 | 分段回填 |
+| 安装包 | 不含可选 step 运行时 | < 45 MB（估算 26.6-47.6，NSIS 固态压缩后回填） | M5 实测 |
+| 滚动 / PTY 帧 | 10 万行 / 满速 | p99.9 < 16 ms 且掉帧计数达标 | M1/M3 建基线 |
+
+> 修正记录：v4.1 的「Tauri 壳空闲 RSS < 250 MB」不可能达到（上游地板实测即 252 MB）；v4.2 改双口径但「应用自身 < 200 MB」仍不可辩护（阈值落在 WebView2 不确定带内且未绑 N）；v4.3 改三结构 + N/S 绑定 + G-1 前置条件，并明确「未判决」状态。22 节 #16 同步改为「可达性未知，M5 回填前是待判决项不是承诺」。
+
+### 14.8 存储分量
+
+（同 v4.2，安装包行注明：估算 26.6-47.6 MB，上限超门禁 2.6 MB，M5 实测 NSIS 压缩后回填；不足则二进制合并或放宽门禁，不许叙事。）
+
+---
+
+## 15. 测试策略与追溯矩阵
+
+### 15.1 分层测试
+
+（同 v4.2，补：像素级加 150%/200% DPI 两档；a11y 逐页键盘可达核对；M0 分支式验收。）
+
+### 15.2 需求追溯矩阵
+
+（同 v4.2 表，补 C-2 → 12 节支持矩阵 + 15.3 Windows matrix；C-3 → 全程 fork 自管清单审查；FR-6 补 L22/L23；FR-7 落点改「5.5 + 4.5 B5 + 10.2 + L18」；FR-11 → 12.4；NFR-11 → 9.7；NFR-12 → 12.4。）
+
+### 15.3 CI 门禁与环境（v4.3 补，GAP-9）
+
+| 门禁 | 内容 | 触发 |
+|---|---|---|
+| TS 切片 | `npm run check` 切片 | 每次 push |
+| Rust 切片 | per crate check/test/clippy | 每次 push |
+| fixture gate | 新命令无 fixture 则红 | 每次 push |
+| 架构门禁 | architecture.test.mjs + crate 依赖规则 | 每次 push |
+| 微基准 + 渲染轻量基准 | criterion + puffin 场景，阈值防抖 | 每次 push |
+| Windows matrix | check/clippy/test on windows-latest | 每次 push |
+| 场景基准 | 14.6 脚本套件 | 夜间 / 发布前 |
+| 产物校验 | 签名、架构、体积门禁 | release workflow |
+
+**CI 环境策略（诚实版）**：CI **不可能跑全真链路**：step CLI 官方只走 CDN（无 GitHub release），CI 从 CDN 拉取 + manifest 校验 + 缓存；OAuth 无 headless 登录，CI 全部用**录制回放 mock step**（11.3），真机登录态只在手动/夜间的真机门禁验证；Windows 真机（至少一台 Win11 22H2，含一台无独显机器验软栅降级）列为带提前期的采购任务，M0 期间启动（IM-7）。分层结论：mock 进 CI、真机门禁手动/夜间、发布前 full。
+
+---
+
+## 16. 研发工作流与 WBS
+
+### 16.1 工程工作流（继承 AGENTS.md）
+
+（同 v4.2，加：文档维护规则。本方案由项目负责人维护；每个里程碑对抗评审后升版本号并在 22 节刷新证据日期；22 节带日期的证据跨月后按 C-5 重新分级，估算不得当事实引用（GAP-15）。）
+
+### 16.2 迁移工作流与真实依赖图
+
+1. 核心线：M1 的进程内 facade 即 daemon 服务层的种子，M2 由「抽取 + 换传输」构成，不是从零起步。M2.1/M2.3 可与 M1.1-M1.4 并行（测试载体用 egui 无头夹具），M2.2/M2.4 必须等 M1 facade 稳定。
+2. 像素线：Tauri 壳挂 renderer（M1）→ 逐页像素级签收（M1 至 M4，按 9.5 矩阵逐模块）。
+3. 原生的线：M3 go/no-go（五项）→ 过的才做；不过则进程树监控回 WebView，gpui 线关闭。
+4. TUI 线：M6a fork + spike；M6b 插件沙箱后置（等 M4 面板稳定后取真实插件样本）。
+
+```mermaid
+flowchart LR
+  M0 --> M1[M1.1-M1.4 进程内 facade]
+  M1 --> M15[M1.5-M1.7 harness + IME + 评审]
+  M1 --> M22[M2.2 重连协议]
+  M21[M2.1 daemon 生命周期] -.并行, egui 夹具.- M22
+  M23[M2.3 会话目录] -.并行.- M24[M2.4 移植 + 删 TS]
+  M1 --> M24
+  M31[M3.1 go/no-go 五项] -.并行, 只依赖 rev+DX11.- M1
+  M31 -->|过| M32[M3.2 gpui 面板]
+  M31 -->|不过| M3W[进程树回 WebView]
+  M2PTY[M2 PTY 池] --> M32
+```
+
+### 16.3 里程碑 WBS（估算为人日；按 2-3 人并行给日历，IM-8）
+
+**资源与技能假设（v4.3 补，GAP-14）**：2-3 人；必需技能线五条：Rust 异步/tokio、Tauri v2、egui/gpui（二选一深）、React/TS、Windows API（Job Object/ConPTY/DPAPI/NSIS）；gpui 与 Windows 原生是两条高门槛线，需在 M0 期间确认团队覆盖或排外部支援；HQTUI 上游是单人项目，团队侧对应单点已记（18 章）。
+
+**M0 止血（约 7 至 10 人日）**
+- M0.1 Rust 适配器审批环 9 method 与测试（4 至 6；**不含 TS 侧**，IM-1）
+- M0.2 dialog 到达性实测 + 分支结论记录（1）
+- M0.3 口径修正 + tempdir + Windows 冒烟 spike（egui 真实 GPU RSS / WebView2 单页 RSS / ConPTY 往返）（2 至 3；AT-8）
+- M0.4 对抗评审（1）
+- **并行启动（非人日）**：Windows 真机采购、签名证书采购（组织验证日历周级）、step CLI CDN 拉取方案（IM-7）
+
+**M1 Tauri 壳 + 像素级基线（约 18 至 28 人日）**
+- M1.1 Tauri 脚手架 + renderer 挂载 + `window.ompStudio` 注入（3-5）
+- M1.2 6 channel 迁移 + 三桥重建 + 门禁表同提交（4-7）
+- M1.3 窗口铬重校 + Vite base + CSP + **150%/200% DPI 两档**（3-5；IM-4 上调）
+- M1.4 WebView2 兼容矩阵 + 六页面人工比对清单（3-6；IM-4 上调）
+- M1.5 性能 harness（criterion + 渲染轻量基准）+ 滚动基线 + IME 最早测（3-4）
+- M1.6 egui 0.32/0.33 升级评估（1-2）
+- M1.7 对抗评审（1）
+
+**M2 host daemon 化（约 21 至 31 人日）**
+- M2.1 daemon 生命周期 + 监督者（退避 + 熔断）+ 宽限期（4-6）
+- M2.2 重连协议 + 全量刷新 + **壳侧 HostTransport 双路径回归**（4-7；IM-3）
+- M2.3 会话目录移植 + 惰性激活 + 重入代价实测（5-8）
+- M2.4 models/usage/设置/诊断移植与 TS 删除（**含删除连锁：ALLOWED_INTERNAL_DEPS、check 切片、installer 清单同提交改**；5-8；IM-5）
+- M2.5 杀壳重连实验 + epoch 测试 + daemon 熔断演练（2-3）
+- M2.6 对抗评审（1）
+
+**M3 原生的线（go/no-go 约束，约 10 至 18 人日）**
+- M3.1 go/no-go 五项（4-6；含窗口协调原型与 WebView 终端实测）
+- M3.2 过则 gpui 进程树监控面板（4-6）；不过则 WebView 实现（3-5）
+- M3.3 文件树 + git 面板（4-6；diff 已在 WebView，不重做）
+- M3.4 PTY 池（daemon 侧，喂 WebView 终端）+ 帧时基线（2-4）
+- M3.5 对抗评审（1）
+
+**M4 剩余面板（约 14 至 22 人日）**
+- M4.1 六页面像素级签收（按 9.5 矩阵逐模块，6-10）
+- M4.2 Agent 状态监控（WebView 卡片 + 数据面）（2-4）
+- M4.3 预览模式 + 诊断/日志面板 + a11y 逐页键盘核对（3-5）
+- M4.4 对抗评审（1）
+
+**M5 Windows 硬化与分发（约 17 至 27 人日）**
+- M5.1 平台能力全项（DPAPI/代理/电源/托盘/单实例）（5-8）
+- M5.2 NSIS 产线 + ed25519 更新 + **daemon 热替换 + 回滚演练**（5-8；GAP-2）
+- M5.3 WebView2 分发方案 + VC++ 运行库（2-3）
+- M5.4 14.7 门禁实测回填 + RSS 曲线 + 托盘跳帧 + 两种壳产物对比（3-5）
+- M5.5 数据迁移与回滚实现 + 真机用例（2-3；FR-11）
+- M5.6 egui 轻量壳定型 + **Electron 删除（4-6，原 1-2 不现实，IM-7）**（4-6）
+- M5.7 对抗评审（1）
+
+**M6a HQTUI TUI（约 10 至 17 人日）**：M6a.1 fork + spike（含 headless 渲染器确认）3-5；M6a.2 四仪表盘 5-8；M6a.3 键位 + fixtures 对拍 2-4；M6a.4 评审 1。
+
+**M6b 插件沙箱（约 8 至 12 人日，后置）**：M6b.1 沙箱 spike（熔断 + 白名单 + schemars）3-4；M6b.2 能力面落地 + 真实插件取样 3-5；M6b.3 TS 剥离产线 + Bun 逃生舱打包复测 2-3。
+
+**M7 收尾（约 3 至 5 人日）**：darwin/web 传输删除 + 门禁同步 + 文档归档。
+
+### 16.4 30 天 MVP（v4.3 定义，IM-9）
+
+范围：**M0 + M1.1-M1.4**，硬切线：M1.5-M1.7 顺延 M1'；M0.4 并入 M1' 评审；M1.4 缩为「六页面人工比对清单 + WebGL2/CSS 冒烟 + 未迁移 kind 的 unavailable 声明」。人日 17-29，30 天单开发者约 21 有效人日，故按裁剪后范围排。
+
+验收（dev build）：① `cargo tauri dev` 一键起，WebView2 缺失给引导；② 五方法全通且 `transport-desktop` 与 renderer vitest 零改动；③ M0 审批卡在 WebView 内可展示可响应；④ 一个真实 turn 端到端 + 7 档 thinking 可切；⑤ 未迁移 kind 返回 unavailable receipt，页面不白屏（**这是 MVP 允许的降级不是缺陷**）；⑥ 六页面人工比对签收；⑦ **明确声明 dev build：无签名、无安装器、无自动更新，仅内部/友好用户手动安装，不得对外分发**；RSS 只记录不设门禁。
+
+到可分发的路径：MVP(dev) → M1' → M2 → M3 → M4 → M5（第一个可分发里程碑）；中间产物一律 dev build，不得以 MVP 名义外发。
+
+---
+
+## 17. 里程碑总表
+
+（表同 v4.2 结构，范围与验收按 16.3 更新：M0 分支式验收、M1 含 DPI、M2 含双路径回归与删除连锁、M3 go/no-go、M5 含迁移回滚与 Electron 删除 4-6、M6 拆 M6a/M6b。）
+
+---
+
+## 18. 风险登记
+
+（表同 v4.2，变更行：）
+
+| 风险 | 影响 | 缓解 |
+|---|---|---|
+| gpui 依赖不稳 + **Windows 浮动子窗上游缺失（PR #63277 未合）** | 面板形态或返工 | go/no-go 五项；不过回 WebView；锁 rev + 抽象 |
+| 窗口协调成本被低估（无先例） | 子窗脱根类 3am 故障 | 9.6 判据 1 七场景原型；不过则不做独立窗 |
+| 原生化收益未实测 | 破坏拓扑换幻觉 | C-6 先测量再破坏；9.6 判据 2/5 |
+| WebView2+renderer 实测超 165 MB | G-1 不可达 | M0 冒烟提前暴露；不可达则调门禁结构不调叙事 |
+| 四表面维护税 | 长期成本 | 表面不扩张；gpui 线可整体关闭（L1 降级） |
+| 像素签收成本 | 滑期 | 逐模块估 20-38 人日已入账 |
+| 升级时 daemon 在跑 | 更新后不可用 | 12.4 热替换序列 + 宽限期置 0 + 回滚 |
+| HQTUI fork 终身维护 | TUI 成本 | fixtures 门禁 + 1-2 人日/月入账；退 ratatui |
+| 并发会话内存线性增长 | 多开会话失控 | 惰性激活；G-3 绑 N≤1 |
+| CI 不可能全真链路 | 测试覆盖幻觉 | mock 进 CI + 真机门禁分层（15.3） |
+| 真机/证书采购提前期 | 卡 M5 | M0 期间并行启动 |
+| daemon 崩溃循环 | 刷屏无终态 | 退避 + 5 次熔断 + 可见终态 |
+| Bun 逃生舱体积波动 | 插件分发 | 按需下载 + 签名 + 每版复测 |
+| 微基准 CI 抖动 | 假红 | 阈值防抖 + 重跑一次 |
+| 门禁数字被叙事绑架 | 低开销变空话 | G-1/G-2/G-3 绑定 + 未判决状态明示 |
+
+---
+
+## 19. 决策记录与复审点
+
+| 决策 | 理由 | 被否决的路线 | 复审点 |
+|---|---|---|---|
+| 外壳 Tauri + egui + gpui 混合 | 用户指定；像素级只有 WebView 承载 React 能做到 | 单一 egui（像素级不可达）；单一 Tauri（浪费原生终端能力） | M3 go/no-go |
+| WebView 单实例最小化 | 用户「尽量减少」 | 多 WebView 标签页 | 任何面板申请迁出时 |
+| **终端/diff 默认 WebView，gpui 只保留进程树监控候选** | 二审：拓扑像素级是第一门禁约束；原生化收益未实测且落在 WebView2 不确定带内；gpui 浮动窗上游缺失；无先例 | 独立原生窗 + 协调（保 25-45 MB 参考口径，弃拓扑像素级，自担协调全套）；按需 detach（留 M5+） | M3 go/no-go 五项 |
+| M1 接法 = 进程内 facade 过渡 | 复用 3.4 实测路径与 bridge 双模式；studio-host 是无 bin 库使 (a) 需第三条协议面 | (a) TS sidecar（嵌 JS 运行时或新写入口）；(b) 提前 daemon（阻塞 M1） | M2.4 删过渡时 |
+| host 常驻 daemon | tty7 模式；goal/cron 保活 | host 作壳子进程 | M2 重连实验后 |
+| 内存门禁三结构 G-1/G-2/G-3 | 单条 200 MB 不可辩护（不确定带内 + 未绑 N） | v4.1 单口径 250 MB（不可能）；v4.2 双口径 200 MB（仍不可辩护） | M5 回填后 |
+| MemoryHints 退出杠杆表 | 对 WebView 无效；200 MB 是第三方差值 | 列为一级杠杆（v4.2 口径错位） | 不改 |
+| M6 拆 M6a/M6b | 无共享路径；沙箱需真实插件样本 | 捆一个里程碑（M6.4 2-3 人日覆盖不了） | M6a 后 |
+| renderer 回归产品本体 | WebView 回来后零重写达成像素级 | 退役为参照（v3.x） | 不改 |
+| egui 不承担终端面板 | 退路 16-24 人日是成本黑洞 | egui 终端退路（v4.2 风险表） | 不改 |
+| 30 天 MVP = M0 + M1.1-M1.4 | 可验证的像素级 dev build | 无 MVP 定义（v4.2） | M1' 后 |
+| 每会话一 step 进程 + 惰性激活 | 上游实测约束 | 进程内切会话（上游不支持） | M2 重入实测后 |
+
+**待用户签字项（AT-1 二审要求）**：像素级复刻的范围是否包含窗口拓扑。当前文档口径：像素级 = WebView 承载面的逐页比对，窗口拓扑不在内（终端/diff 若回 WebView 则拓扑也一致，此项自然消解；若 go/no-go 通过走原生独立窗，则必须重新签字）。
+
+可推翻上述任一条的条件：新的实测数据，或用户明确的方向变更。
+
+---
+
+## 20. 术语表
+
+（同 v4.2，变更：「daemon」定义加「egui 直连模式除外」；「grade」拆 receipt grade 与 capability level 两个词条；补「go/no-go 五项」「G-1/G-2/G-3」「HostTransport」「giving-up 态」「dev build」。）
+
+---
+
+## 21. 执行进展（2026-11-11）
+
+| 项 | 状态 |
+|---|---|
+| 设计文档 | v4.6 落盘于 `design/plan.md`；两轮专家团 73 条 finding 处置台账见 26 节 |
+| Rust 桥与适配器 | 已跑通真实 Step CLI 与真实模型（25 个 cargo 测试） |
+| egui 壳 | 核心对话链路端到端，egui 0.31；双模式定位 |
+| React renderer | 产品本体，待 Tauri 化（M1） |
+| 审批环 | **M0.1/M0.2 完成**：Rust 适配器 9 method + `interaction.respond` + stale 失败关闭；真实 CLI dialog 往返实证（3.3 末）；e2e 新增 fake 往返与 stale 两测试全绿 |
+| host daemon 化 / gpui 面板 / HQTUI | 未开始 |
+| 性能 harness / Windows 真机 / 双口径实测 | 零实测；M0.3 Windows 冒烟因无真机阻塞（egui 真实 GPU RSS / WebView2 单页 RSS / ConPTY 往返待硬件） |
+
+---
+
+## 22. 证据分级与来源
+
+（同 v4.2，变更：#16 改为「G-1 可达性未知，M5 回填前是待判决项不是承诺」；新增第二轮验证记录：内存预算独立重算（性能工程师，2026-11-11）、实施路线与 MVP 验证（含代码级核实：studio-host 无 bin、bridge_client.rs 直连路径、studio-bridge client 双模式）、窗口拓扑交叉验证（联网核实：Zed 无面板 detach、VS Code 1.85 浮出为完整 BrowserWindow 且终端浮出仍是 xterm.js webview、gpui WindowKind::Floating 在 Windows 后端为空操作、Zed PR #63277 未合、「WebView 主窗 + 原生子窗面板」无成熟先例）；step 环境变量本地文档核实（`STEP_CODING_AGENT_DIR`/`STEP_CODING_AGENT_SESSION_DIR` 存在、`STEPCODE_CONFIG_DIR` 不存在、`STEPCODE_DISABLE_TELEMETRY` 存在）。）
+
+**待确认**：（1-15 同 v4.2，#16 改为 G-1 前置条件项，另加：#17 `STEPCODE_AUTH_PATH` 存在性；#18 xterm.js 在 WebView2 的实测帧时与 RSS（M1.4 回填）；#19 gpui PR #63277 合入时间。）
+
+---
+
+## 23. 第三方许可与合规（v4.3 新增，GAP-10）
+
+| 组件 | 许可证 | 义务 |
+|---|---|---|
+| omp-studio（fork 基底） | MIT | 保留 NOTICE 与版权声明；**MIT 不含商标许可**，产品名/图标不得使用 omp-studio 标识 |
+| Step Code | MIT | 同上；「Step」相关标识使用需确认授权范围 |
+| Tauri v2 及插件 | MIT/Apache-2.0 | 声明保留 |
+| egui/eframe、gpui（git 依赖 Zed/Longbridge 快照） | MIT/Apache-2.0 | 声明保留；git 依赖需在 NOTICE 记 commit |
+| hqtui fork | MIT | 声明保留 + fork 变更说明 |
+| conpty.dll/OpenConsole.exe | MIT（微软） | 声明保留 |
+| WebView2 Evergreen | 微软再分发条款 | 安装器引导需符合其条款；bootstrapper 方案 M5 定稿时复核 |
+| rquickjs | MIT | 声明保留 |
+| syntect（MIT）/ similar（Apache-2.0）/ ignore+grep-searcher（MIT/Unlicense） | 见上 | 声明保留 |
+
+要求：cargo-deny 管传递依赖；发布产物附第三方许可清单（release workflow 生成）；商标与名称使用在公开分发前法务确认；NOTICE 随包。
+
+---
+
+## 24. 文档维护规则（v4.6 修订，GAP-15/GAP-16）
+
+- 本方案由项目负责人维护，单一事实源；`status.md` 记录实现状态，本文件记录路线，两者不重复。
+- **全部设计文档只放仓库内 `design/` 一个目录**（索引与阅读顺序见 `design/README.md`），
+  不再放到仓库外；方案随代码一起进版本历史，不单独漂移。
+- **设计与代码同一个提交**：任何让本文件结论失效的代码改动，其提交必须同时带上本文件或
+  `status.md` 的对应修订。M0 曾因方案放在仓库外，出现两个代码提交不带任何文档修订的情况，
+  该规则即为修复此问题。
+- 升版触发：每个里程碑对抗评审后；任何约束变化；任何 22 节证据到期（跨月的带日期证据按 C-5 重新分级）。
+- 修订必须写「本版相对上版的变化」段；估算必须带「估算」标签，实施后回填实测并保留原估算作偏差记录。
+- 审计 finding 处置台账（26 节）append-only，不删历史。
+
+---
+
+## 25.（并入 24）
+
+---
+
+## 26. 审计处置台账（v4.3，append-only）
+
+第一轮 5 路审计（内部一致性 IC / 遗漏 GAP / 对抗性 AT / 可实现性 IM / 性能校验 PV）+ 第二轮 3 路交叉验证，共 73 条。裁决分三类：**采纳**（已改入 v4.3）、**采纳并修正**（核心成立、表述调整）、**驳回**（不成立或已有更好覆盖，附理由）。
+
+**IC（内部一致性，23 条）**：IC-1 断引 6.5→6.4 采纳；IC-2 环境变量双名采纳（本地裁决 `STEP_CODING_AGENT_DIR`，`STEPCODE_CONFIG_DIR` 不存在）；IC-3 egui 启动门禁采纳（拆可归因段）；IC-4 瀑布混 N 采纳（14.3 重写）；IC-5 WBS 加总采纳（16.3 全表重算）；IC-6/7 追溯闭合采纳（补 C-2/C-3、FR-6/7 落点）；IC-8 术语表 daemon 定义采纳（例外一同步）；IC-9 HQTUI headless 采纳（改待确认）；IC-10 三线改四线采纳（16.2 重写为依赖图）；IC-11 host 客户端归属采纳（并入 studio-bridge）；IC-12 cron/subagents/ultracode 采纳（5.3 为命令面权威）；IC-13 PTY task 改线程采纳；IC-14 grade 同名采纳（capability 改 level）；IC-15/16/17 安装包算术、14% 分母、MemoryHints 状态采纳；IC-18 hqtui 单位置采纳；IC-19 PDEATHSIG 采纳（留档不用）；IC-20 typo 采纳；IC-21 25 测试归属采纳（注明同一套）；IC-22 webview 门禁零余量采纳（拆段）；IC-23 零 Node 口径采纳（注明上游运行时含在 167.1 MB 内）。
+
+**GAP（遗漏，15 条）**：GAP-1 采纳并修正（迁移范围限本方数据，omp-studio 用户数据不在范围，12.4）；GAP-2 采纳（daemon 热替换 + 握手构建号）；GAP-3 采纳（4.3 窗口生命周期）；GAP-4 采纳（4.3 多用户）；GAP-5 采纳（9.7 a11y + NFR-11，屏幕阅读器记账非目标）；GAP-6 采纳（DPI 进像素口径，i18n 记非目标）；GAP-7 采纳（8 节崩溃上报策略：v1 不上报 + 诊断包）；GAP-8 采纳（静默/每机器决策：v1 每用户 + 残留清单）；GAP-9 采纳（15.3 CI 环境策略：mock 进 CI + 真机分层 + 采购提前期）；GAP-10 采纳（23 节许可合规章）；GAP-11 采纳（8 节隐私清单）；GAP-12 采纳（7.2 日志轮转）；GAP-13 采纳（12 节支持矩阵）；GAP-14 采纳（16.3 资源与技能假设）；GAP-15 采纳（24 节文档维护）。
+
+**AT（对抗性，14 条）**：AT-1 采纳并修正（二审判决：默认回 WebView + 9.6 go/no-go 五项 + 19 节待签字项）；AT-2 采纳（归因断裂，14.1 重排 + G-1 前置条件）；AT-3 采纳（12.4 热替换序列）；AT-4 采纳（M1 接法定 + M2 切面对齐）；AT-5 采纳并修正（renderer 改动与像素级冲突：需动渲染代码的优化降为「可选、须过像素级复审」）；AT-6 采纳并修正（降级梯 L1/L2 + egui 终端退路驳回）；AT-7 采纳（NFR-4 与五二进制冲突：M5 实测校准，不足则合并或放宽）；AT-8 采纳（M0.3 Windows 冒烟）；AT-9 采纳（本地裁决变量名 + M0 探针）；AT-10 采纳（B1 措辞收窄为禁 token/句柄/会话路径，允许工作区路径）；AT-11 采纳（6.1 熔断）；AT-12 采纳（6.4 giving-up 态）；AT-13 采纳（5.5 Bun 逃生舱签名）；AT-14 采纳（5.0 payload 编解码规格）。
+
+**IM（可实现性，9 条）**：IM-1 采纳（M0 只做 Rust 侧）；IM-2 采纳（分支式验收 + 「可展示」移交 M1）；IM-3 采纳（路线 c + HostTransport + 依赖图）；IM-4 采纳（像素签收逐模块估）；IM-5 采纳（删除连锁单项化 + 三门禁验收）；IM-6 采纳（M6 拆 M6a/M6b + fork 维护税 1-2 人日/月）；IM-7 采纳（真机/证书采购 + CI 基建 + Electron 删除上调 4-6）；IM-8 采纳（16.3 人力假设 + 日历）；IM-9 采纳（16.4 MVP 定义）。
+
+**PV（性能校验，12 条）**：PV-1 采纳（MemoryHints 降为存在性证据 + 退出杠杆表 + 22 节补证据条目）；PV-2 采纳（WebView 取 120-200 重工作台类 + 终端收益不得与 WebView 区间重复计入）；PV-3 采纳（14.3 增量式重写）；PV-4 采纳（G-1/G-2/G-3 三结构 + N/S 绑定 + 未判决状态）；PV-5 采纳（14.2 启动拆段）；PV-6 采纳（窗口/WebView 两事件 + 起止点定义）；PV-7 采纳（96% 与 16.5% 双口径）；PV-8 采纳（惰性激活 −167.1 → −252.0 含 MCP）；PV-9 采纳（安装包算术 + 压缩注记 + 基线列改未测）；PV-10 采纳（Bun 统一 88 MB 实测口径）；PV-11 采纳（14.6 测量配方 + p99.9 门禁）；PV-12 采纳（渲染侧轻量基准进 CI）。
+
+**二审新增（3 条）**：V-AT-1 gpui Windows 浮动窗上游缺失（PR #63277 未合）采纳（9.2/18 章）；V-IM-3 studio-host 无 bin 入口（路线 a 更贵）采纳（4.1 例外二 + 16.2）；V-PV-4 WebView2 取数类目修正（重工作台 120-200 而非中间值）采纳（14.3）。
+
+**未采纳（2 条，附理由）**：GAP-1 中「从 Electron 版迁移用户数据是主路径」驳回（产品是 fork 非升级替代，配置目录不同，迁移范围限本方数据）；AT-6 中「egui 终端面板作退路」驳回（16-24 人日成本黑洞，egui 三角色不含此，退路改为 L1/L2 降级梯）。

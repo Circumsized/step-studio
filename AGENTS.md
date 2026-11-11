@@ -19,6 +19,15 @@ Host 诊断日志：`%APPDATA%\omp-studio\logs\host-YYYY-MM-DD.log`；macOS：`~
 
 面向使用者和外部贡献者的入口是 [`README.md`](README.md)、[`docs/`](docs/README.md)、[`CHANGELOG.md`](CHANGELOG.md)、[`CONTRIBUTING.md`](CONTRIBUTING.md)。本文件是协作者的工作约定，不是产品说明书。
 
+## Step Studio 设计文档
+
+本 fork 的设计文档全部集中在 [`design/`](design/README.md)：`plan.md` 是研发方案主文件，
+`status.md` 记实现状态与实测数字，`reference/` 存参考资料。改动设计前先读 `design/README.md`
+里的阅读顺序；改完代码后按 `design/plan.md` 第 24 节把设计与代码放进同一个提交。
+
+**Step Studio 是机密项目**：未经项目负责人明确许可，不得向任何外部仓库提交 PR / issue /
+fork / 公开分支，也不得把本仓设计内容外发。
+
 ## 功能代码索引
 
 改某块产品功能前，打开 [`doc/feature-index.md`](doc/feature-index.md) 按表跳到文件，不要全库盲搜。那是功能 → 文件的地图，不是架构愿景；路径变更只改索引，不要把表格复制进本文件。
