@@ -253,6 +253,33 @@ session。现在用 repo 根目录。
 适配器通过 `STEP_STUDIO_SESSION=continue` 选择性开启；桌面 Host spawn 时不带这个变量，
 行为不变。
 
+## Windows 交叉编译（2026-11-11 打通）
+
+从这台 Linux 服务器产出 Windows exe 已验证可行。命令：
+
+```bash
+cargo xwin build --release -p step-studio-desktop-tauri --target x86_64-pc-windows-msvc
+# 产物：target/x86_64-pc-windows-msvc/release/step-studio-desktop-tauri.exe（约 17 MB）
+```
+
+四个前提，缺一不可，都是这次实测踩出来的：
+
+1. **`cargo install cargo-xwin --locked`**——它会首次构建时自动下载 MSVC CRT 与 Windows SDK
+   （约 1.1 GB，落在 `~/.cache/cargo-xwin`）。
+2. **必须禁掉本机 IPv6**：`sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1`（default 同）。
+   原因是 `download.visualstudio.microsoft.com` 的 DNS 同时返回 A 与 AAAA，而本机 IPv6 是
+   黑洞路由——SYN 发出去无人应答也无人拒绝。cargo-xwin 的 ureq 会因此**永久挂住**
+   （表现为连接 ESTAB 到 CDN、0% CPU、缓存目录不增长）。`curl -4` 正常、`curl -6` 秒失败，
+   就是这个症状。禁用后 connect 立即返回错误，自动回落 IPv4。
+3. **`llvm-rc` 要在 PATH 里叫这个名字**：系统只有 `llvm-rc-18`，而 `tauri-winres` 找
+   `llvm-rc`。`sudo ln -sf /usr/bin/llvm-rc-18 /usr/local/bin/llvm-rc`。缺了它 build
+   script 直接 panic：`NotAttempted("llvm-rc")`。
+4. **clang + lld-link**（本机已有 clang 18）。
+
+未解决/未验证：`tauri build` 的 npm CLI 链路（NSIS 安装包）**不能**从 Linux 交叉打包，
+Tauri 官方不支持。所以拿得到 exe 本体，拿不到安装程序——安装包要等 Windows 机器或 CI。
+exe 在目标机运行时需要 WebView2 Runtime（Windows 11 自带，Win10 需安装）。
+
 ## 尚未完成
 
 - **Windows 命名管道与打包实测**：适配器只在 Linux 上验过 Unix domain socket；
