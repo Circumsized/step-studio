@@ -298,6 +298,24 @@ impl BridgeSession {
         }))
     }
 
+    /// Run a command and collect the events it saw on the way.
+    ///
+    /// Same as [`BridgeSession::invoke_with`], but for a caller that wants the
+    /// events rather than only the receipt. A turn's deltas that land while a
+    /// query waits are real output, and dropping them loses the turn.
+    pub fn invoke_collecting(
+        &self,
+        operation: Value,
+        mut on_event: impl FnMut(&Value),
+    ) -> Result<(Value, Vec<Value>), BridgeError> {
+        let mut events = Vec::new();
+        let receipt = self.invoke_with(operation, |event| {
+            events.push(event.clone());
+            on_event(event);
+        })?;
+        Ok((receipt, events))
+    }
+
     /// Run a command, handing each event to `on_event` the moment it arrives,
     /// and return the terminal receipt.
     ///

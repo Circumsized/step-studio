@@ -495,3 +495,64 @@ fn a_daemon_whose_adapter_cannot_start_exits_instead_of_degrading() {
     assert!(!Path::new(&endpoint).exists(), "the socket file was cleaned up");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_usage_prompt_does_not_disturb_the_live_conversation() {
+    // `/usage` is sent as a prompt, and §9.6 requires that such a prompt not
+    // occupy a conversation turn. Nothing verified that, so this measures it:
+    // a turn is started, the usage panel is fetched mid-turn, and the turn has
+    // to finish exactly as it would have without the interruption.
+    let daemon = Daemon::start("usage-mid-turn");
+    let session = connect(&daemon);
+    let _ = session.snapshot().expect("snapshot");
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+
+    // Start a turn that outlives the panel fetch: the fake settles "slow" after
+    // 1.5 s, and the fetch takes about that long too.
+    session
+        .send_command(serde_json::json!({ "kind": "core.prompt", "text": "slow" }))
+        .expect("start the turn");
+
+    // The turn runs, and the panel is fetched on the same surface while it is
+    // in flight — which is the arrangement the shell actually has, one surface.
+    //
+    // The subtler half of the requirement cannot be measured here and is not
+    // pretended to be: `/usage` emits its own `agent_settled`, which the adapter
+    // reads as "the turn is over", so the turn's terminal receipt *could* be
+    // settled early. Proving it isn't needs the panel fetched from a second
+    // concurrent surface, and the daemon serves one at a time until M2.3. What
+    // this does prove is that the turn's answer survives the fetch intact.
+    let collector = std::sync::Arc::clone(&seen);
+    let (receipt, _) = session
+        .invoke_collecting(serde_json::json!({ "kind": "usage.panel" }), move |event| {
+            if event.get("kind") == Some(&serde_json::json!("conversation.message.delta")) {
+                if let Some(delta) = event.get("delta").and_then(|d| d.as_str()) {
+                    collector.lock().expect("lock").push_str(delta);
+                }
+            }
+        })
+        .expect("usage.panel mid-turn");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed"),
+        "the panel must come back even with a turn in flight"
+    );
+
+    // Anything that landed after the fetch is drained here.
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while Instant::now() < deadline && seen.lock().expect("lock").is_empty() {
+        for event in session.drain_events() {
+            if event.get("kind") == Some(&serde_json::json!("conversation.message.delta")) {
+                if let Some(delta) = event.get("delta").and_then(|d| d.as_str()) {
+                    seen.lock().expect("lock").push_str(delta);
+                }
+            }
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(
+        &*seen.lock().expect("lock"),
+        "hello!",
+        "the turn in flight completed its answer despite the panel fetch"
+    );
+}
