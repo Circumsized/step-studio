@@ -73,6 +73,9 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<AdapterConfig, S
     let continue_session = std::env::var("STEP_STUDIO_SESSION")
         .map(|value| value == "continue")
         .unwrap_or(false);
+    // Set by the daemon, which is the adapter's only client and therefore owns
+    // its lifetime. A shell does not set it: it kills the adapter itself.
+    let exit_on_disconnect = std::env::var_os("STEP_STUDIO_EXIT_ON_DISCONNECT").is_some();
 
     Ok(AdapterConfig {
         endpoint,
@@ -82,5 +85,6 @@ pub fn parse_args(args: impl Iterator<Item = String>) -> Result<AdapterConfig, S
         step_command,
         step_env,
         continue_session,
+        exit_on_disconnect,
     })
 }

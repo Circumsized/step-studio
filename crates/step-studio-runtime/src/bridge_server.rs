@@ -5,8 +5,9 @@
 //! whichever client it belonged to.
 
 use std::io::BufReader;
-use step_studio_bridge::transport::{self, Accepted};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use step_studio_bridge::transport::{self, Accepted};
 
 use serde_json::{json, Value};
 
@@ -23,6 +24,13 @@ const TERMINAL_STATUSES: [&str; 4] = ["completed", "failed", "rejected", "outcom
 
 /// Terminal outcomes a reconnect may have missed.
 const TERMINAL_HISTORY: usize = 64;
+
+/// How long a shutdown waits for the turn in flight before exiting anyway.
+///
+/// Five seconds, the same bound the desktop Host already uses for a graceful
+/// shutdown once the OS is powering off (`apps/desktop/src/types.ts`). One
+/// number for one idea.
+const SHUTDOWN_DRAIN: Duration = Duration::from_secs(5);
 
 /// Outstanding dialog requests, by the id the CLI issued.
 ///
@@ -69,6 +77,12 @@ pub struct AdapterConfig {
     pub step_env: Vec<(String, String)>,
     /// Resume the previous session instead of starting a fresh one.
     pub continue_session: bool,
+    /// Exit when the one connection ends, rather than waiting for the next.
+    ///
+    /// The daemon sets this. It is the adapter's only client, so the adapter's
+    /// lifetime is the daemon's: without it the adapter would outlive a daemon
+    /// that was killed, still holding `step` and with it the user's session.
+    pub exit_on_disconnect: bool,
 }
 
 /// Everything one connection needs: the socket, the CLI, and the shared state
@@ -113,7 +127,15 @@ impl Runtime {
             // The listener is borrowed: it outlives every connection it accepts.
             loop {
                 match transport::accept(listener.try_clone().expect("the listener duplicates")) {
-                    Ok(connection) => serve_one(connection, &self.config, &self.terminal),
+                    Ok(connection) => {
+                        // Joined, not just spawned: whether this connection was
+                        // the adapter's last is decided by what it returns.
+                        let worker = serve_one(connection, &self.config, &self.terminal);
+                        let _ = worker.join();
+                        if self.config.exit_on_disconnect {
+                            return Ok(());
+                        }
+                    }
                     Err(error) => {
                         eprintln!("step-studio-runtime: accept failed: {error}");
                     }
@@ -149,12 +171,13 @@ impl Runtime {
     }
 }
 
-/// Hand one accepted connection to its own thread.
+/// Hand one accepted connection to its own thread, and return the handle so
+/// the caller can wait for it.
 fn serve_one(
     connection: transport::Accepted,
     config: &AdapterConfig,
     terminal: &Arc<Mutex<Vec<Value>>>,
-) {
+) -> std::thread::JoinHandle<()> {
     let config = AdapterConfig {
         endpoint: config.endpoint.clone(),
         token: config.token.clone(),
@@ -163,13 +186,14 @@ fn serve_one(
         step_command: config.step_command.clone(),
         step_env: config.step_env.clone(),
         continue_session: config.continue_session,
+        exit_on_disconnect: config.exit_on_disconnect,
     };
     let terminal = Arc::clone(terminal);
     std::thread::spawn(move || {
         if let Err(error) = serve_connection(connection, config, terminal) {
             eprintln!("step-studio-runtime: connection ended: {error}");
         }
-    });
+    })
 }
 
 /// The tail, not the head: a UUIDv7's first characters are its timestamp, so
@@ -189,6 +213,9 @@ struct Session {
     session_id: String,
     terminal: Arc<Mutex<Vec<Value>>>,
     shutting_down: bool,
+    /// When a shutdown request stops waiting for the turn in flight. `None`
+    /// until a shutdown is asked for.
+    shutdown_deadline: Option<Instant>,
     turn_error: Option<String>,
     state_version: u64,
     command_manifest_hash: String,
@@ -197,6 +224,14 @@ struct Session {
 }
 
 impl Session {
+    /// Whether a turn is still running inside the shutdown deadline.
+    fn draining_a_turn(&self) -> bool {
+        self.pending_prompt.is_some()
+            && self
+                .shutdown_deadline
+                .is_some_and(|deadline| Instant::now() < deadline)
+    }
+
     fn send(&mut self, body: &Value) -> Result<(), FrameError> {
         write_frame(&mut self.stream, self.epoch, body)
     }
@@ -253,7 +288,12 @@ impl Session {
 
     fn failed(&mut self, request_id: &str, message: String) {
         // The error rides on the receipt, not the result.
-        self.receipt_with_error(request_id, "failed", None, Some(("INTERNAL_ERROR", message)));
+        self.receipt_with_error(
+            request_id,
+            "failed",
+            None,
+            Some(("INTERNAL_ERROR", message)),
+        );
     }
 
     /// A failure with a code the client can branch on. The generic `failed`
@@ -309,12 +349,20 @@ impl Session {
         let Some(operation) = body.get("operation") else {
             return;
         };
-        let request_id = body.get("requestId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let request_id = body
+            .get("requestId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let kind = operation.get("kind").and_then(|v| v.as_str()).unwrap_or("");
 
         match kind {
             "core.prompt" => {
-                let text = operation.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let text = operation
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 if std::env::var_os("STEP_STUDIO_TRACE").is_some() {
                     eprintln!("[runtime] prompt accepted, sending to cli");
                 }
@@ -325,12 +373,26 @@ impl Session {
                 }
             }
             "core.steer" | "core.followUp" => {
-                let command = if kind == "core.steer" { "steer" } else { "follow_up" };
-                let text = operation.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let command = if kind == "core.steer" {
+                    "steer"
+                } else {
+                    "follow_up"
+                };
+                let text = operation
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 // Queueing is synchronous upstream, so this answers `completed`;
                 // only `core.prompt` outlives its reply.
-                match self.step.request(command, json!({ "message": text }), std::time::Duration::from_secs(10)) {
-                    Ok(_) => self.receipt(&request_id, "completed", Some(json!({ "queued": true }))),
+                match self.step.request(
+                    command,
+                    json!({ "message": text }),
+                    std::time::Duration::from_secs(10),
+                ) {
+                    Ok(_) => {
+                        self.receipt(&request_id, "completed", Some(json!({ "queued": true })))
+                    }
                     Err(error) => self.failed(&request_id, error.to_string()),
                 }
             }
@@ -361,16 +423,34 @@ impl Session {
                 }));
             }
             "runtime.shutdown" => {
-                self.resolve_outstanding("aborted");
+                // Draining means letting the turn in flight finish. The old
+                // code aborted it and called that a drain, so any caller that
+                // passed `drain: true` and waited got a silently truncated
+                // turn instead of the turn.
+                self.shutting_down = true;
+                self.shutdown_deadline = Some(Instant::now() + SHUTDOWN_DRAIN);
                 self.receipt(&request_id, "completed", None);
                 let _ = self.send(&json!({ "kind": "runtime.shutdownComplete" }));
-                self.shutting_down = true;
+                // Nothing in flight, so there is nothing to wait for.
+                if self.pending_prompt.is_none() {
+                    self.resolve_outstanding("aborted");
+                }
             }
             "session.model.set" => {
                 if std::env::var_os("STEP_STUDIO_TRACE").is_some() {
-                    eprintln!("[runtime] model.set {}", operation.get("selector").and_then(|v| v.as_str()).unwrap_or("?"));
+                    eprintln!(
+                        "[runtime] model.set {}",
+                        operation
+                            .get("selector")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?")
+                    );
                 }
-                let selector = operation.get("selector").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let selector = operation
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 match resolve_and_set_model(&mut self.step, &selector) {
                     Ok(()) => {
                         self.refresh_state();
@@ -380,7 +460,11 @@ impl Session {
                 }
             }
             "session.thinking.set" => {
-                let level = operation.get("level").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let level = operation
+                    .get("level")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 match set_thinking(&mut self.step, &level) {
                     Ok(()) => {
                         self.refresh_state();
@@ -397,7 +481,11 @@ impl Session {
                 if std::env::var_os("STEP_STUDIO_TRACE").is_some() {
                     eprintln!("[runtime] session.new requested");
                 }
-                match self.step.request("new_session", json!({}), std::time::Duration::from_secs(15)) {
+                match self.step.request(
+                    "new_session",
+                    json!({}),
+                    std::time::Duration::from_secs(15),
+                ) {
                     Ok(_) => {
                         self.context = MapContext::new(String::new());
                         self.refresh_state();
@@ -414,7 +502,11 @@ impl Session {
                 Err(error) => self.failed(&request_id, error),
             },
             "session.models.list" => {
-                match self.step.request("get_available_models", json!({}), std::time::Duration::from_secs(10)) {
+                match self.step.request(
+                    "get_available_models",
+                    json!({}),
+                    std::time::Duration::from_secs(10),
+                ) {
                     Ok(catalog) => {
                         let models = catalog
                             .get("models")
@@ -465,23 +557,31 @@ impl Session {
             "session.state" => {
                 self.refresh_state();
                 let snapshot = build_snapshot(&mut self.step, self.epoch, &self.session_id);
-                self.receipt(&request_id, "completed", Some(json!({ "snapshot": snapshot })));
+                self.receipt(
+                    &request_id,
+                    "completed",
+                    Some(json!({ "snapshot": snapshot })),
+                );
             }
             // Extensions and their MCP servers are facts on disk; the command
             // catalog is one RPC away. Neither needs a bespoke adapter.
             "session.extensions.list" => {
                 let root = crate::extensions::config_root();
                 let extensions = crate::extensions::list_extensions(root.as_deref());
-                self.receipt(&request_id, "completed", Some(json!({ "extensions": extensions })));
+                self.receipt(
+                    &request_id,
+                    "completed",
+                    Some(json!({ "extensions": extensions })),
+                );
             }
-            "session.commands.list" => {
-                match crate::extensions::list_commands(&mut self.step) {
-                    Ok(commands) => {
-                        self.receipt(&request_id, "completed", Some(json!({ "commands": commands })))
-                    }
-                    Err(error) => self.failed(&request_id, error),
-                }
-            }
+            "session.commands.list" => match crate::extensions::list_commands(&mut self.step) {
+                Ok(commands) => self.receipt(
+                    &request_id,
+                    "completed",
+                    Some(json!({ "commands": commands })),
+                ),
+                Err(error) => self.failed(&request_id, error),
+            },
             // The client's answer to a dialog the CLI is holding open. The
             // wire shape is the Studio contract's: decision submit/cancel plus
             // an optional value, which is translated per method into what the
@@ -497,7 +597,10 @@ impl Session {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
                     .to_string();
-                let decision = operation.get("decision").and_then(|v| v.as_str()).unwrap_or("");
+                let decision = operation
+                    .get("decision")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 let value = operation.get("value");
                 let Some(method) = self.interactions.close(&interaction_id) else {
                     // The client is holding a card for a dialog that is already
@@ -528,9 +631,16 @@ impl Session {
                         return;
                     }
                 };
-                match self.step.reply("extension_ui_response", &interaction_id, answer) {
+                match self
+                    .step
+                    .reply("extension_ui_response", &interaction_id, answer)
+                {
                     Ok(()) => {
-                        let outcome = if decision == "cancel" { "cancelled" } else { "submitted" };
+                        let outcome = if decision == "cancel" {
+                            "cancelled"
+                        } else {
+                            "submitted"
+                        };
                         self.resolved(&interaction_id, &command_id, outcome);
                         self.receipt(&request_id, "completed", Some(json!({ "ok": true })));
                     }
@@ -542,11 +652,18 @@ impl Session {
     }
 
     fn refresh_state(&mut self) {
-        if let Ok(state) = self.step.request("get_state", json!({}), std::time::Duration::from_secs(10)) {
+        if let Ok(state) =
+            self.step
+                .request("get_state", json!({}), std::time::Duration::from_secs(10))
+        {
             if let Some(id) = state.get("sessionId").and_then(|v| v.as_str()) {
                 if !id.is_empty() && id != self.session_id {
                     if std::env::var_os("STEP_STUDIO_TRACE").is_some() {
-                        eprintln!("[runtime] session {} -> {}", short(&self.session_id), short(id));
+                        eprintln!(
+                            "[runtime] session {} -> {}",
+                            short(&self.session_id),
+                            short(id)
+                        );
                     }
                     self.session_id = id.to_string();
                 }
@@ -558,9 +675,20 @@ impl Session {
     fn pump_events(&mut self, timeout: std::time::Duration) -> bool {
         let mut settled = false;
         while let Some(event) = self.step.wait_event(timeout) {
-            let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let kind = event
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             if std::env::var_os("STEP_STUDIO_TRACE").is_some() {
-                eprintln!("[runtime] cli event {kind} {}", serde_json::to_string(&event).unwrap_or_default().chars().take(300).collect::<String>());
+                eprintln!(
+                    "[runtime] cli event {kind} {}",
+                    serde_json::to_string(&event)
+                        .unwrap_or_default()
+                        .chars()
+                        .take(300)
+                        .collect::<String>()
+                );
             }
             if kind == "extension_ui_request" {
                 let method = event.get("method").and_then(|v| v.as_str()).unwrap_or("");
@@ -602,7 +730,6 @@ impl Session {
             None => self.receipt(&request_id, "completed", Some(json!({ "ok": true }))),
         }
     }
-
 }
 
 /// Resolve a selector against the live catalog.
@@ -613,13 +740,23 @@ impl Session {
 /// as an id first, then falling back to `provider/id`, accepts both forms.
 fn resolve_and_set_model(step: &mut StepRpc, selector: &str) -> Result<(), String> {
     let catalog = step
-        .request("get_available_models", json!({}), std::time::Duration::from_secs(10))
+        .request(
+            "get_available_models",
+            json!({}),
+            std::time::Duration::from_secs(10),
+        )
         .map_err(|e| e.to_string())?;
     let models = catalog.get("models").and_then(|m| m.as_array());
 
     if let Some(list) = models {
-        if let Some(match_by_id) = list.iter().find(|m| m.get("id").and_then(|v| v.as_str()) == Some(selector)) {
-            let provider = match_by_id.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+        if let Some(match_by_id) = list
+            .iter()
+            .find(|m| m.get("id").and_then(|v| v.as_str()) == Some(selector))
+        {
+            let provider = match_by_id
+                .get("provider")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             return set_model(step, provider, selector);
         }
     }
@@ -657,7 +794,11 @@ fn set_thinking(step: &mut StepRpc, level: &str) -> Result<(), String> {
         }
         // `auto` has no Step equivalent: take the model's first supported level.
         let catalog = step
-            .request("get_available_thinking_levels", json!({}), std::time::Duration::from_secs(10))
+            .request(
+                "get_available_thinking_levels",
+                json!({}),
+                std::time::Duration::from_secs(10),
+            )
             .map_err(|e| e.to_string())?;
         let levels = catalog.get("levels").and_then(|l| l.as_array());
         let first = levels
@@ -670,9 +811,13 @@ fn set_thinking(step: &mut StepRpc, level: &str) -> Result<(), String> {
 }
 
 fn apply_thinking(step: &mut StepRpc, level: &str) -> Result<(), String> {
-    step.request("set_thinking_level", json!({ "level": level }), std::time::Duration::from_secs(10))
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    step.request(
+        "set_thinking_level",
+        json!({ "level": level }),
+        std::time::Duration::from_secs(10),
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }
 
 fn fork_session(step: &mut StepRpc) -> Result<(), String> {
@@ -683,9 +828,13 @@ fn fork_session(step: &mut StepRpc) -> Result<(), String> {
     if leaf.is_empty() {
         return Err("session has no entry to fork from".to_string());
     }
-    step.request("fork", json!({ "entryId": leaf }), std::time::Duration::from_secs(20))
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    step.request(
+        "fork",
+        json!({ "entryId": leaf }),
+        std::time::Duration::from_secs(20),
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }
 
 /// One page of the active branch. Step exposes no pagination cursor, so the
@@ -694,12 +843,22 @@ fn read_transcript(step: &mut StepRpc, cursor: Option<&str>) -> Result<Value, St
     let entries = step
         .request("get_entries", json!({}), std::time::Duration::from_secs(15))
         .map_err(|e| e.to_string())?;
-    let list = entries.get("entries").and_then(|e| e.as_array()).cloned().unwrap_or_default();
-    let leaf = entries.get("leafId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let list = entries
+        .get("entries")
+        .and_then(|e| e.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let leaf = entries
+        .get("leafId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
     let head = format!("step-1:{}", if leaf.is_empty() { "empty" } else { &leaf });
     if let Some(cursor) = cursor {
         if !cursor.is_empty() && cursor != head {
-            return Err("CURSOR_STALE: transcript cursor does not match the active session".to_string());
+            return Err(
+                "CURSOR_STALE: transcript cursor does not match the active session".to_string(),
+            );
         }
     }
     let items: Vec<Value> = list
@@ -797,6 +956,7 @@ fn serve_connection(
         session_id: String::new(),
         terminal,
         shutting_down: false,
+        shutdown_deadline: None,
         turn_error: None,
         state_version: 0,
         command_manifest_hash: command_hash,
@@ -821,21 +981,22 @@ fn serve_connection(
     let instance_id = format!("step-runtime-{}", std::process::id());
     let proof = challenge_proof(&config.token, challenge, &instance_id);
     let _ = verify_hello(&body, &config.token, challenge); // validation only
-    session.send(&json!({
-        "type": "studio.hello.result",
-        "requestId": body.get("requestId"),
-        "selectedProtocolVersion": PROTOCOL_VERSION,
-        "runtimeVersion": manifest.runtime_version,
-        "upstreamVersion": "step-code",
-        "upstreamCommit": "0.1.7",
-        "runtimeInstanceId": instance_id,
-        "runtimeEpoch": session.epoch,
-        "capabilityManifest": manifest.value,
-        "commandManifestHash": manifest.command_hash,
-        "stateVersion": 0,
-        "challengeProof": proof,
-    }))
-    .map_err(|e| e.to_string())?;
+    session
+        .send(&json!({
+            "type": "studio.hello.result",
+            "requestId": body.get("requestId"),
+            "selectedProtocolVersion": PROTOCOL_VERSION,
+            "runtimeVersion": manifest.runtime_version,
+            "upstreamVersion": "step-code",
+            "upstreamCommit": "0.1.7",
+            "runtimeInstanceId": instance_id,
+            "runtimeEpoch": session.epoch,
+            "capabilityManifest": manifest.value,
+            "commandManifestHash": manifest.command_hash,
+            "stateVersion": 0,
+            "challengeProof": proof,
+        }))
+        .map_err(|e| e.to_string())?;
 
     // The session id only exists once the CLI has created its session.
     session.refresh_state();
@@ -869,7 +1030,11 @@ fn serve_connection(
     });
 
     loop {
-        if session.shutting_down {
+        // A shutdown waits for the turn in flight, but only until its deadline.
+        // Past it the loop returns and the process exits, which is what makes
+        // the wait bounded — and the turn that missed it settles as
+        // `outcome_unknown` on the client rather than as a completed lie.
+        if session.shutting_down && !session.draining_a_turn() {
             return Ok(());
         }
         // A streaming turn must keep flowing while the Host is idle, so the CLI

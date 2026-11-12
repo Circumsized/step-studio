@@ -1,9 +1,9 @@
 //! A connected Studio Bridge session: handshake done, commands and events
 //! flowing. The shell drives this from a background thread.
 
+use crate::transport::{self, Stream};
 use std::collections::VecDeque;
 use std::io::{BufReader, Write};
-use crate::transport::{self, Stream};
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -12,9 +12,9 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 
 use crate::frame::{read_frame, write_frame, FrameError};
+use crate::handshake::{verify_hello, PROTOCOL_VERSION};
 #[cfg(windows)]
 use named_pipe;
-use crate::handshake::{verify_hello, PROTOCOL_VERSION};
 
 /// Receipt statuses that settle a command.
 pub const TERMINAL_STATUSES: [&str; 4] = ["completed", "failed", "rejected", "outcome_unknown"];
@@ -71,7 +71,9 @@ impl Shared {
     /// A poisoned mutex still holds valid state, and a stalled reader must not
     /// take the whole session down with it.
     fn lock_inbox(&self) -> std::sync::MutexGuard<'_, Inbox> {
-        self.inbox.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.inbox
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn close(&self, reason: String) {
@@ -163,7 +165,8 @@ impl BridgeSession {
         write_frame(&mut transport::handshake_writer(&mut stream), 1, &hello)?;
         let frame = read_frame(&mut reader)?
             .ok_or_else(|| BridgeError::Protocol("adapter closed before hello".to_string()))?;
-        let verified = verify_hello(&frame.body, &token, &challenge).map_err(BridgeError::Protocol)?;
+        let verified =
+            verify_hello(&frame.body, &token, &challenge).map_err(BridgeError::Protocol)?;
 
         // From here on a reader thread owns the socket: it demultiplexes
         // frames into the shared inbox and wakes whoever is waiting.
@@ -183,36 +186,50 @@ impl BridgeSession {
     /// Launch the adapter process. Separated so a client-only session can skip
     /// it entirely.
     fn spawn(launch: &AdapterLaunch) -> Result<Child, BridgeError> {
-        let mut command = if launch.command.is_empty() {
-            let mut command = Command::new(&launch.node);
-            command.arg(&launch.adapter_script);
-            command
-        } else {
-            let mut parts = launch.command.iter();
-            let mut command = Command::new(parts.next().expect("command is non-empty"));
-            for arg in parts {
-                command.arg(arg);
-            }
-            command
+        spawn_adapter(launch)
+    }
+
+    /// Ask the runtime to shut down, then make sure it is gone.
+    ///
+    /// Explicit rather than in `Drop`, because who owns the child decides
+    /// whether a disconnect is allowed to end the session. The shell's session
+    /// is client-only — it launched nothing — so dropping it must only close
+    /// the socket; sending `runtime.shutdown` there is what made a shell
+    /// restart kill the conversation. The daemon, which does own the child,
+    /// calls this itself.
+    ///
+    /// Idempotent: the child is taken, so a second call is a no-op.
+    pub fn shutdown(&mut self) {
+        let Some(child) = self.child.take() else {
+            // Not ours to stop. Close the socket and nothing else.
+            return;
         };
-        command
-            .arg("--mode")
-            .arg("studio-host")
-            .arg("--bridge-endpoint")
-            .arg(&launch.socket_path)
-            .arg("--bridge-token-file")
-            .arg(&launch.token_file)
-            .arg("--bridge-runtime-epoch")
-            .arg(launch.runtime_epoch.to_string())
-            .arg("--cwd")
-            .arg(&launch.cwd);
-        for (key, value) in &launch.env {
-            command.env(key, value);
+        Self::drain_child(&self.stream, child);
+    }
+
+    /// Send the shutdown request and wait out the child.
+    fn drain_child(stream: &Mutex<Stream>, mut child: Child) {
+        let mut stream = stream
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let request = json!({
+            "type": "studio.request",
+            "requestId": "shell-shutdown",
+            "runtimeEpoch": 0,
+            "operation": { "kind": "runtime.shutdown", "drain": true },
+        });
+        let _ = write_frame(&mut *stream, 0, &request);
+        let _ = stream.flush();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < deadline {
+            match child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+                Err(_) => break,
+            }
         }
-        command
-            .stdout(std::process::Stdio::null())
-            .spawn()
-            .map_err(|e| BridgeError::Io(format!("spawn adapter: {e}")))
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
     pub fn epoch(&self) -> u64 {
@@ -350,34 +367,32 @@ impl BridgeSession {
 
 impl Drop for BridgeSession {
     fn drop(&mut self) {
-        // Ask the runtime to shut down cleanly, then make sure it is gone.
-        let request = json!({
-            "type": "studio.request",
-            "requestId": "shell-shutdown",
-            "runtimeEpoch": self.epoch,
-            "operation": { "kind": "runtime.shutdown", "drain": true },
-        });
-        let _ = self.send(&request);
-        let mut stream = self
-            .stream
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let _ = stream.flush();
-        let Some(child) = self.child.as_mut() else {
-            return;
-        };
-        let deadline = Instant::now() + Duration::from_secs(3);
-        while Instant::now() < deadline {
-            match child.try_wait() {
-                Ok(Some(_)) => return,
-                Ok(None) => std::thread::sleep(Duration::from_millis(50)),
-                Err(_) => break,
-            }
-        }
-        let _ = child.kill();
-        let _ = child.wait();
+        // Only ends the runtime when this session launched it. See
+        // [`BridgeSession::shutdown`].
+        self.shutdown();
+        // Half-close, so the peer sees the disconnect now rather than whenever
+        // this process happens to exit. The reader thread holds a clone of the
+        // socket, so without this the write side stays open on our end and the
+        // peer never gets an EOF — which means a daemon watching for surfaces
+        // to leave would wait forever.
+        announce_departure(&self.stream);
     }
 }
+
+/// Tell the peer this side is done writing.
+///
+/// Unix only for now: a named pipe handle has no equivalent, and the Windows
+/// path is unverified regardless.
+#[cfg(unix)]
+fn announce_departure(stream: &Mutex<Stream>) {
+    let stream = stream
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+}
+
+#[cfg(not(unix))]
+fn announce_departure(_stream: &Mutex<Stream>) {}
 
 /// Own the read half of the socket and file every frame into the shared inbox.
 fn spawn_reader(stream: Stream, shared: Arc<Shared>) {
@@ -395,9 +410,9 @@ fn spawn_reader(stream: Stream, shared: Arc<Shared>) {
                         .to_string();
                     let mut inbox = shared.lock_inbox();
                     match kind {
-                        "studio.event" => inbox.events.push_back(
-                            body.get("event").cloned().unwrap_or(Value::Null),
-                        ),
+                        "studio.event" => inbox
+                            .events
+                            .push_back(body.get("event").cloned().unwrap_or(Value::Null)),
                         // `accepted` is not terminal, so it is dropped here
                         // rather than settling a waiter early.
                         "studio.snapshot" if !request_id.is_empty() => {
@@ -428,7 +443,10 @@ fn spawn_reader(stream: Stream, shared: Arc<Shared>) {
 }
 
 /// Poll for the socket file; the adapter creates it after binding.
-fn wait_for_socket(path: &str, timeout: Duration) -> Result<Stream, BridgeError> {
+///
+/// Public because the daemon spawns the adapter through [`spawn_adapter`] and
+/// has to wait for the socket the same way a session does.
+pub fn wait_for_socket(path: &str, timeout: Duration) -> Result<Stream, BridgeError> {
     let deadline = Instant::now() + timeout;
     loop {
         // On Windows the pipe is named, not pathed, so it has no file to wait
@@ -475,6 +493,44 @@ fn stream_clone(stream: &Stream) -> Result<Stream, BridgeError> {
             &std::env::var("STEP_STUDIO_TRANSPORT_ENDPOINT").unwrap_or_default(),
         ))
     }
+}
+
+/// Build and launch the adapter process.
+///
+/// Public because the daemon owns the adapter in M2 while the shell is a
+/// client: both need the same argv, and a second copy of it would drift. The
+/// daemon spawns through here and keeps the `Child` itself.
+pub fn spawn_adapter(launch: &AdapterLaunch) -> Result<Child, BridgeError> {
+    let mut command = if launch.command.is_empty() {
+        let mut command = Command::new(&launch.node);
+        command.arg(&launch.adapter_script);
+        command
+    } else {
+        let mut parts = launch.command.iter();
+        let mut command = Command::new(parts.next().expect("command is non-empty"));
+        for arg in parts {
+            command.arg(arg);
+        }
+        command
+    };
+    command
+        .arg("--mode")
+        .arg("studio-host")
+        .arg("--bridge-endpoint")
+        .arg(&launch.socket_path)
+        .arg("--bridge-token-file")
+        .arg(&launch.token_file)
+        .arg("--bridge-runtime-epoch")
+        .arg(launch.runtime_epoch.to_string())
+        .arg("--cwd")
+        .arg(&launch.cwd);
+    for (key, value) in &launch.env {
+        command.env(key, value);
+    }
+    command
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| BridgeError::Io(format!("spawn adapter: {e}")))
 }
 
 fn is_terminal(status: Option<&str>) -> bool {

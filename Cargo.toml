@@ -5,6 +5,7 @@ members = [
   "crates/studio-bridge",
   "crates/step-studio-shell",
   "crates/step-studio-runtime",
+  "crates/studio-host",
 ]
 
 [workspace.package]

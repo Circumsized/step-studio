@@ -10,4 +10,4 @@ pub mod transport;
 pub use frame::{FrameDecoder, FrameEncoder};
 pub use handshake::{challenge_proof, PROTOCOL_VERSION};
 
-pub use client::{AdapterLaunch, BridgeError, BridgeSession};
+pub use client::{spawn_adapter, AdapterLaunch, BridgeError, BridgeSession};

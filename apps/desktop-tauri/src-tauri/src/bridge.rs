@@ -26,6 +26,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use serde_json::{json, Value};
 use step_studio_bridge::{AdapterLaunch, BridgeSession};
+use step_studio_host as host;
 
 use crate::pump::{self, Job};
 
@@ -182,31 +183,6 @@ fn next_query_id() -> String {
     format!("tauri-query-{}", COUNTER.fetch_add(1, Ordering::Relaxed))
 }
 
-/// Where the adapter lives. Packaged builds ship the native runtime beside the
-/// shell; a checkout run finds it under `target/`.
-///
-/// Returns at most ONE command: `AdapterLaunch.command` is `argv[0]` plus its
-/// arguments, so a second element would be passed to the adapter as an
-/// argument. The candidates deliberately overlap — a shell in `target/release`
-/// finds the same binary through `beside_exe` and through `repo_root` — so this
-/// must take the first hit rather than collect them all.
-fn native_runtime_command(repo_root: &Path) -> Vec<String> {
-    let beside_exe = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("step-studio-runtime")));
-    let candidates = beside_exe
-        .into_iter()
-        .chain(["release", "debug"].map(|profile| {
-            repo_root.join(format!("target/{profile}/step-studio-runtime"))
-        }));
-    for candidate in candidates {
-        if candidate.is_file() {
-            return vec![candidate.to_string_lossy().to_string()];
-        }
-    }
-    Vec::new()
-}
-
 /// Walk up looking for the workspace root, so a shell run from a subdirectory
 /// still finds the adapter.
 fn find_repo_root(start: &Path) -> PathBuf {
@@ -224,15 +200,12 @@ fn env_or(name: &str, fallback: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| fallback.to_string())
 }
 
-/// Connect a session and take its first snapshot.
+/// Connect to the host daemon, starting it if nothing is answering.
 ///
-/// Returns `None` when the session cannot be established, in which case the
-/// shell keeps reporting the unavailable shape. Every failure is printed: a
-/// silent fallback would look identical to a working shell with nothing to
-/// show.
-///
-/// The session is returned rather than dropped: dropping it would shut the
-/// adapter down, and the pump needs it for the process lifetime.
+/// The shell is a client. It launches the daemon and nothing else, and the
+/// daemon owns the adapter — which is what makes a shell restart survivable:
+/// dropping this session closes a socket and half-closes it, and the adapter
+/// keeps running under the daemon.
 pub fn connect_session() -> Option<Connected> {
     let cwd = PathBuf::from(env_or("STEP_STUDIO_CWD", "."));
     let repo_root = find_repo_root(
@@ -242,7 +215,7 @@ pub fn connect_session() -> Option<Connected> {
     );
     let step_command = env_or("STEP_STUDIO_STEP_CMD", "step");
 
-    // A path that does not exist is a configuration mistake; the adapter would
+    // A path that does not exist is a configuration mistake; the daemon would
     // only report it as a closed socket after the handshake.
     if step_command.contains('/') && !Path::new(&step_command).is_file() {
         eprintln!("[bridge] Step CLI not found at {step_command}");
@@ -251,30 +224,24 @@ pub fn connect_session() -> Option<Connected> {
 
     let session_dir = cwd.join(".step-studio");
     let _ = std::fs::create_dir_all(&session_dir);
+    let endpoint = host::lifecycle::default_endpoint();
+    if !ensure_daemon(&endpoint, &cwd, &repo_root, &step_command, &session_dir) {
+        return None;
+    }
+
+    // Client-only: an empty `node` means this session spawns nothing, so its
+    // drop must not end the runtime. The daemon owns the adapter and therefore
+    // the token file, which is why the token is passed rather than written.
     let launch = AdapterLaunch {
-        node: "node".to_string(),
-        adapter_script: repo_root
-            .join("packages/runtime-stepcode/dist/src/main.js")
-            .to_string_lossy()
-            .to_string(),
-        socket_path: session_dir
-            .join("bridge.sock")
-            .to_string_lossy()
-            .to_string(),
+        node: String::new(),
+        adapter_script: String::new(),
+        socket_path: endpoint,
         token_file: session_dir.join("token").to_string_lossy().to_string(),
         cwd: cwd.to_string_lossy().to_string(),
         runtime_epoch: 1,
-        // Both names: the Rust adapter reads STEP_STUDIO_STEP_CMD, the
-        // TypeScript fallback reads STEP_STUDIO_RUNTIME_CMD.
-        env: vec![
-            ("STEP_STUDIO_STEP_CMD".to_string(), step_command.clone()),
-            ("STEP_STUDIO_RUNTIME_CMD".to_string(), step_command),
-            // Resume the previous session.
-            ("STEP_STUDIO_SESSION".to_string(), "continue".to_string()),
-        ],
-        // The shell launches the adapter, so it owns the token file.
-        token: None,
-        command: native_runtime_command(&repo_root),
+        env: Vec::new(),
+        token: Some(BRIDGE_TOKEN.to_string()),
+        command: Vec::new(),
     };
 
     let session = match BridgeSession::connect(&launch) {
@@ -296,11 +263,142 @@ pub fn connect_session() -> Option<Connected> {
     let inner = snapshot.get("snapshot").unwrap_or(&snapshot);
     Some(Connected {
         bootstrap,
+        // The daemon mints the epoch and persists it, so a daemon that restarted
+        // under a reconnecting shell is visible as a new authority rather than
+        // looking like the same one. The shell used to hardcode 1 here, which
+        // made the client's epoch rule dead code.
         runtime_epoch: session.epoch(),
-        authority_epoch: inner.get("runtimeEpoch").and_then(Value::as_u64).unwrap_or(1),
-        state_version: inner.get("stateVersion").and_then(Value::as_u64).unwrap_or(0),
+        authority_epoch: inner
+            .get("runtimeEpoch")
+            .and_then(Value::as_u64)
+            .unwrap_or(1),
+        state_version: inner
+            .get("stateVersion")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
         session,
     })
+}
+
+/// The bridge token. The daemon writes the same value into the token file it
+/// owns, so a surface that already knows it does not have to read the file.
+const BRIDGE_TOKEN: &str = "step-studio";
+
+/// Make sure a daemon is answering on `endpoint`, starting one when it is not.
+///
+/// Returns false when no daemon could be reached, in which case the caller keeps
+/// reporting the unavailable shape rather than pretending to be connected.
+fn ensure_daemon(
+    endpoint: &str,
+    cwd: &Path,
+    repo_root: &Path,
+    step_command: &str,
+    session_dir: &Path,
+) -> bool {
+    let target = step_studio_bridge::transport::endpoint_for_bind(endpoint);
+    if step_studio_bridge::transport::connect(&target).is_ok() {
+        return true;
+    }
+    if !spawn_daemon(endpoint, cwd, repo_root, step_command, session_dir) {
+        return false;
+    }
+
+    // Poll rather than block: the daemon has to spawn the adapter and complete a
+    // handshake with it before it can answer anybody, and that is not instant.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
+        if step_studio_bridge::transport::connect(&target).is_ok() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    }
+
+    // The launcher counts, not the daemon: a daemon that died cannot record its
+    // own failure, and the budget has to survive the restart it is meant to
+    // stop.
+    eprintln!("[bridge] the host daemon did not come up");
+    let mut state = host::state::load();
+    if state.breaker.record_failure(
+        host::state::now_secs(),
+        "the daemon did not answer after 30s",
+    ) {
+        eprintln!(
+            "[bridge] the daemon breaker is open after {} failed starts; \
+             run `step-studio-host reset` to try again",
+            state.breaker.attempts
+        );
+    }
+    let _ = host::state::save(&state);
+    false
+}
+
+/// Start the daemon and leave it running.
+///
+/// Detached, because the daemon has to outlive the shell: a child in the shell's
+/// process group would be killed by the same signal that ends the shell, which
+/// is the whole thing M2 removes. Stdio goes to a file, since a daemon with no
+/// terminal has nowhere to write and a GUI shell has none to give it.
+fn spawn_daemon(
+    endpoint: &str,
+    cwd: &Path,
+    repo_root: &Path,
+    step_command: &str,
+    session_dir: &Path,
+) -> bool {
+    let Some(binary) = daemon_binary(repo_root) else {
+        eprintln!("[bridge] no step-studio-host binary found");
+        return false;
+    };
+    let log = std::fs::File::create(session_dir.join("daemon.log")).unwrap_or_else(|_| {
+        std::fs::File::create(std::env::temp_dir().join("step-studio-daemon.log"))
+            .expect("a log file")
+    });
+    let mut command = std::process::Command::new(&binary);
+    command
+        .arg("--endpoint")
+        .arg(endpoint)
+        .arg("--adapter-endpoint")
+        .arg(
+            session_dir
+                .join("bridge.sock")
+                .to_string_lossy()
+                .to_string(),
+        )
+        .arg("--cwd")
+        .arg(cwd)
+        .arg("--repo-root")
+        .arg(repo_root)
+        .arg("--step-cmd")
+        .arg(step_command);
+    #[cfg(unix)]
+    {
+        // A new session, so a SIGHUP to the shell's terminal does not take the
+        // daemon with it.
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    command.stdout(log.try_clone().expect("the log duplicates"));
+    command.stderr(log);
+    match command.spawn() {
+        Ok(_) => true,
+        Err(error) => {
+            eprintln!("[bridge] could not start the daemon: {error}");
+            false
+        }
+    }
+}
+
+/// Where the daemon lives: beside the shell in a packaged build, under
+/// `target/` in a checkout. The first hit wins, because the candidates overlap.
+fn daemon_binary(repo_root: &Path) -> Option<PathBuf> {
+    let beside_exe = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("step-studio-host")));
+    let candidates = beside_exe.into_iter().chain(
+        ["release", "debug"]
+            .map(|profile| repo_root.join(format!("target/{profile}/step-studio-host"))),
+    );
+    candidates.into_iter().find(|candidate| candidate.is_file())
 }
 
 /// Translate a Studio snapshot into the client contract's `ClientBootstrap`.
@@ -320,13 +418,22 @@ fn bootstrap_from_snapshot(response: &serde_json::Value) -> serde_json::Value {
     // `entities.snapshot`. Leaving it out is not a smaller payload: with
     // `snapshot` absent the client holds null forever, `snapshotReady` stays
     // false (`App.tsx:4205`) and the composer never enables.
-    let state_version = snapshot.get("stateVersion").and_then(Value::as_u64).unwrap_or(0);
+    let state_version = snapshot
+        .get("stateVersion")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     let runtime_id = snapshot
         .get("runtimeId")
         .and_then(|v| v.as_str())
         .unwrap_or("step-runtime");
-    let runtime_epoch = snapshot.get("runtimeEpoch").and_then(|v| v.as_u64()).unwrap_or(1);
-    let session_id = snapshot.get("sessionId").and_then(|v| v.as_str()).unwrap_or_default();
+    let runtime_epoch = snapshot
+        .get("runtimeEpoch")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1);
+    let session_id = snapshot
+        .get("sessionId")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
 
     let mut selected = serde_json::json!({});
     if let Some(model) = snapshot.get("model") {
@@ -387,8 +494,9 @@ pub fn bootstrap(state: tauri::State<'_, SessionState>) -> serde_json::Value {
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     match cached.as_ref() {
         Some(snapshot) => snapshot.clone(),
-        None => serde_json::to_value(unavailable_bootstrap())
-            .unwrap_or_else(|_| serde_json::json!({})),
+        None => {
+            serde_json::to_value(unavailable_bootstrap()).unwrap_or_else(|_| serde_json::json!({}))
+        }
     }
 }
 
@@ -431,7 +539,10 @@ pub fn query(
     state: tauri::State<'_, SessionState>,
     request: serde_json::Value,
 ) -> Result<serde_json::Value, IpcError> {
-    let name = request.get("queryName").and_then(Value::as_str).unwrap_or_default();
+    let name = request
+        .get("queryName")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     let input = request.get("input").cloned().unwrap_or(Value::Null);
     let payload = round_trip(&state, name, input, &next_query_id(), pump::Want::Result)?;
     Ok(json!({ "ok": true, "queryName": name, "result": shape_query_result(name, payload) }))
@@ -477,9 +588,15 @@ pub fn command(
     state: tauri::State<'_, SessionState>,
     request: serde_json::Value,
 ) -> Result<serde_json::Value, IpcError> {
-    let name = request.get("commandName").and_then(Value::as_str).unwrap_or_default();
+    let name = request
+        .get("commandName")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     let input = request.get("input").cloned().unwrap_or(Value::Null);
-    let request_id = request.get("requestId").and_then(Value::as_str).unwrap_or_default();
+    let request_id = request
+        .get("requestId")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
     round_trip(&state, name, input, request_id, pump::Want::Ack)
 }
 
@@ -499,8 +616,9 @@ pub fn subscribe(
 #[tauri::command]
 pub fn close(state: tauri::State<'_, SessionState>) -> Result<(), IpcError> {
     // Dropping the sender is what ends the pump: its `recv_timeout` then sees a
-    // disconnected channel and returns, which drops the session and with it the
-    // adapter child process.
+    // disconnected channel and returns, which drops the session. The session
+    // owns no child — the daemon owns the adapter — so this closes a socket and
+    // nothing else. The daemon keeps the conversation for its grace period.
     let sender = state
         .jobs
         .lock()

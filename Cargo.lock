@@ -4914,8 +4914,18 @@ dependencies = [
  "serde_json",
  "sha2",
  "step-studio-bridge",
+ "step-studio-host",
  "tauri",
  "tauri-build",
+]
+
+[[package]]
+name = "step-studio-host"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "step-studio-bridge",
 ]
 
 [[package]]

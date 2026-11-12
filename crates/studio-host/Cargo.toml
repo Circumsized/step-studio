@@ -1,0 +1,17 @@
+[package]
+name = "step-studio-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+step-studio-bridge.workspace = true
+
+[[bin]]
+name = "step-studio-host"
+path = "src/bin/studio-host.rs"

@@ -10,7 +10,9 @@ use step_studio_bridge::{AdapterLaunch, BridgeSession};
 use step_studio_runtime::bridge_server::{AdapterConfig, Runtime};
 
 fn find_step() -> Option<String> {
-    let from_env = std::env::var("STEP_STUDIO_REAL_STEP").ok().filter(|v| !v.is_empty());
+    let from_env = std::env::var("STEP_STUDIO_REAL_STEP")
+        .ok()
+        .filter(|v| !v.is_empty());
     if let Some(path) = from_env {
         return std::path::Path::new(&path).exists().then_some(path);
     }
@@ -25,7 +27,9 @@ fn find_step() -> Option<String> {
     }
     let home = std::env::var("HOME").unwrap_or_default();
     let installed = PathBuf::from(home).join(".stepcode/bin/step");
-    installed.exists().then(|| installed.to_string_lossy().to_string())
+    installed
+        .exists()
+        .then(|| installed.to_string_lossy().to_string())
 }
 
 /// A wrapper that runs the shared fake CLI, so the adapter can be pointed at a
@@ -37,8 +41,11 @@ fn fake_step_wrapper(dir: &std::path::Path) -> PathBuf {
         .expect("repo root")
         .join("packages/runtime-stepcode/test/fake-step.mjs");
     let wrapper = dir.join("fake-step");
-    std::fs::write(&wrapper, format!("#!/bin/sh\nexec node {} \"$@\"\n", fake.display()))
-        .expect("write wrapper");
+    std::fs::write(
+        &wrapper,
+        format!("#!/bin/sh\nexec node {} \"$@\"\n", fake.display()),
+    )
+    .expect("write wrapper");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -71,13 +78,14 @@ fn config_in(dir: &std::path::Path, step_command: String) -> (AdapterConfig, Pat
             runtime_epoch: 1,
             cwd: dir.to_string_lossy().to_string(),
             step_command,
-        // The whole environment, the same way the production config path passes
-        // it: the CLI resolves its config dir and credentials from more than a
-        // prefix, and filtering it here silently starves the turn.
-        step_env: std::env::vars().collect(),
-        continue_session: false,
-    };
-    (config, dir.to_path_buf())
+            // The whole environment, the same way the production config path passes
+            // it: the CLI resolves its config dir and credentials from more than a
+            // prefix, and filtering it here silently starves the turn.
+            step_env: std::env::vars().collect(),
+            continue_session: false,
+            exit_on_disconnect: false,
+        };
+        (config, dir.to_path_buf())
     }
 }
 
@@ -98,6 +106,7 @@ fn the_rust_adapter_drives_the_real_step_cli() {
         step_command: config.step_command.clone(),
         step_env: config.step_env.clone(),
         continue_session: false,
+        exit_on_disconnect: false,
     });
     std::thread::spawn(move || {
         let _ = runtime.serve();
@@ -106,7 +115,10 @@ fn the_rust_adapter_drives_the_real_step_cli() {
     // Wait for the socket to appear.
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     while !std::path::Path::new(&config.endpoint).exists() {
-        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
         std::thread::sleep(Duration::from_millis(50));
     }
 
@@ -130,7 +142,10 @@ fn the_rust_adapter_drives_the_real_step_cli() {
         .pointer("/snapshot/sessionId")
         .and_then(|v| v.as_str())
         .expect("sessionId");
-    assert!(!session_id.is_empty(), "the CLI reported an empty session id");
+    assert!(
+        !session_id.is_empty(),
+        "the CLI reported an empty session id"
+    );
 
     let (receipt, events) = session
         .invoke(serde_json::json!({ "kind": "core.prompt", "text": "reply with exactly: PONG" }))
@@ -139,7 +154,10 @@ fn the_rust_adapter_drives_the_real_step_cli() {
         receipt.get("status").and_then(|s| s.as_str()),
         Some("completed"),
         "turn failed: {}",
-        receipt.pointer("/error/message").and_then(|m| m.as_str()).unwrap_or("unknown")
+        receipt
+            .pointer("/error/message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown")
     );
 
     let answer: String = events
@@ -154,9 +172,14 @@ fn the_rust_adapter_drives_the_real_step_cli() {
         .invoke(serde_json::json!({ "kind": "session.transcript.read" }))
         .expect("transcript")
         .0;
-    let items = page.pointer("/result/items").and_then(|i| i.as_array()).expect("items");
+    let items = page
+        .pointer("/result/items")
+        .and_then(|i| i.as_array())
+        .expect("items");
     assert!(
-        items.iter().any(|item| item.get("role") == Some(&serde_json::json!("assistant"))),
+        items
+            .iter()
+            .any(|item| item.get("role") == Some(&serde_json::json!("assistant"))),
         "the transcript lost the assistant turn"
     );
 }
@@ -184,6 +207,7 @@ fn an_approval_round_trips_through_the_rust_adapter() {
         step_command: config.step_command.clone(),
         step_env: config.step_env.clone(),
         continue_session: config.continue_session,
+        exit_on_disconnect: false,
     });
     std::thread::spawn(move || {
         let _ = runtime.serve();
@@ -191,7 +215,10 @@ fn an_approval_round_trips_through_the_rust_adapter() {
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     while !std::path::Path::new(&config.endpoint).exists() {
-        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
         std::thread::sleep(Duration::from_millis(50));
     }
 
@@ -271,7 +298,10 @@ fn an_approval_round_trips_through_the_rust_adapter() {
         receipt.get("status").and_then(|s| s.as_str()),
         Some("completed"),
         "the turn did not settle after the answer: {}",
-        receipt.pointer("/error/message").and_then(|m| m.as_str()).unwrap_or("unknown")
+        receipt
+            .pointer("/error/message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown")
     );
 
     // The transcript proves the CLI saw the answer: it only writes the verdict
@@ -280,7 +310,10 @@ fn an_approval_round_trips_through_the_rust_adapter() {
         .invoke(serde_json::json!({ "kind": "session.transcript.read" }))
         .expect("transcript")
         .0;
-    let items = page.pointer("/result/items").and_then(|i| i.as_array()).expect("items");
+    let items = page
+        .pointer("/result/items")
+        .and_then(|i| i.as_array())
+        .expect("items");
     assert!(
         items.iter().any(|item| {
             item.get("role") == Some(&serde_json::json!("assistant"))
@@ -310,6 +343,7 @@ fn a_cancelled_answer_reaches_the_cli_as_cancelled() {
         step_command: config.step_command.clone(),
         step_env: config.step_env.clone(),
         continue_session: config.continue_session,
+        exit_on_disconnect: false,
     });
     std::thread::spawn(move || {
         let _ = runtime.serve();
@@ -317,7 +351,10 @@ fn a_cancelled_answer_reaches_the_cli_as_cancelled() {
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     while !std::path::Path::new(&config.endpoint).exists() {
-        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
         std::thread::sleep(Duration::from_millis(50));
     }
 
@@ -361,7 +398,10 @@ fn a_cancelled_answer_reaches_the_cli_as_cancelled() {
                 }
                 if event.get("kind").and_then(|k| k.as_str()) == Some("interaction.resolved") {
                     saw_resolved = true;
-                    assert_eq!(event.get("outcome").and_then(|o| o.as_str()), Some("cancelled"));
+                    assert_eq!(
+                        event.get("outcome").and_then(|o| o.as_str()),
+                        Some("cancelled")
+                    );
                 }
             },
         )
@@ -376,7 +416,10 @@ fn a_cancelled_answer_reaches_the_cli_as_cancelled() {
         .invoke(serde_json::json!({ "kind": "session.transcript.read" }))
         .expect("transcript")
         .0;
-    let items = page.pointer("/result/items").and_then(|i| i.as_array()).expect("items");
+    let items = page
+        .pointer("/result/items")
+        .and_then(|i| i.as_array())
+        .expect("items");
     assert!(
         items.iter().any(|item| item.to_string().contains("denied")),
         "the CLI never saw the denial: {items:?}"
@@ -405,6 +448,7 @@ fn a_stale_interaction_answer_fails_closed() {
         step_command: config.step_command.clone(),
         step_env: config.step_env.clone(),
         continue_session: config.continue_session,
+        exit_on_disconnect: false,
     });
     std::thread::spawn(move || {
         let _ = runtime.serve();
@@ -412,7 +456,10 @@ fn a_stale_interaction_answer_fails_closed() {
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     while !std::path::Path::new(&config.endpoint).exists() {
-        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
         std::thread::sleep(Duration::from_millis(50));
     }
 
@@ -461,7 +508,10 @@ fn a_stale_interaction_answer_fails_closed() {
         Some("INTERACTION_STALE"),
         "the stale answer must carry the stale code"
     );
-    assert!(saw_resolved, "a stale answer must still resolve the client's card");
+    assert!(
+        saw_resolved,
+        "a stale answer must still resolve the client's card"
+    );
 }
 
 #[test]
@@ -481,6 +531,7 @@ fn aborting_settles_the_turn_the_rust_adapter_is_still_running() {
         step_command: config.step_command.clone(),
         step_env: config.step_env.clone(),
         continue_session: false,
+        exit_on_disconnect: false,
     });
     std::thread::spawn(move || {
         let _ = runtime.serve();
@@ -488,7 +539,10 @@ fn aborting_settles_the_turn_the_rust_adapter_is_still_running() {
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     while !std::path::Path::new(&config.endpoint).exists() {
-        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
         std::thread::sleep(Duration::from_millis(50));
     }
 
@@ -510,11 +564,14 @@ fn aborting_settles_the_turn_the_rust_adapter_is_still_running() {
     let (first, started) = std::sync::mpsc::channel::<()>();
     let turn = std::sync::Arc::clone(&session);
     let handle = std::thread::spawn(move || {
-        turn.invoke_with(serde_json::json!({ "kind": "core.prompt", "text": "hang" }), |event| {
-            if event.get("kind") == Some(&serde_json::json!("conversation.message.delta")) {
-                let _ = first.send(());
-            }
-        })
+        turn.invoke_with(
+            serde_json::json!({ "kind": "core.prompt", "text": "hang" }),
+            |event| {
+                if event.get("kind") == Some(&serde_json::json!("conversation.message.delta")) {
+                    let _ = first.send(());
+                }
+            },
+        )
     });
 
     started
@@ -524,12 +581,18 @@ fn aborting_settles_the_turn_the_rust_adapter_is_still_running() {
         .invoke(serde_json::json!({ "kind": "core.abort" }))
         .expect("abort was refused");
 
-    let receipt = handle.join().expect("turn thread").expect("the turn never settled");
+    let receipt = handle
+        .join()
+        .expect("turn thread")
+        .expect("the turn never settled");
     assert_eq!(
         receipt.get("status").and_then(|s| s.as_str()),
         Some("completed"),
         "the aborted turn did not settle: {}",
-        receipt.pointer("/error/message").and_then(|m| m.as_str()).unwrap_or("unknown")
+        receipt
+            .pointer("/error/message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown")
     );
 }
 
@@ -555,6 +618,7 @@ fn a_new_session_mints_a_fresh_session_id() {
         step_command: config.step_command.clone(),
         step_env: config.step_env.clone(),
         continue_session: false,
+        exit_on_disconnect: false,
     });
     std::thread::spawn(move || {
         let _ = runtime.serve();
@@ -562,7 +626,10 @@ fn a_new_session_mints_a_fresh_session_id() {
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     while !std::path::Path::new(&config.endpoint).exists() {
-        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
         std::thread::sleep(Duration::from_millis(50));
     }
 
@@ -596,7 +663,10 @@ fn a_new_session_mints_a_fresh_session_id() {
         receipt.get("status").and_then(|s| s.as_str()),
         Some("completed"),
         "session.new failed: {}",
-        receipt.pointer("/error/message").and_then(|m| m.as_str()).unwrap_or("unknown")
+        receipt
+            .pointer("/error/message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown")
     );
 
     let after = session
@@ -628,6 +698,7 @@ fn a_turn_settles_when_the_cli_dies_mid_turn() {
         step_command: config.step_command.clone(),
         step_env: config.step_env.clone(),
         continue_session: false,
+        exit_on_disconnect: false,
     });
     std::thread::spawn(move || {
         let _ = runtime.serve();
@@ -635,7 +706,10 @@ fn a_turn_settles_when_the_cli_dies_mid_turn() {
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
     while !std::path::Path::new(&config.endpoint).exists() {
-        assert!(std::time::Instant::now() < deadline, "the adapter never bound its socket");
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
         std::thread::sleep(Duration::from_millis(50));
     }
 
@@ -691,8 +765,16 @@ fn every_declared_capability_is_actually_dispatched() {
         .iter()
         .map(|entry| {
             (
-                entry.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                entry.get("grade").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                entry
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                entry
+                    .get("grade")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
             )
         })
         .collect();
@@ -700,11 +782,9 @@ fn every_declared_capability_is_actually_dispatched() {
 
     // The dispatch arms, read from the source rather than restated here: a test
     // that duplicates the list would agree with itself.
-    let source = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/bridge_server.rs"
-    ))
-    .expect("read the dispatcher");
+    let source =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/bridge_server.rs"))
+            .expect("read the dispatcher");
 
     let undelivered: Vec<String> = declared
         .iter()

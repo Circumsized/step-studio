@@ -87,8 +87,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: studio-crates
-      - run: cargo test -p step-studio-bridge -p step-studio-runtime
-      - run: cargo clippy -p step-studio-bridge -p step-studio-runtime --all-targets -- -D warnings
+      - run: cargo test -p step-studio-bridge -p step-studio-runtime -p step-studio-host
+      - run: cargo clippy -p step-studio-bridge -p step-studio-runtime -p step-studio-host --all-targets -- -D warnings
 
   rust-windows:
     # The transport is the only platform-specific code: Unix sockets here, named

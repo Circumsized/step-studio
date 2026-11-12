@@ -452,6 +452,45 @@ Node 进程里驱动：
 
 这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
 
+### M2.1：host daemon 化——生命周期 + 监督者（2026-11-12 完成并实证）
+
+新增 `crates/studio-host`（workspace 成员），壳从「spawn 适配器 + 当客户端 + 退出时杀适配器」三合一改为**纯客户端**。
+
+| 层 | 文件 | 内容 |
+|---|---|---|
+| 监督者 | `src/supervisor.rs` | 退避 + 熔断 + 宽限的纯状态机。时间是「自监督者创建的单调偏移」而非 `Instant`，所以整套策略是被告知内容的纯函数，测试不需要 sleep 也没有时钟 trait |
+| 持久化 | `src/state.rs` | daemon epoch（单调、持久化）+ daemon 熔断器（5 次 / 10 分钟窗口）。写入用 `create_new` + `rename`，崩溃在写的瞬间只留旧文件或新文件 |
+| 端点 | `src/lifecycle.rs` | 单例探测（连得上就是活的，连不上才清陈旧 socket 文件）、`bind` 前建父目录、排空时钟 |
+| 转发 | `src/relay.rs` | 字节级帧转发。不解码是承重墙：重新编码就得决定盖哪个 epoch |
+| 适配器 | `src/adapter.rs` | daemon 拥有 child；握手失败时杀 child（`Child::drop` 不杀进程，这是孤儿化的直接来源） |
+| daemon | `src/bin/studio-host.rs` | 单例 → mint epoch → 监督线程 + 排空看护线程 + 平台形状 accept 循环 |
+
+**监督参数**（`supervisor.rs` 顶部一个 `Policy`）：宽限 60 s（复用方案里同义的热窗口）、初始退避 500 ms、倍率 2、上限 30 s、3 次失败即停、窗口 600 s。存活过宽限的子进程视为健康重启，立即拉起且不清预算。没有抖动——单个被监督子进程形不成雷惊群，且 `std` 没有 RNG；M2.3 扇出到 N 个适配器时才是加 full jitter 的时刻。
+
+**真机验收（Xvfb，`STEP_STUDIO_SELF_CHECK=1`，假 Step CLI）**：
+
+1. 跑壳 → 壳 detached 拉起 daemon（`process_group(0)`，stdio 重定向到 `.step-studio/daemon.log`）→ daemon spawn 适配器 → 适配器 spawn `step`；
+2. 自检回合完整：prompt accepted、`conversation.message.started/completed`、tool started/completed、逐字 delta `he`/`llo`/`!`、终态回执 `completed`；
+3. `kill -9` 壳 → **daemon / 适配器 / step 同 PID 全部存活**（这是 M2 的核心主张）；
+4. 重启壳 → 连上同一个 daemon 与同一个适配器（PID 未变，没有新起适配器），回合再次正常完成。
+
+**四个只有真机或无头测试能抓的问题**（都不是 review 能看出来的）：
+
+| 问题 | 症状 | 根因 |
+|---|---|---|
+| 适配器 `serve()` 是无限循环 | daemon 被杀后适配器不死，`step` 被 reparent 握着 `~/.stepcode` 会话——静默数据损坏（R1） | 连接结束只是线程退出，进程继续 `accept`。加 `STEP_STUDIO_EXIT_ON_DISCONNECT`，M2 拓扑下 daemon 是适配器唯一客户 |
+| `BridgeSession` reader 线程持有 socket 克隆 fd | `drop(session)` 后对端看不到 EOF，宽限时钟永远等下去；第二个表面永远拿不到 relay | `Child` 被 drop 不杀进程，同理 fd 被克隆不随 session 消失。`Drop` 里半关闭（`shutdown(Write)`） |
+| `/tmp/step-studio-<uid>/` 目录不存在 | daemon `bind` 直接 ENOENT，壳等 30 秒后报「daemon 没起来」 | `UnixListener::bind` 要求父目录存在，而短路径约束恰好要求它落在没人建的临时子目录里 |
+| `--grace` 没接到 `GraceClock` | 排空时钟跑的是 600 秒而不是传入的 3 秒 | `main` 里写死了 `GraceClock::new(DRAIN_GRACE)` 常量，没用 `config.grace` |
+
+另有一条死锁是**设计级**的：`wait_for_adapter` 在轮询期间持有适配器槽锁，`serve_surface` 的「等适配器」循环永远拿不到锁；`serve_surface` 又把锁持有整个中继期，堵住排空路径。拆成 `writer` 走 `Arc<Mutex<>>`、槽只用于取一个 `AdapterView` 视图后两条路都通。
+
+**测试**：`cargo test --workspace` 91 个通过，clippy 零警告，`cargo fmt --check` 干净，`npm run check` 全绿。其中 daemon 端到端 5 个：壳重启保住会话、杀 daemon 不留孤儿适配器、无表面则排空退出、第二个 daemon 让位给在跑的那个、`runtime.shutdown` 真的排在飞回合。
+
+**明确跳过**（理由记在 §19）：信号处理排空（fd 级联已覆盖正确性，代价是 `unsafe` 或新依赖，收益只是 5 秒优雅窗口）、OS 自动拉起（M5.2 与 NSIS 产线一起）、daemon↔surface 新协议与多表面（M2.2/M2.3）。
+
+**环境备注**：本机 AF_UNIX socketpair 缓冲只有约 250-300 字节（`/tmp/buf_probe2` 在 cargo 之外同样复现），所以「先写完再读」的测试写法在这里必然阻塞；socket 测试必须让写线程与读并发。
+
 ### M1.2c-terminal：`ompStudioTerminal` 真 PTY（2026-11-12 完成）
 
 底部 Terminal 接上真 PTY（`portable-pty` 0.9），不是行缓冲——AGENTS.md 明确要求
@@ -675,6 +714,11 @@ WebKitGTK 上实证过。要真正确认需要一台 Windows 机器或 CI。
 | `packages/runtime-stepcode/` | 新增：Step Code 的 Studio Bridge 适配器（TypeScript，现为回退路径） |
 | `crates/step-studio-runtime/` | 新增：同一适配器的 Rust 实现，壳优先使用 |
 | `crates/step-studio-shell/src/markdown.rs` | 新增：markdown 行分类，与渲染分开以便无窗口测试 |
+| `crates/studio-host/` | 新增：M2.1 常驻 host daemon（bin + supervisor + lifecycle + state + relay） |
+| `crates/studio-bridge/src/client.rs` | 改：`spawn_adapter` 提为公共函数（daemon 与壳共用同一份 argv）；`Drop` 改为按 child 所有权门控的 `shutdown()` + 半关闭 |
+| `crates/step-studio-runtime/src/bridge_server.rs` | 改：`runtime.shutdown` 从假排空改为有界真排空（5 s）；`serve_one` 返回 JoinHandle；`exit_on_disconnect` 时连接结束即进程结束 |
+| `crates/step-studio-runtime/src/config.rs` | 改：读 `STEP_STUDIO_EXIT_ON_DISCONNECT` |
+| `apps/desktop-tauri/src-tauri/src/bridge.rs` | 改：`connect_session` 从「spawn 适配器」改为「连 daemon，连不上就 detached 拉起再连」；client-only session；epoch 来自 daemon |
 | `apps/desktop/src/host-composition.ts` | 改：`STUDIO_RUNTIME_EXECUTABLE` 选择 custom runtime 源，并让显式指定的 limited 运行时获得 session controller |
 | `apps/desktop-tauri/` | 新增：Tauri v2 主壳（M1.1 脚手架 + bridge 注入 + 六个命令 stub） |
 | `packages/transport-desktop/src/ipc-validation.ts` | 新增：`createDesktopIpcBridge` 等从 `apps/desktop/src/` 迁入，桥本身零改动 |
