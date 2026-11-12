@@ -501,7 +501,9 @@ force push 只以 `--force-with-lease` 发出，**从不发裸 `--force`**——
 
 同批修掉：`pull` 的 match 漏 `ff-only` 臂（那是默认值也正是面板 Pull 按钮发的，每次必错）；`worktree_path` 漏 `..`（可在仓库外建 worktree）且三处 `..` 检查只 split `'/'`、漏 Windows 的 `..\..\x`；`unborn` 永不为真；`truncated` 在正好 `limit` 条时误报；`%D` 剥前缀导致本地/远端同名歧义（改完整 refname 映射）；**`revision` 从未发出使乐观并发检查在面板上全是死的**——我上一轮还在文档里写「破坏性操作一律带乐观并发检查」，那条宣称当时是假的。
 
-尚未修（下批）：`commit` 忽略 `paths` 会提交整个索引；rename/copy 的类型 2 行按普通变更解析、`originalPath` 从不发出；`discard` 对未跟踪文件直接失败；若干模型带了契约没有的 `unavailableReason` 键、`state('T')` 映射到契约外的 `"typechange"`；若干测试失败路径不清场。
+第二批已修：`commit` 忽略 `paths`（加 `--only --`，否则 UI 说「提交这些文件」却把整个索引都提交了）；`discard` 对未跟踪文件直接失败（拆成 tracked→restore、untracked→移除）。
+
+仍未修：rename/copy 的类型 2 行按普通变更解析、`originalPath` 从不发出（`plan.md` 早已把这条列为 M3.5 的审问题）；若干模型带了契约没有的 `unavailableReason` 键、`state('T')` 映射到契约外的 `"typechange"`；若干测试失败路径不清场。
 
 ### M3.3 文件树：`workspace.fileTree` 落地（2026-11-12 完成）
 

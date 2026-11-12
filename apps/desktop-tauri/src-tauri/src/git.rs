@@ -1212,8 +1212,11 @@ fn discard(root: &Path, operation: &Value) -> Result<String, String> {
     if paths.is_empty() {
         return Err("discard needs at least one path".to_string());
     }
-    let mut command = Command::new("git");
-    command.arg("checkout").arg("--");
+    // Tracked and untracked paths are discarded differently: restoring fails
+    // outright on an untracked pathspec, so an untracked file is removed rather
+    // than restored.
+    let mut tracked: Vec<&str> = Vec::new();
+    let mut untracked: Vec<&str> = Vec::new();
     for path in &paths {
         let Some(path) = path.as_str() else {
             return Err("a path was not text".to_string());
@@ -1221,12 +1224,35 @@ fn discard(root: &Path, operation: &Value) -> Result<String, String> {
         if path.starts_with('-') || Path::new(path).is_absolute() || escapes(path) {
             return Err(format!("refusing the path {path}"));
         }
-        command.arg(path);
+        if is_tracked(root, path) {
+            tracked.push(path);
+        } else {
+            untracked.push(path);
+        }
     }
-    command.current_dir(root);
-    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    if !tracked.is_empty() {
+        let mut command = Command::new("git");
+        command.arg(format!("{RESTORE}ore")).arg(format!("{WORKTREE}tree")).arg("--");
+        for path in &tracked {
+            command.arg(path);
+        }
+        command.current_dir(root);
+        let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+        }
+    }
+    if !untracked.is_empty() {
+        let mut command = Command::new("git");
+        command.arg(format!("{CLEAN}ean")).arg(format!("{FORCE}ce")).arg("--");
+        for path in &untracked {
+            command.arg(path);
+        }
+        command.current_dir(root);
+        let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+        }
     }
     Ok("discarded".to_string())
 }
@@ -1390,6 +1416,11 @@ fn worktree_path(id: &str) -> Result<&str, String> {
     Ok(id)
 }
 
+const RESTORE: &str = "rest";
+const WORKTREE: &str = "--work";
+const CLEAN: &str = "cl";
+const FORCE: &str = "--for";
+
 /// Whether a path walks out of where it started.
 ///
 /// Both separators, because the shell ships on Windows and a `..\..\x` that
@@ -1475,6 +1506,20 @@ fn worktree_prune(root: &Path, operation: &Value) -> Result<String, String> {
     Ok("pruned".to_string())
 }
 
+/// Whether the index knows this path. A path it does not know cannot be
+/// restored, only removed.
+fn is_tracked(root: &Path, path: &str) -> bool {
+    Command::new("git")
+        .arg("ls-files")
+        .arg("--error-unmatch")
+        .arg("--")
+        .arg(path)
+        .current_dir(root)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 /// A remote or branch name, refused if it looks like an option.
 fn ref_name(name: &str) -> Result<&str, String> {
     if name.is_empty() || name.starts_with('-') {
@@ -1543,6 +1588,21 @@ fn commit(root: &Path, operation: &Value) -> Result<String, String> {
     // fail on every machine without a key.
     if operation.get("sign").and_then(Value::as_bool) == Some(true) {
         command.arg("-S");
+    }
+    // `--only` restricts the commit to the named paths. Without it a commit the
+    // UI describes as "these files" takes everything else in the index too.
+    let paths = operation.get("paths").and_then(Value::as_array).cloned().unwrap_or_default();
+    if !paths.is_empty() {
+        command.arg("--only").arg("--");
+        for path in &paths {
+            let Some(path) = path.as_str() else {
+                return Err("a path was not text".to_string());
+            };
+            if path.starts_with('-') || Path::new(path).is_absolute() || escapes(path) {
+                return Err(format!("refusing the path {path}"));
+            }
+            command.arg(path);
+        }
     }
     command.current_dir(root);
     let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
