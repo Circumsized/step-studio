@@ -780,6 +780,24 @@ pub fn execute(operation: &Value) -> Value {
         "push" => push(&root, operation),
         "stash.push" => stash_push(&root, operation),
         "stash.apply" => stash_apply(&root, operation),
+        "stash.drop" => stash_drop(&root, operation),
+        "discard" => discard(&root, operation),
+        "merge" => integrate(&root, "merge", operation),
+        "rebase" => integrate(&root, "rebase", operation),
+        "cherry-pick" => integrate(&root, "cherry-pick", operation),
+        "revert" => integrate(&root, "revert", operation),
+        "reset" => reset(&root, operation),
+        "checkout" => checkout(&root, operation),
+        "tag.create" => tag_create(&root, operation),
+        "tag.delete" => tag_delete(&root, operation),
+        "remote.add" => remote_add(&root, operation),
+        "remote.setUrl" => remote_set_url(&root, operation),
+        "remote.remove" => remote_remove(&root, operation),
+        "worktree.create" => worktree_create(&root, operation),
+        "worktree.lock" => worktree_lock(&root, operation, true),
+        "worktree.unlock" => worktree_lock(&root, operation, false),
+        "worktree.remove" => worktree_remove(&root, operation),
+        "worktree.prune" => worktree_prune(&root, operation),
         other => {
             return json!({
                 "operation": other,
@@ -1032,6 +1050,295 @@ fn stash_apply(root: &Path, operation: &Value) -> Result<String, String> {
     Ok(if pop { "popped".to_string() } else { "applied".to_string() })
 }
 
+/// Drop one stash, honouring the optimistic-concurrency check.
+fn stash_drop(root: &Path, operation: &Value) -> Result<String, String> {
+    let stash = operation.get("stash").and_then(Value::as_str).unwrap_or("");
+    let expected = operation.get("expectedRevision").and_then(Value::as_str).unwrap_or("");
+    if expected != head_revision(root) {
+        return Err("the repository moved since this stash was listed; refresh and try again".to_string());
+    }
+    let output = Command::new("git")
+        .arg("stash")
+        .arg("drop")
+        .arg(ref_name(stash)?)
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("dropped {stash}"))
+}
+
+/// Discard working-tree changes to specific paths.
+///
+/// Destructive and unrecoverable, which is why the contract makes
+/// `expectedRevision` mandatory: if the head moved since the caller listed the
+/// files, what would be discarded is no longer what they saw.
+fn discard(root: &Path, operation: &Value) -> Result<String, String> {
+    let expected = operation.get("expectedRevision").and_then(Value::as_str).unwrap_or("");
+    if expected != head_revision(root) {
+        return Err("the repository moved since these changes were listed; refresh and try again".to_string());
+    }
+    let paths = operation.get("paths").and_then(Value::as_array).cloned().unwrap_or_default();
+    if paths.is_empty() {
+        return Err("discard needs at least one path".to_string());
+    }
+    let mut command = Command::new("git");
+    command.arg("checkout").arg("--");
+    for path in &paths {
+        let Some(path) = path.as_str() else {
+            return Err("a path was not text".to_string());
+        };
+        if path.starts_with('-') || Path::new(path).is_absolute() || path.split('/').any(|p| p == "..") {
+            return Err(format!("refusing the path {path}"));
+        }
+        command.arg(path);
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok("discarded".to_string())
+}
+
+/// merge / rebase / cherry-pick / revert: the four that take a ref and can stop
+/// with a conflict.
+fn integrate(root: &Path, verb: &str, operation: &Value) -> Result<String, String> {
+    let reference = operation.get("ref").and_then(Value::as_str).unwrap_or("");
+    if reference.is_empty() {
+        return Err(format!("{verb} needs a ref"));
+    }
+    let mut command = Command::new("git");
+    command.arg(verb);
+    // `--no-ff` is opt-in: a merge that the caller did not ask to force is left
+    // to fast-forward, which is what a merge normally does.
+    if verb == "merge" && operation.get("noFastForward").and_then(Value::as_bool) == Some(true) {
+        command.arg("--no-ff");
+    }
+    command.arg(ref_name(reference)?).current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("{verb} {reference}"))
+}
+
+/// Move the current branch. `hard` discards working-tree changes, so it takes
+/// the same optimistic-concurrency check as `discard`.
+fn reset(root: &Path, operation: &Value) -> Result<String, String> {
+    let mode = operation.get("mode").and_then(Value::as_str).unwrap_or("mixed");
+    if !matches!(mode, "soft" | "mixed" | "hard") {
+        return Err(format!("refusing the reset mode {mode}"));
+    }
+    let expected = operation.get("expectedRevision").and_then(Value::as_str).unwrap_or("");
+    if expected != head_revision(root) {
+        return Err("the repository moved since this reset was requested; refresh and try again".to_string());
+    }
+    let reference = operation.get("ref").and_then(Value::as_str).unwrap_or("");
+    let output = Command::new("git")
+        .arg("reset")
+        .arg(format!("--{mode}"))
+        .arg(ref_name(reference)?)
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("reset --{mode} {reference}"))
+}
+
+fn checkout(root: &Path, operation: &Value) -> Result<String, String> {
+    let reference = operation.get("ref").and_then(Value::as_str).unwrap_or("");
+    let output = Command::new("git")
+        .arg("checkout")
+        .arg(ref_name(reference)?)
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("checked out {reference}"))
+}
+
+/// Create a tag. A message makes it annotated; without one it is lightweight,
+/// which is what the panel's "留空创建轻量 Tag" means.
+fn tag_create(root: &Path, operation: &Value) -> Result<String, String> {
+    let name = operation.get("name").and_then(Value::as_str).unwrap_or("").trim();
+    if name.is_empty() || name.starts_with('-') {
+        return Err(format!("refusing the tag name {name}"));
+    }
+    let mut command = Command::new("git");
+    command.arg("tag").arg(name);
+    if let Some(message) = operation.get("message").and_then(Value::as_str) {
+        if !message.trim().is_empty() {
+            command.arg("-m").arg(message);
+        }
+    }
+    if let Some(target) = operation.get("target").and_then(Value::as_str) {
+        command.arg(ref_name(target)?);
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("tagged {name}"))
+}
+
+fn tag_delete(root: &Path, operation: &Value) -> Result<String, String> {
+    let name = operation.get("name").and_then(Value::as_str).unwrap_or("");
+    let output = Command::new("git")
+        .arg("tag")
+        .arg("-d")
+        .arg(ref_name(name)?)
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("deleted tag {name}"))
+}
+
+fn remote_add(root: &Path, operation: &Value) -> Result<String, String> {
+    let name = operation.get("name").and_then(Value::as_str).unwrap_or("");
+    let url = operation.get("url").and_then(Value::as_str).unwrap_or("");
+    let output = Command::new("git")
+        .arg("remote")
+        .arg("add")
+        .arg(ref_name(name)?)
+        .arg(url)
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("added remote {name}"))
+}
+
+fn remote_set_url(root: &Path, operation: &Value) -> Result<String, String> {
+    let name = operation.get("name").and_then(Value::as_str).unwrap_or("");
+    let url = operation.get("url").and_then(Value::as_str).unwrap_or("");
+    let mut command = Command::new("git");
+    command.arg("remote").arg("set-url");
+    if operation.get("push").and_then(Value::as_bool) == Some(true) {
+        command.arg("--push");
+    }
+    command.arg(ref_name(name)?).arg(url).current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("set {name} url"))
+}
+
+fn remote_remove(root: &Path, operation: &Value) -> Result<String, String> {
+    let name = operation.get("name").and_then(Value::as_str).unwrap_or("");
+    let output = Command::new("git")
+        .arg("remote")
+        .arg("remove")
+        .arg(ref_name(name)?)
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("removed remote {name}"))
+}
+
+/// A worktree is addressed by the id the contract carries, which is the
+/// worktree's path. The shell does not track worktree ids itself, so it uses the
+/// one the caller was given.
+fn worktree_path(id: &str) -> Result<&str, String> {
+    if id.is_empty() || id.starts_with('-') || Path::new(id).is_absolute() {
+        return Err(format!("refusing the worktree id {id}"));
+    }
+    Ok(id)
+}
+
+fn worktree_create(root: &Path, operation: &Value) -> Result<String, String> {
+    let branch = operation.get("branch").and_then(Value::as_str).unwrap_or("");
+    if branch.is_empty() || branch.starts_with('-') {
+        return Err(format!("refusing the branch name {branch}"));
+    }
+    let mut command = Command::new("git");
+    command.arg("worktree").arg("add");
+    if operation.get("createBranch").and_then(Value::as_bool) == Some(true) {
+        command.arg("-b").arg(branch);
+    }
+    if let Some(directory) = operation.get("directoryName").and_then(Value::as_str) {
+        command.arg(worktree_path(directory)?);
+    }
+    if let Some(start) = operation.get("startPoint").and_then(Value::as_str) {
+        command.arg(ref_name(start)?);
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("worktree for {branch}"))
+}
+
+fn worktree_lock(root: &Path, operation: &Value, lock: bool) -> Result<String, String> {
+    let id = operation.get("worktreeId").and_then(Value::as_str).unwrap_or("");
+    let mut command = Command::new("git");
+    command.arg("worktree").arg(if lock { "lock" } else { "unlock" });
+    command.arg(worktree_path(id)?);
+    if let Some(reason) = operation.get("reason").and_then(Value::as_str) {
+        command.arg("--reason").arg(reason);
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(if lock { format!("locked {id}") } else { format!("unlocked {id}") })
+}
+
+fn worktree_remove(root: &Path, operation: &Value) -> Result<String, String> {
+    let id = operation.get("worktreeId").and_then(Value::as_str).unwrap_or("");
+    let expected = operation.get("expectedRevision").and_then(Value::as_str);
+    if let Some(expected) = expected {
+        if expected != head_revision(root) {
+            return Err("the repository moved since this worktree was listed; refresh and try again".to_string());
+        }
+    }
+    let mut command = Command::new("git");
+    command.arg("worktree").arg("remove");
+    if operation.get("force").and_then(Value::as_bool) == Some(true) {
+        command.arg("--force");
+    }
+    command.arg(worktree_path(id)?).current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("removed worktree {id}"))
+}
+
+/// `--dry-run` is honoured: the contract's flag exists so the panel can show what
+/// would be pruned without pruning it.
+fn worktree_prune(root: &Path, operation: &Value) -> Result<String, String> {
+    let mut command = Command::new("git");
+    command.arg("worktree").arg("prune");
+    if operation.get("dryRun").and_then(Value::as_bool) == Some(true) {
+        command.arg("--dry-run");
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok("pruned".to_string())
+}
+
 /// A remote or branch name, refused if it looks like an option.
 fn ref_name(name: &str) -> Result<&str, String> {
     if name.is_empty() || name.starts_with('-') {
@@ -1200,16 +1507,17 @@ mod write_tests {
 
     #[test]
     fn an_unwired_operation_says_so_rather_than_doing_nothing() {
-        // `merge`, not `push`: an unwired example must not be an operation that
-        // happens to be wired, or the test performs it. An earlier version of
-        // this used `push` and really did try to reach the remote.
-        let result = execute(&json!({ "kind": "merge" }));
+        // `init`, not `merge`: an unwired example must not be an operation that
+        // happens to be wired, or the test performs it. Two earlier versions of
+        // this used `push` and then `merge`, both of which had been wired by the
+        // time the test ran — and `push` really did try to reach the remote.
+        let result = execute(&json!({ "kind": "init" }));
         let message = result.get("message").and_then(Value::as_str).unwrap_or("");
         assert!(
             message.contains("not wired"),
             "the user must be able to tell an unwired operation from a failed one: {message}"
         );
-        assert_eq!(result.get("operation").and_then(Value::as_str), Some("merge"));
+        assert_eq!(result.get("operation").and_then(Value::as_str), Some("init"));
     }
 
     #[test]

@@ -476,7 +476,11 @@ gix 仍记为目标，留到子进程成本在某个测量里显现。这是 §1
 
 路径安全：每个 path 与分支名都是单 argv 元素、不过 shell；前导 `-`（会被当成选项）、绝对路径、含 `..` 段的一律拒绝。`commit` 空 message 拒绝；`sign` 默认关（默认签名的壳在没有密钥的机器上每次提交都会失败）。
 
-第二批接上四个 branch operation，第三批接上 fetch/pull/push 与 stash.push/stash.apply（共 13 种）。
+第二批接上四个 branch operation，第三批接上 fetch/pull/push 与 stash.push/stash.apply，第四批接上 stash.drop/discard/merge/rebase/cherry-pick/revert/reset/checkout/tag.create/tag.delete/remote.add/remote.setUrl/remote.remove/worktree.{create,lock,unlock,remove,prune}。
+
+**至此 Git 面板 action 菜单发出的 git operation 全部接上**（`pr.*` 走 `github.execute`，不属于这个面）。剩 `init`/`clone`/`continue`/`abort`/`cancel` 五种面板并不发，保持明确拒绝。
+
+破坏性操作一律带乐观并发检查：`discard`、`reset`、`stash.drop`、`worktree.remove`、`branch.delete` 都比对 `expectedRevision` 与当前 head，不一致就拒绝——head 移动过，调用方看到的就不再是将被操作的那个。`reset` 的 mode 只认 soft/mixed/hard 三种。
 
 force push 只以 `--force-with-lease` 发出，**从不发裸 `--force`**——lease 会在远端移动过调用方看到的 oid 时拒绝推送，这才是阻止 force push 丢掉别人提交的东西。argv 构造提成 `push_argv` 纯函数，使这条规则不需要远端就能测。`pull` 的 strategy 只认契约那三种，其余拒绝而不是静默变成 merge。
 
