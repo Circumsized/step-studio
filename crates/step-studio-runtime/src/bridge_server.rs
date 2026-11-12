@@ -227,6 +227,12 @@ struct Session {
     state_version: u64,
     command_manifest_hash: String,
     pending_prompt: Option<String>,
+    /// A `usage.panel` request waiting for its panel, and when it gives up.
+    ///
+    /// Parked rather than waited for: holding the connection handler until the
+    /// panel arrives would stop every other command for those seconds, and
+    /// `core.abort` is the one that must never be blocked.
+    pending_usage: Option<(String, Instant)>,
     interactions: InteractionRegistry,
 }
 
@@ -238,6 +244,14 @@ impl Session {
     /// (`usage.panel`) routes what it passes exactly as the pump would, instead
     /// of growing a second copy of this that drifts.
     fn route_event(&mut self, event: &Value) {
+        // A parked usage request is settled from here, so the panel is
+        // intercepted before the general routing sees it.
+        if self.pending_usage.is_some() {
+            self.settle_usage(event);
+            if self.pending_usage.is_none() {
+                return;
+            }
+        }
         let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
         if kind == "extension_ui_request" {
             let method = event.get("method").and_then(|v| v.as_str()).unwrap_or("");
@@ -269,37 +283,37 @@ impl Session {
             self.failed(request_id, error.to_string());
             return;
         }
-        let deadline = Instant::now() + USAGE_PANEL_TIMEOUT;
-        let mut panel = None;
-        while Instant::now() < deadline {
-            let Some(event) = self.step.wait_event(Duration::from_millis(100)) else {
-                if self.step.closed() {
-                    break;
-                }
-                continue;
-            };
-            let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
-            // `notify` is a general presentation method — extensions and OAuth
-            // login progress both use it — so the path is what identifies the
-            // `/usage` panel. Taking the first notify would deliver some other
-            // extension's message to the contract as the usage panel.
-            if kind == "extension_ui_request"
-                && event.get("method").and_then(|v| v.as_str()) == Some("notify")
-                && event.get("extensionPath").and_then(|v| v.as_str()) == Some("command:usage")
-            {
-                panel = event.get("message").and_then(|v| v.as_str()).map(str::to_string);
-                break;
-            }
-            self.route_event(&event);
+        // Parked, not waited for. The first version held the connection handler
+        // until the panel arrived, which stopped every other command for those
+        // seconds — `core.abort` included, and an abort that cannot be sent is
+        // the worst thing to block.
+        self.pending_usage = Some((request_id.to_string(), Instant::now() + USAGE_PANEL_TIMEOUT));
+    }
+
+    /// Complete a parked `usage.panel` request if its panel has arrived, or fail
+    /// it if the CLI has gone quiet for too long.
+    ///
+    /// Called from the main loop, which already runs every 50 ms — so waiting
+    /// for the panel costs no thread and blocks no command.
+    fn settle_usage(&mut self, event: &Value) {
+        let Some((request_id, deadline)) = self.pending_usage.clone() else {
+            return;
+        };
+        let is_panel = event.get("type").and_then(|v| v.as_str()) == Some("extension_ui_request")
+            && event.get("method").and_then(|v| v.as_str()) == Some("notify")
+            && event.get("extensionPath").and_then(|v| v.as_str()) == Some("command:usage");
+        if is_panel {
+            self.pending_usage = None;
+            let panel = event.get("message").and_then(|v| v.as_str()).unwrap_or("");
+            self.receipt(&request_id, "completed", Some(json!({ "panel": panel })));
+            return;
         }
-        match panel {
-            Some(panel) => {
-                self.receipt(request_id, "completed", Some(json!({ "panel": panel })))
-            }
-            None => self.failed(
-                request_id,
+        if Instant::now() >= deadline {
+            self.pending_usage = None;
+            self.failed(
+                &request_id,
                 "the CLI did not return a usage panel".to_string(),
-            ),
+            );
         }
     }
 
@@ -1031,6 +1045,7 @@ fn serve_connection(
         state_version: 0,
         command_manifest_hash: command_hash,
         pending_prompt: None,
+        pending_usage: None,
         interactions: InteractionRegistry::default(),
     };
 
@@ -1109,7 +1124,10 @@ fn serve_connection(
         }
         // A streaming turn must keep flowing while the Host is idle, so the CLI
         // is polled first with a short budget rather than blocking on either.
-        if session.pending_prompt.is_some()
+        // Pumped for a parked `usage.panel` as well as for a turn. Without the
+        // second condition an idle connection never drains the CLI's events, so
+        // the panel a query is waiting for would never be read.
+        if (session.pending_prompt.is_some() || session.pending_usage.is_some())
             && session.pump_events(std::time::Duration::from_millis(50))
         {
             continue;
