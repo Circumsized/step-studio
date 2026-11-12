@@ -244,6 +244,22 @@ DPI 150%/200%、IME、xterm.js 帧时与 RSS）；`cargo test --workspace` 并�
 单独跑 8/8 过、复跑两次全绿，未定位到具体用例（最可能是打真实 CLI 与模型 API 的那个在并行
 负载下超时），记为已知抖动。
 
+### M1.2c 完成：remote 桥不建，方案非目标（2026-11-12）
+
+M1.2c 三条桥，chrome 与 terminal 已落地（见上面两节）。第三条 `ompStudioRemote`
+**不建**——方案 §1.3 非目标明文写着「不做远程工作区、手机连接、插件市场、delta 更新」。
+
+不建的理由不是工作量，是范围：`apps/desktop/src/remote/` 是 2416 行 / 23 个文件的
+SSH 子系统（部署、网络代理、本地 vault、provisioning、环境安装），而 renderer 只用到
+其中 6 个方法（`list` / `connect` / `select` / `onChanged` / `approveDeployment` /
+`disconnect`）。为一个非目标搭 2416 行基础设施没有意义。
+
+`ompStudioRemote` 因此保持缺席，renderer 的 remote 面板走 M1.1 已确立的降级路径
+（本地模式）。这与 chrome 的 Host 背后方法留空是同一条纪律：**缺席即诚实不可用，
+不伪造**。
+
+M1.2 至此完成：6 个 Desktop IPC channel 全部接上真实会话，三条桥按方案范围裁剪落地。
+
 ### 改名：OMP → Step（2026-11-12 完成）
 
 用户要求的复刻条件里有一条是「除把 omp 改为 step之外基本复刻」。此前只有 Tauri 窗口标题是
