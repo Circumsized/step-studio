@@ -616,3 +616,67 @@ fn the_daemon_answers_the_process_tree_itself() {
         Some(summed)
     );
 }
+
+#[test]
+fn two_surfaces_both_receive_the_same_broadcast() {
+    // The adapter broadcasts with no addressing, so the daemon has to fan out
+    // rather than let two readers split one stream — which is what the old
+    // one-surface gate did, by making the second surface wait instead. Both
+    // surfaces must see the same events, and neither may see a gap: a frame one
+    // of them missed must not advance the other's view of the stream.
+    let daemon = Daemon::start("fan-out");
+    let first = connect(&daemon);
+    let second = connect(&daemon);
+
+    let (receipt, first_events) = first
+        .invoke(serde_json::json!({ "kind": "core.prompt", "text": "hi" }))
+        .expect("the first surface's turn");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed")
+    );
+
+    // The second surface was attached the whole time, so it saw the same turn
+    // arrive — its events were queued while it issued nothing, which is exactly
+    // the case `drain_events` exists for.
+    let mut second_events = second.drain_events();
+    // A turn takes a moment to cross; give it the same chance the first got.
+    if second_events.is_empty() {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline && second_events.is_empty() {
+            second_events = second.drain_events();
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    let deltas = |events: &[Value]| -> String {
+        events
+            .iter()
+            .filter(|event| {
+                event.get("kind") == Some(&serde_json::json!("conversation.message.delta"))
+            })
+            .filter_map(|event| event.get("delta").and_then(|d| d.as_str()))
+            .collect()
+    };
+    assert_eq!(
+        deltas(&first_events),
+        "hello!",
+        "the surface that ran the turn saw its answer"
+    );
+    assert_eq!(
+        deltas(&second_events),
+        "hello!",
+        "the surface that only watched saw the same answer — the stream fanned out \\
+         rather than being split"
+    );
+
+    // And the watcher can still act: its own command reaches the same adapter.
+    let (receipt, _) = second
+        .invoke(serde_json::json!({ "kind": "session.models.list" }))
+        .expect("the watcher's own query");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed"),
+        "a second surface can drive the same session"
+    );
+}

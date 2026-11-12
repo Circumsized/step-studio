@@ -502,7 +502,11 @@ Windows 无 `std` 可达的 toolhelp 快照（要 `unsafe`），所以那边只�
 
 **已接线**（下一步同批完成）：契约加 `process.tree.get` + `ProcessTreeReadModel`；daemon 在转发途中拦截它、自己作答，回执经**专职写线程**写到 surface 的写半边（relay 线程不碰那个 fd，两个 owner 会交错帧）；壳把它当普通 operation 发送——它走的是同一条 wire，只是目的地址是 daemon。测试断言树以 daemon 为根、含适配器、总数是上报值之和。
 
-这就是 M2.3「多面」的第一道缝：daemon 第一次终结一个 operation 而不是透传。多会话扇出走同一个 seam。
+这就是 M2.3「多面」的第一道缝：daemon 第一次终结一个 operation 而不是透传。
+
+**同批打通多面本体**：把「一个 slot」改成「一组 surface 接收者」，适配器的广播真正扇出；并拆掉「同时只服务一个 surface」那道闸——它的存在是因为两个 surface 会把一路广播劈成两半，而扇出之后该修的是广播，不是把第二个 surface 挡住。surface 用自增 serial 作身份（`mpsc::Sender` 无可比身份），pump 退出只清自己的条目。
+
+测试：两个 surface 同时挂着，一个跑回合，另一个**看到同一个答案**（不是被劈走的那一半），且能继续驱动同一个会话。这正是评审 R2/R3 预警的那条，现在有对拍。
 
 ### D-1 定案：Step 的 session 存储键就是 project 绝对路径（2026-11-12 实测）
 

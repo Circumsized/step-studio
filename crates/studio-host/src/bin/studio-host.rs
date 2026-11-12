@@ -11,7 +11,7 @@
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
@@ -75,26 +75,33 @@ struct Daemon {
     /// One slot, not one per surface: the adapter broadcasts, and two surfaces
     /// reading one stream would split it between them. A second surface waits
     /// rather than competing.
-    /// `(sender, adapter serial)`. The serial is what lets a pump tell whether
-    /// the slot still belongs to it: `mpsc::Sender` has no identity to compare,
-    /// and clearing a replacement adapter's sender would drop a healthy
-    /// adapter's frames into a socket nobody closes.
-    to_surface: Mutex<Option<(Sender<Vec<u8>>, u64)>>,
+    /// One entry per attached surface.
+    ///
+    /// A set rather than one slot, because the adapter broadcasts with no
+    /// addressing: every attached surface reads the same stream, and each tracks
+    /// its own delivery. A frame one surface missed must not advance another's,
+    /// which is why they do not share a channel.
+    ///
+    /// The serial tag is what lets a pump tell whether an entry is still its own:
+    /// `mpsc::Sender` has no identity to compare, and clearing a replacement
+    /// adapter's entries would drop a healthy adapter's frames into sockets
+    /// nobody closes.
+    to_surface: Mutex<Vec<Surface>>,
     /// Set once the daemon has decided to go away, so the supervisor does not
     /// restart the adapter it just drained.
     stopping: AtomicBool,
     /// Set by a surface attaching. A halted supervisor is revived by a caller
     /// that actually wants the runtime, which is the only honest probe.
     retry_requested: AtomicBool,
-    /// Which adapter the current `to_surface` sender belongs to.
+    /// Which adapter the current `to_surface` entries belong to.
     adapter_serial: AtomicU64,
+    /// Identity of each attached surface, because `mpsc::Sender` has none to
+    /// compare: two surfaces attached at once have separate senders, and removing
+    /// by anything else would silence the wrong one.
+    surface_serial: AtomicU64,
     /// Whether this process bound the endpoint, so it is the only one that may
     /// unlink it.
     bound_endpoint: AtomicBool,
-    /// Whether a surface currently owns the relay.
-    active: Mutex<bool>,
-    /// Signalled when the active surface lets go.
-    freed: Condvar,
     grace: Mutex<GraceClock>,
 }
 
@@ -165,13 +172,12 @@ fn main() {
         started: Instant::now(),
         epoch,
         adapter: Mutex::new(None),
-        to_surface: Mutex::new(None),
+        to_surface: Mutex::new(Vec::new()),
         adapter_serial: AtomicU64::new(0),
+        surface_serial: AtomicU64::new(0),
         bound_endpoint: AtomicBool::new(false),
         stopping: AtomicBool::new(false),
         retry_requested: AtomicBool::new(false),
-        active: Mutex::new(false),
-        freed: Condvar::new(),
         grace: Mutex::new(GraceClock::new(grace)),
     });
     eprintln!(
@@ -364,10 +370,11 @@ fn spawn_pump(
         let outcome = relay::pump_frames_to(&mut reader, |frame| {
             // Nobody attached is a normal state, not an error: the frames are
             // dropped, because there is nobody to deliver them to.
-            let slot = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some((sender, _)) = slot.as_ref() {
-                let _ = sender.send(frame);
-            }
+            let mut surfaces = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
+            // A send that fails means that surface is gone. Retaining it would
+            // leak a sender per dead surface for the daemon's lifetime, and
+            // holding the lock across a slow surface would stall the others.
+            surfaces.retain(|(sender, _, _)| sender.send(frame.clone()).is_ok());
             Ok(())
         });
         if let Err(error) = outcome {
@@ -382,10 +389,8 @@ fn spawn_pump(
         // socket nobody closes — the shell would sit on a silent connection and
         // every command would block in `await_reply` forever.
         {
-            let mut slot = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
-            if slot.as_ref().is_some_and(|(_, held)| *held == serial) {
-                *slot = None;
-            }
+            let mut surfaces = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
+            surfaces.retain(|(_, held, _)| *held != serial);
         }
         adapter::mark_dead(&alive);
     });
@@ -584,16 +589,8 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         std::thread::sleep(Duration::from_millis(50));
     }
 
-    // Take the relay. Somebody else may already own it.
-    {
-        let mut active = daemon.active.lock().unwrap_or_else(|p| p.into_inner());
-        while *active && !daemon.stopping.load(Ordering::Relaxed) {
-            active = daemon.freed.wait(active).unwrap_or_else(|p| p.into_inner());
-        }
-        if daemon.stopping.load(Ordering::Relaxed) {
-            return;
-        }
-        *active = true;
+    if daemon.stopping.load(Ordering::Relaxed) {
+        return;
     }
     daemon
         .grace
@@ -607,10 +604,11 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     // Publish the sender the adapter's pump thread delivers to. Dropping it is
     // what ends the writer thread below, which is what closes the socket.
     let (sender, receiver) = mpsc::channel::<Vec<u8>>();
+    let surface = daemon.surface_serial.fetch_add(1, Ordering::Relaxed) + 1;
     {
         let serial = daemon.adapter_serial.load(Ordering::Relaxed);
-        let mut slot = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
-        *slot = Some((sender.clone(), serial));
+        let mut surfaces = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
+        surfaces.push((sender.clone(), serial, surface));
     }
 
     // The writer owns the surface's write half and drains until the sender is
@@ -620,7 +618,7 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
             Ok(stream) => stream,
             Err(error) => {
                 eprintln!("step-studio-host: {error}");
-                daemon.let_go();
+                daemon.let_go(surface);
                 return;
             }
         };
@@ -638,7 +636,7 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         Ok(stream) => stream,
         Err(error) => {
             eprintln!("step-studio-host: {error}");
-            daemon.let_go();
+            daemon.let_go(surface);
             return;
         }
     };
@@ -652,7 +650,7 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     };
     let Some(handle) = handle else {
         let _ = writer.join();
-        daemon.let_go();
+        daemon.let_go(surface);
         return;
     };
 
@@ -790,7 +788,7 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     // the join below waiting for a close this function is the only one that can
     // cause.
     drop(sender);
-    daemon.let_go();
+    daemon.let_go(surface);
     let _ = writer.join();
     daemon
         .grace
@@ -817,18 +815,19 @@ fn close_socket(_stream: &transport::Stream) {}
 
 impl Daemon {
     /// Give up the relay and wake whoever is waiting for it.
-    fn let_go(&self) {
-        {
-            let mut slot = self.to_surface.lock().unwrap_or_else(|p| p.into_inner());
-            *slot = None;
-        }
-        {
-            let mut active = self.active.lock().unwrap_or_else(|p| p.into_inner());
-            *active = false;
-        }
-        self.freed.notify_all();
+    fn let_go(&self, surface: u64) {
+        let mut surfaces = self.to_surface.lock().unwrap_or_else(|p| p.into_inner());
+        surfaces.retain(|(_, _, held)| *held != surface);
     }
 }
+
+/// One attached surface: where its frames go, and which adapter and surface they
+/// belong to.
+///
+/// The two serials are what let a pump drop exactly its own entries — an adapter's
+/// when it ends, a surface's when that surface detaches — without being able to
+/// compare a `Sender`, which has no identity.
+type Surface = (Sender<Vec<u8>>, u64, u64);
 
 /// A `Write` over the adapter's shared write half.
 struct AdapterWriter(Arc<Mutex<step_studio_bridge::transport::Stream>>);
