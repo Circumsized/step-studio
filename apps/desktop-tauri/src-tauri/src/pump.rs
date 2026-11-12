@@ -55,6 +55,21 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
 const PROMPT_CAPABILITY: (&str, &str) = ("core.prompt", "stable");
 
 /// Facade names the adapter spells differently.
+/// Facade names the shell answers or reshapes, with the grade the data earns.
+///
+/// Separate from `ADAPTER_NATIVE` because these are not adapter operation ids:
+/// they are the renderer's spellings, and their grade describes what the shell
+/// can actually deliver rather than what the adapter implements.
+const FACADE_ONLY: &[(&str, &str)] = &[
+    // The CLI's `/usage` panel as ANSI text: no per-hour or per-model numbers.
+    ("usage.get", "limited"),
+    // The catalog only. Roles, presets, cycle order and fallback chains have no
+    // Step data source.
+    ("models.get", "limited"),
+    // Answered by the shell from its own dispatch table.
+    ("capabilities.get", "stable"),
+];
+
 const RENAMED: &[(&str, &str)] = &[
     // `session.create` is a Host-level concept (workspace, archive entry); the
     // nearest thing a single-session adapter has is a fresh session.
@@ -76,6 +91,12 @@ pub enum Dispatch {
     Turn,
     /// Answers with its own terminal receipt.
     Control,
+    /// Answered by the shell itself, from what it already knows.
+    ///
+    /// The capability manifest is derived from this dispatch table, so asking
+    /// the adapter for it would be a round trip to learn something the shell
+    /// computed before the session existed.
+    Local,
 }
 
 /// `{...input, kind}`. The spread order is the one the Electron facade uses
@@ -95,6 +116,9 @@ fn spread(input: &Value, kind: &str) -> Value {
 pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)> {
     if name == "core.prompt" {
         return Some((spread(input, "core.prompt"), Dispatch::Turn));
+    }
+    if name == "capabilities.get" {
+        return Some((json!({}), Dispatch::Local));
     }
     let kind = if let Some((_, renamed)) = RENAMED.iter().find(|(from, _)| *from == name) {
         *renamed
@@ -121,6 +145,17 @@ pub fn capability_manifest() -> Value {
         "evidence": "step-studio-tauri",
     })];
     for (id, grade) in ADAPTER_NATIVE {
+        capabilities.push(json!({
+            "id": id,
+            "grade": grade,
+            "version": 1,
+            "evidence": "step-studio-tauri",
+        }));
+    }
+    // The facade spellings, which resolve_operation renames. Claiming only the
+    // adapter's ids would leave the renderer's `can()` false for every name it
+    // actually uses.
+    for (id, grade) in FACADE_ONLY {
         capabilities.push(json!({
             "id": id,
             "grade": grade,
@@ -424,6 +459,20 @@ fn pump(
                     "acceptedAt": iso_utc(now_millis()),
                 });
                 match job.dispatch {
+                    Dispatch::Local => {
+                        // The manifest is derived from the dispatch tables, so
+                        // it cannot disagree with what this pump resolves.
+                        let manifest = capability_manifest();
+                        emit(sink, &mut stream, |stream| {
+                            stream.receipt(
+                                &job.request_id,
+                                &job.command_name,
+                                "completed",
+                                json!({ "result": manifest }),
+                            )
+                        });
+                        let _ = job.reply.send(Ok(ack));
+                    }
                     Dispatch::Turn => {
                         stream.pending_turn = Some((job.request_id.clone(), job.command_name.clone()));
                         // Fire and forget: waiting here would block the pump
@@ -593,6 +642,32 @@ mod tests {
     }
 
     #[test]
+    fn the_capability_manifest_is_answered_locally_and_matches_the_table() {
+        // It is derived from the dispatch tables, so asking the adapter for it
+        // would be a round trip to learn something already computed.
+        let (operation, dispatch) = resolve_operation("capabilities.get", &json!({})).expect("resolves");
+        assert_eq!(dispatch, Dispatch::Local);
+        assert!(operation.as_object().is_some_and(|m| m.is_empty()), "nothing to send anywhere");
+
+        // And the manifest claims exactly what resolves: the bidirectional
+        // invariant the renderer's `can()` depends on.
+        let manifest = capability_manifest();
+        let claimed: Vec<&str> = manifest
+            .get("capabilities")
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .filter_map(|entry| entry.get("id").and_then(Value::as_str))
+                    .collect()
+            })
+            .unwrap_or_default();
+        for id in ["core.prompt", "usage.get", "models.get", "capabilities.get"] {
+            assert!(claimed.contains(&id), "{id} is resolvable but not claimed");
+        }
+        assert!(!claimed.contains(&"github.pr.list"), "a refused name must not be claimed");
+    }
+
+    #[test]
     fn resolve_refuses_what_the_adapter_cannot_do() {
         assert!(resolve_operation("github.pr.list", &json!({})).is_none());
         assert!(resolve_operation("stats.dashboard", &json!({})).is_none());
@@ -609,12 +684,16 @@ mod tests {
             .map(|entry| entry["id"].as_str().expect("id is text"))
             .collect();
         // Every declared capability resolves, and nothing resolves that is not
-        // declared. `conversation.open` is the one declared-by-rename query: it
-        // resolves to `session.transcript.read`, which is declared.
+        // declared. The renamed facade spellings are declared in their own
+        // right: the renderer calls `usage.get`, not `usage.panel`, so claiming
+        // only the adapter's ids would leave `can()` false for the names it uses.
         for id in &declared {
             assert!(resolve_operation(id, &json!({})).is_some(), "{id} is declared but does not resolve");
         }
-        assert_eq!(declared.len(), ADAPTER_NATIVE.len() + 1);
+        for id in FACADE_ONLY.iter().map(|(id, _)| *id) {
+            assert!(declared.contains(&id), "{id} resolves but is not declared");
+        }
+        assert_eq!(declared.len(), ADAPTER_NATIVE.len() + 1 + FACADE_ONLY.len());
         assert!(declared.contains(&"core.prompt"));
         assert!(!declared.iter().any(|id| id.starts_with("conversation.")));
         // The hash is over the capability list, so it is stable across boots.

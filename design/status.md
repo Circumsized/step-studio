@@ -452,6 +452,14 @@ Node 进程里驱动：
 
 这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
 
+### M2.2-C3：`capabilities.get` 本地作答（2026-11-12 完成）
+
+manifest 由派表层派生，所以问适配器要它是一次往返去学自己早就算出的东西——加 `Dispatch::Local` 由壳直接答。
+
+**抓到的真缺口**：`capability_manifest()` 原先只遍历 `ADAPTER_NATIVE`，于是 `usage.get` / `models.get` / `capabilities.get` 这些**渲染层实际调用的名字**一个都没被声明，`can()` 对它们全返回 false——能力清单说自己不能做它能做的事。补 `FACADE_ONLY` 表（带各自诚实的 grade：两个 limited、一个 stable），双向不变式的单测同时夹住「声明的必须能 resolve」与「能 resolve 的必须已声明」。
+
+`comparison-checklist` 5.2 翻「齐」；**5.1 仍「空」**——适配器有 `session.extensions.list` / `session.commands.list` 且 stable，但壳未把它们暴露成 facade query，渲染层拿不到。这一步只是接线，不夸大。
+
 ### M2.2-C2：模型 catalog 进 read model（2026-11-12 完成并实证）
 
 `models.get` → 适配器 `session.models.list`（早已 stable），壳重塑成 `ModelConfigReadModel`。

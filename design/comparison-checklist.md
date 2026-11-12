@@ -66,8 +66,8 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 
 | # | 比对点 | 态 |
 |---|---|---|
-| 5.1 | 三个 list 的呈现（扩展 / MCP / 命令） | **空** |
-| 5.2 | 能力条目与 grade 徽标 | **空** |
+| 5.1 | 三个 list 的呈现（扩展 / MCP / 命令） | **空**（适配器有 `session.extensions.list` / `session.commands.list` 且 stable，但壳未把它们暴露成 facade query，渲染层拿不到） |
+| 5.2 | 能力条目与 grade 徽标 | **齐**（`capabilities.get` 由壳本地作答，manifest 由派发表派生，双向不变式有单测夹住） |
 
 方案 §9.6 记「基本齐」，但那是 adapter 已声明 `session.extensions.list` /
 `session.commands.list` 为 stable 的意思。**当前壳未把这两个 query 接给 renderer 的能力页**
