@@ -135,3 +135,53 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 
 每修好一项，把态改掉并写日期。**「空」是合法的中间态，「缺」不是**——
 出现「缺」要么补实现，要么在方案里记一条决策说明为什么不做，不要留成第三种状态。
+
+---
+
+## 未迁移 kind 的 unavailable 声明（M1.4 第三项）
+
+壳只桥接它能做的事。`apps/desktop-tauri/src-tauri/src/pump.rs` 的
+`resolve_operation` 是**唯一**判定点：命中 → 译成适配器 operation；未命中 →
+`CAPABILITY_UNAVAILABLE`，带中文说明（Tauri 壳只桥接 Step 会话本身，Host 服务尚未接入）。
+
+已声明可用的（14 个，能力清单由同一张表派生，单测双向夹住）：
+
+| 类别 | kind |
+|---|---|
+| 回合 | `core.prompt`（唯一 `Dispatch::Turn`）、`core.steer`、`core.followUp`、`core.abort` |
+| 会话 | `session.new`、`session.fork`、`session.model.set`、`session.thinking.set`、`session.state`、`session.transcript.read` |
+| 目录 | `session.models.list`、`session.commands.list`、`session.extensions.list` |
+| 改名映射 | `session.create` → `session.new`；`conversation.open` → `session.transcript.read` |
+
+已声明不可用的大类（renderer 画诚实空态，不留第三种状态）：
+
+| 大类 | 代表 kind | 原因 |
+|---|---|---|
+| 工作区 | `workspace.open` / `workspace.pick` / `workspace.fileTree` / `projects.list` | Host 的 workspace registry |
+| Git | `git.*`（约 12 个） | 自建于 M3/M4 |
+| 模型配置 | `models.get` / `models.provider.*` / `models.webSearch.*` | models.yml 管理在 Host |
+| 归档与历史 | `history.list` / `session.transcript.readPage` / `session.agents.list` | Host 的 archive reader |
+| 用量 | `usage.get` / `stats.dashboard` | M4；方案 §9.6 已验证 `/usage` 可经 prompt 取到但未接入 |
+| 能力与诊断 | `capabilities.get` / `diagnostics.get` / `environment.get` / `commands.getManifest` | Host 的 read model 聚合 |
+| 工件 | `artifacts.*` | Host 的 artifact library |
+| GitHub | `github.*` | Host 的 GitHub 服务 |
+| 浏览器观察 | `browser.*` | 未排期 |
+| chrome 的 Host 面 | `beginMediaUpload` / `importArtifact` / `attachPrediction` / `listServiceDefinitions` 等 | 同上；recording 三件套同 |
+| 自动更新器 | `getUpdateSnapshot` / `prepareUpdates` / `applyUpdate` 等约 40 个 | 打包面，非产品面 |
+| remote | `ompStudioRemote` 全部 | 方案 §1.3 非目标 |
+
+## WebGL2 / CSS 冒烟（M1.4 第二项）
+
+renderer **确实用 WebGL**：`three` 0.186.1 的 `WebGLRenderer`
+（`apps/renderer/src/graphics/GraphicScene.tsx:51`，用于 GraphicPreview）。
+`@xterm/addon-webgl` **未安装**，终端走 2D canvas，所以终端的 WebGL 风险为零。
+
+失败路径已核实为优雅降级：`GraphicScene.tsx:160` 的 `catch` 调
+`onFailure(message)`，`GraphicPreview` 有自己的 error 态（"Graphics workers are
+unavailable"）。所以 WebGL 不可用时是错误提示，不是白屏或崩溃。
+
+**未验证**：成功路径在 WebView2 下是否真的跑起来（WebGL2 上下文、着色器编译、
+`devicePixelRatio` 上限 1.5 的行为）。Linux/WebKitGTK 下应用在跑，但 GraphicPreview
+未被触发过。需要真机。
+
+CSS 冒烟：版式在 150% / 200% 两档下无破裂（见上文 9.3，Linux 口径）。
