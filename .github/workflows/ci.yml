@@ -109,7 +109,10 @@ jobs:
       # Compile and lint only. The runtime is unverified on Windows: no Step CLI
       # is installed here, so the end-to-end tests would skip rather than prove
       # anything, and a GUI shell cannot run on a hosted runner.
-      - run: cargo clippy -p step-studio-bridge -p step-studio-runtime --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+      # `step-studio-host` is here for the same reason the transport is: its
+      # `#[cfg(not(unix))]` arms — the pipe-name endpoint, the no-op departure
+      # announcement — have no other way to be compiled at all.
+      - run: cargo clippy -p step-studio-bridge -p step-studio-runtime -p step-studio-host --target x86_64-pc-windows-msvc --all-targets -- -D warnings
 
   macos-package:
     name: macOS test package (arm64)

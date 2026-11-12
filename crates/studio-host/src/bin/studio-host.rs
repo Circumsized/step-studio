@@ -654,6 +654,10 @@ fn shutdown(daemon: &Arc<Daemon>) {
 
 /// Watch the grace clock and the stop flag while surfaces come and go.
 fn watch(daemon: Arc<Daemon>) {
+    // The poll slice is short so a draining daemon reacts promptly, but the log
+    // is not: at 250 ms a ten-minute grace period is 2400 identical lines. One
+    // line per whole second left, and only when that second changes.
+    let mut announced: Option<u64> = None;
     loop {
         std::thread::sleep(POLL_SLICE);
         if daemon.stopping.load(Ordering::Relaxed) {
@@ -665,12 +669,13 @@ fn watch(daemon: Arc<Daemon>) {
             .unwrap_or_else(|p| p.into_inner())
             .poll(daemon.started.elapsed());
         match liveness {
-            Liveness::Alive => {}
+            Liveness::Alive => announced = None,
             Liveness::Draining { remaining } => {
-                eprintln!(
-                    "step-studio-host: no surface attached; draining in {}s",
-                    remaining.as_secs()
-                );
+                let seconds = remaining.as_secs();
+                if announced != Some(seconds) {
+                    announced = Some(seconds);
+                    eprintln!("step-studio-host: no surface attached; draining in {seconds}s");
+                }
             }
             Liveness::Expired => {
                 shutdown(&daemon);

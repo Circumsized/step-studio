@@ -489,6 +489,8 @@ Node 进程里驱动：
 
 **明确跳过**（理由记在 §19）：信号处理排空（fd 级联已覆盖正确性，代价是 `unsafe` 或新依赖，收益只是 5 秒优雅窗口）、OS 自动拉起（M5.2 与 NSIS 产线一起）、daemon↔surface 新协议与多表面（M2.2/M2.3）。
 
+**CI 覆盖**：`step-studio-host` 已同时进 `rust` 与 `rust-windows` 两个 job。Windows 那一项是必要的而不是凑数——它的 `#[cfg(not(unix))]` 分支（管道名端点、`announce_departure` 空实现、bind 前不建目录）没有任何其他途径被编译。本地无 Windows 真机，这些分支**未经运行验证**，只保证可编译。
+
 **环境备注**：本机 AF_UNIX socketpair 缓冲只有约 250-300 字节（`/tmp/buf_probe2` 在 cargo 之外同样复现），所以「先写完再读」的测试写法在这里必然阻塞；socket 测试必须让写线程与读并发。
 
 ### M1.2c-terminal：`ompStudioTerminal` 真 PTY（2026-11-12 完成）
