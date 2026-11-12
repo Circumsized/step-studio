@@ -78,6 +78,7 @@ import type {
   ModelWebSearchSetInput,
   ModelWebSearchCredentialSetInput,
   ModelWebSearchCredentialRemoveInput,
+  ProcessTreeReadModel,
   RuntimeConnection,
   RuntimeInstallState,
   ResidentsReadModel,
@@ -101,6 +102,8 @@ export interface QueryInputMap extends ContextViewQueryMap {
   "artifacts.storage.get": EmptyInput;
   "environment.get": EmptyInput;
   "capabilities.get": EmptyInput;
+  /** The host daemon's own process tree. Answered by the daemon, not the runtime. */
+  "process.tree.get": EmptyInput;
   "commands.getManifest": EmptyInput;
   "diagnostics.get": EmptyInput;
   "history.list": {
@@ -168,6 +171,7 @@ export interface QueryResultMap extends ContextViewResultMap {
   "environment.get": EnvironmentReadModel;
   /** Capability read model; the protocol manifest is the safe public shape. */
   "capabilities.get": CapabilityManifest;
+  "process.tree.get": ProcessTreeReadModel;
   /** Operator command manifest; reused from the protocol as a public shape. */
   "commands.getManifest": OperatorCommandManifest;
   "diagnostics.get": DiagnosticReadModel;

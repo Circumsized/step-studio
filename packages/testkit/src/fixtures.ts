@@ -310,6 +310,7 @@ const QUERY_INPUTS = {
   "github.pr.list": { workspaceId: WORKSPACE_ID, state: "open" },
   "github.pr.get": { workspaceId: WORKSPACE_ID, number: 1 },
   "github.pr.checks": { workspaceId: WORKSPACE_ID, number: 1 },
+  "process.tree.get": {},
 } satisfies { readonly [K in QueryName]: QueryInput<K> };
 
 const QUERY_RESPONSES = {
@@ -597,6 +598,21 @@ const QUERY_RESPONSES = {
     ok: true,
     queryName: "github.pr.checks",
     result: { workspaceId: WORKSPACE_ID, pullRequestNumber: 1, checks: [], overall: "neutral" },
+  },
+  "process.tree.get": {
+    ok: true,
+    queryName: "process.tree.get",
+    result: {
+      generatedAt: T0,
+      selfPid: 4242,
+      processes: [
+        { pid: 4242, role: "daemon", rssBytes: 2_800_000 },
+        { pid: 4243, parentPid: 4242, role: "adapter", rssBytes: 12_000_000 },
+        { pid: 4244, parentPid: 4243, role: "cli", rssBytes: 168_000_000 },
+      ],
+      totalRssBytes: 182_800_000,
+      complete: true,
+    },
   },
 } satisfies { readonly [K in QueryName]: ClientQueryResponse<K> };
 

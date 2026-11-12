@@ -864,6 +864,16 @@ export class StudioHostClientFacade implements ClientTransport {
         const result = await this.#queryCapabilities();
         return { ok: true, queryName: request.queryName, result } as ClientQueryResponse;
       }
+      case "process.tree.get": {
+        // The process tree belongs to the resident daemon, and this Host is not
+        // one: under Electron the runtime is a child of this process, so there is
+        // no daemon to report. Refusing is honest; a tree of this process's own
+        // children would answer a different question than the one asked.
+        throw clientError(
+          "CAPABILITY_UNAVAILABLE",
+          "The process tree is reported by the host daemon, which this Host does not run.",
+        );
+      }
       case "commands.getManifest": {
         const result = await this.#queryCommandManifest();
         return { ok: true, queryName: request.queryName, result } as ClientQueryResponse;

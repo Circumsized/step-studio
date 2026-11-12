@@ -15,13 +15,14 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
+use serde_json::json;
 use step_studio_bridge::client::AdapterLaunch;
 use step_studio_bridge::frame::write_frame;
 use step_studio_bridge::transport::{self, Accepted};
 use step_studio_host::adapter::{self, AdapterHandle};
 use step_studio_peer_uid::peer_uid;
 use step_studio_host::lifecycle::{self, Acquire, GraceClock, Liveness};
-use step_studio_host::relay::{self, pump_frames};
+use step_studio_host::relay;
 use step_studio_host::state;
 use step_studio_host::supervisor::{Next, Policy, Supervisor};
 
@@ -687,10 +688,79 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         // a surface that keeps sending while its adapter has died is a socket
         // nobody is reading, and the shell behind it would wait forever.
         let (relay_done, relay_done_rx) = mpsc::channel::<()>();
+        // Frames the daemon answered itself, handed back to the surface's writer
+        // thread rather than written here: the writer owns that half of the
+        // socket, and two owners of one fd is how a frame ends up interleaved.
+        let (answered, answered_rx) = mpsc::channel::<Vec<u8>>();
         let mut surface_reader = surface_reader;
+        let daemon_for_relay = Arc::clone(&daemon);
         std::thread::spawn(move || {
-            let _ = pump_frames(&mut surface_reader, &mut adapter_writer);
-            let _ = relay_done.send(());
+            let daemon = daemon_for_relay;
+            loop {
+                match relay::next_frame(&mut surface_reader) {
+                    Ok(Some(frame)) => {
+                        // Operations the daemon answers itself never reach the
+                        // adapter. This is the first of them — the process tree
+                        // is a fact about the daemon and the adapter has no such
+                        // capability — and the seam is where M2.3's
+                        // multiplexing goes.
+                        if let Some(body) = relay::body_of(&frame) {
+                            if body.get("type").and_then(|t| t.as_str()) == Some("studio.request")
+                                && body
+                                    .pointer("/operation/kind")
+                                    .and_then(|k| k.as_str())
+                                    == Some("process.tree.get")
+                            {
+                                let request_id =
+                                    body.get("requestId").cloned().unwrap_or(Value::Null);
+                                let answer = json!({
+                                    "type": "studio.receipt",
+                                    "requestId": request_id,
+                                    "status": "completed",
+                                    "result": step_studio_host::process::read_model(),
+                                });
+                                let mut bytes = Vec::new();
+                                if write_frame(&mut bytes, daemon.epoch, &answer).is_ok() {
+                                    let _ = answered.send(bytes);
+                                }
+                                continue;
+                            }
+                        }
+                        use std::io::Write;
+                        if adapter_writer.write_all(&frame).is_err() {
+                            let _ = relay_done.send(());
+                            return;
+                        }
+                    }
+                    // A surface that stopped sending is gone; one that broke
+                    // mid-frame is broken. Either way the relay is over.
+                    Ok(None) => {
+                        let _ = relay_done.send(());
+                        return;
+                    }
+                    Err(error) => {
+                        eprintln!("step-studio-host: surface read failed: {error}");
+                        let _ = relay_done.send(());
+                        return;
+                    }
+                }
+            }
+        });
+        // A second writer for the daemon's own answers, on the surface's write
+        // half, so the relay thread never touches it.
+        std::thread::spawn({
+            let mut stream = match stream.try_clone() {
+                Ok(stream) => stream,
+                Err(_) => return,
+            };
+            move || {
+                use std::io::Write;
+                while let Ok(frame) = answered_rx.recv() {
+                    if stream.write_all(&frame).is_err() {
+                        return;
+                    }
+                }
+            }
         });
         loop {
             if daemon.stopping.load(Ordering::Relaxed) {

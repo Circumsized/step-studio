@@ -283,6 +283,40 @@ export interface WorkspaceListReadModel {
 }
 
 /** A workspace-relative Explorer node. Absolute paths never cross the Host boundary. */
+/**
+ * The host daemon's own process tree.
+ *
+ * Only the daemon can report this: it is started in its own session, so it is
+ * reparented to init when the shell exits — which is what makes a shell restart
+ * survivable, and what makes a shell-side walk of `/proc` blind to it.
+ */
+export interface ProcessTreeReadModel {
+  readonly generatedAt: string;
+  /** The daemon's own pid, so a reader can tell which daemon answered. */
+  readonly selfPid: number;
+  readonly processes: ReadonlyArray<ProcessRecord>;
+  /** Sum of the `rssBytes` that were reported — short by whatever was not. */
+  readonly totalRssBytes: number;
+  /**
+   * Whether every process could be described. False where the platform has no
+   * `/proc`, so a short total is not mistaken for an exact one.
+   */
+  readonly complete: boolean;
+}
+
+/** One process in the daemon's tree. */
+export interface ProcessRecord {
+  readonly pid: number;
+  readonly parentPid?: number;
+  /**
+   * Derived from the depth in the tree, not from the executable's name: the
+   * daemon's direct child is the adapter, and everything below it is the CLI.
+   */
+  readonly role: "daemon" | "adapter" | "cli";
+  /** Resident set size in bytes, where the platform reports it. */
+  readonly rssBytes?: number;
+}
+
 export interface WorkspaceFileNode {
   readonly type: "file" | "dir";
   readonly name: string;

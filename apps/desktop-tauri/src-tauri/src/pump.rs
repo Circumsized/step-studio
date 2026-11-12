@@ -49,6 +49,10 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
     ("session.extensions.list", "stable"),
     ("session.transcript.read", "stable"),
     ("session.state", "stable"),
+    // Addressed to the daemon, not the adapter: the daemon intercepts it before
+    // the relay reaches the adapter. It travels the same wire, so it routes the
+    // same way.
+    ("process.tree.get", "limited"),
 ];
 
 /// `core.prompt` sits apart because it is the one `Dispatch::Turn` operation.

@@ -572,3 +572,47 @@ fn a_surface_from_another_uid_is_refused() {
         "a surface from the daemon's own user must not be refused"
     );
 }
+
+#[test]
+fn the_daemon_answers_the_process_tree_itself() {
+    // The process tree is a fact about the daemon, and the adapter has no such
+    // capability — so the daemon answers it rather than forwarding it. This is
+    // the first operation that terminates in the daemon instead of passing
+    // through, which is the seam M2.3's multiplexing goes in.
+    let daemon = Daemon::start("process-tree");
+    let session = connect(&daemon);
+
+    let (receipt, _events) = session
+        .invoke(serde_json::json!({ "kind": "process.tree.get" }))
+        .expect("process.tree.get");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed"),
+        "the daemon answered rather than refusing: {receipt}"
+    );
+    let processes = receipt
+        .pointer("/result/processes")
+        .and_then(Value::as_array)
+        .expect("the tree");
+    assert!(!processes.is_empty(), "the daemon itself is in its own tree");
+    // The daemon is the root, and its direct child is the adapter — the role
+    // comes from the depth, not from the executable's name.
+    assert_eq!(
+        processes[0].get("role").and_then(Value::as_str),
+        Some("daemon"),
+        "the tree is rooted at the daemon"
+    );
+    assert!(
+        processes.iter().any(|p| p.get("role").and_then(Value::as_str) == Some("adapter")),
+        "the adapter the daemon spawned is in the tree: {processes:?}"
+    );
+    // And the total is the sum of what was reported, never invented.
+    let summed: u64 = processes
+        .iter()
+        .filter_map(|p| p.get("rssBytes").and_then(Value::as_u64))
+        .sum();
+    assert_eq!(
+        receipt.pointer("/result/totalRssBytes").and_then(Value::as_u64),
+        Some(summed)
+    );
+}

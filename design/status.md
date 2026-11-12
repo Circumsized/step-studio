@@ -500,7 +500,9 @@ Windows 无 `std` 可达的 toolhelp 快照（要 `unsafe`），所以那边只�
 
 过程中两个测试自身的问题：`sh -c 'sleep 30'` 会 **exec 替换自己**、根本没有孙子进程，测试会是空转（改成两条命令）；以及 `tree()` 在 spawn 后立刻调用，竞态抢在 shell fork 之前。
 
-**尚未接线**：契约里还没有 `process.tree.get` query，daemon 也还没把这个 read model 接到非转发路径上——那需要 daemon 为它终结协议，是 M2.3 的下一步。
+**已接线**（下一步同批完成）：契约加 `process.tree.get` + `ProcessTreeReadModel`；daemon 在转发途中拦截它、自己作答，回执经**专职写线程**写到 surface 的写半边（relay 线程不碰那个 fd，两个 owner 会交错帧）；壳把它当普通 operation 发送——它走的是同一条 wire，只是目的地址是 daemon。测试断言树以 daemon 为根、含适配器、总数是上报值之和。
+
+这就是 M2.3「多面」的第一道缝：daemon 第一次终结一个 operation 而不是透传。多会话扇出走同一个 seam。
 
 ### D-1 定案：Step 的 session 存储键就是 project 绝对路径（2026-11-12 实测）
 
