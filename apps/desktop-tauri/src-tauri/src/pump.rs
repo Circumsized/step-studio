@@ -139,18 +139,13 @@ pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)>
         || name == "git.execute"
         || name == "workspace.fileTree"
     {
-        // The workspace the query named, and the page the caller asked for, so
-        // the answer can be attributed and paged.
-        let mut operation = json!({
-            "workspaceId": input.get("workspaceId").and_then(Value::as_str).unwrap_or(""),
-        });
-        if let Some(limit) = input.get("limit") {
-            operation["limit"] = limit.clone();
-        }
-        if let Some(skip) = input.get("skip") {
-            operation["skip"] = skip.clone();
-        }
-        return Some((operation, Dispatch::Local));
+        // The whole input, spread. Hand-picking `workspaceId`/`limit`/`skip`
+        // dropped `operation`, `path`, `target` and `paths`, so every
+        // `git.execute` was refused for a missing operation, every
+        // `workspace.fileTree` listed the repository root regardless of the
+        // directory asked for, and every `git.diff.get` returned an empty patch.
+        // None of the module's tests caught it: they call the module directly.
+        return Some((spread(input, ""), Dispatch::Local));
     }
     let kind = if let Some((_, renamed)) = RENAMED.iter().find(|(from, _)| *from == name) {
         *renamed
@@ -791,6 +786,48 @@ mod tests {
             assert!(claimed.contains(&id), "{id} is resolvable but not claimed");
         }
         assert!(!claimed.contains(&"github.pr.list"), "a refused name must not be claimed");
+    }
+
+    #[test]
+    fn the_git_queries_carry_their_whole_input_through_resolve() {
+        // The bug this pins: the git arm hand-picked `workspaceId`/`limit`/`skip`
+        // instead of spreading the input, so `operation`, `path`, `target` and
+        // `paths` were all dropped. Every `git.execute` was then refused for a
+        // missing operation, every `workspace.fileTree` listed the repository
+        // root regardless of the directory asked for, and every `git.diff.get`
+        // returned an empty patch — and none of the module's tests caught it,
+        // because they call the module directly rather than through here.
+        let (operation, dispatch) =
+            resolve_operation("git.execute", &json!({ "workspaceId": "ws-1", "operation": { "kind": "stage", "paths": ["a.rs"] } }))
+                .expect("resolves");
+        assert_eq!(dispatch, Dispatch::Local);
+        assert_eq!(operation.get("workspaceId").and_then(Value::as_str), Some("ws-1"));
+        let nested = operation.get("operation").expect("the operation survives");
+        assert_eq!(nested.get("kind").and_then(Value::as_str), Some("stage"));
+        assert_eq!(
+            nested.pointer("/paths/0").and_then(Value::as_str),
+            Some("a.rs"),
+            "the paths survive too"
+        );
+
+        let (operation, _) = resolve_operation(
+            "workspace.fileTree",
+            &json!({ "workspaceId": "ws-1", "path": "crates" }),
+        )
+        .expect("resolves");
+        assert_eq!(
+            operation.get("path").and_then(Value::as_str),
+            Some("crates"),
+            "the directory asked for must survive, or the tree always lists the root"
+        );
+
+        let (operation, _) = resolve_operation(
+            "git.diff.get",
+            &json!({ "workspaceId": "ws-1", "path": "a.rs", "target": "staged" }),
+        )
+        .expect("resolves");
+        assert_eq!(operation.get("path").and_then(Value::as_str), Some("a.rs"));
+        assert_eq!(operation.get("target").and_then(Value::as_str), Some("staged"));
     }
 
     #[test]

@@ -114,10 +114,10 @@ pub fn repository_get(workspace_id: &str) -> Value {
             }
         }
     }
-    // An unborn branch has no branch name either; `branch.head` reports
-    // `(detached)` only for a detached head, so an unborn one is detected by the
-    // missing oid above.
-    if model.get("headOid").is_none() && model.get("branch").is_none() {
+    // An unborn branch still reports its name in `branch.head`; only the oid is
+    // `(initial)`. So the oid is what decides, and requiring the name to be
+    // absent too made `unborn` unreachable.
+    if model.get("headOid").is_none() {
         model["unborn"] = json!(true);
     }
     model["changes"] = Value::Array(changes);
@@ -329,6 +329,7 @@ pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Va
     // `common`, which is a claim rather than a fact — this repository is 100+
     // commits ahead of its upstream and none of them are common.
     let outgoing = outgoing_oids(&root);
+    let kinds = ref_kinds(&root);
 
     let mut commits: Vec<Value> = Vec::new();
     for record in text.split('\u{1e}') {
@@ -348,7 +349,7 @@ pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Va
         let subject = fields.next().unwrap_or("");
         let author = fields.next().unwrap_or("");
         let date = fields.next().unwrap_or("");
-        let refs = parse_refs(fields.next().unwrap_or(""));
+        let refs = parse_refs(fields.next().unwrap_or(""), &kinds);
         // The newest commit is the head; the rest are outgoing if the upstream
         // lacks them and common if it has them. `incoming` is never produced
         // here: this walk starts at HEAD, so a commit only the upstream has is
@@ -370,13 +371,13 @@ pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Va
             "refs": refs,
             "relation": relation,
         }));
-        if commits.len() as u64 >= count - 1 {
-            break;
-        }
     }
 
-    // The extra commit means there is more to read.
-    let truncated = commits.len() as u64 >= count - 1 && limit.is_some_and(|asked| asked < 500);
+    // Truncated means the extra commit arrived. The old check ran inside the
+    // loop and broke at `limit`, so it never saw the `limit+1`-th record — a
+    // repository with exactly `limit` commits reported more.
+    let asked = limit.unwrap_or(50).min(500);
+    let truncated = commits.len() as u64 > asked;
     let head = commits.first().map(|commit| commit.get("oid").cloned().unwrap_or(Value::Null));
     json!({
         "workspaceId": workspace_id,
@@ -420,35 +421,55 @@ fn unavailable_log(workspace_id: &str, reason: &str) -> Value {
     })
 }
 
+/// Every ref's full name, so a decoration can be classified by what it actually
+/// is rather than by what its name looks like.
+///
+/// `%D` strips the `refs/` prefix, which makes a local `feature/x` and a remote
+/// `origin/feature/x` indistinguishable by name — and a slash in the name is not
+/// evidence of being remote. One `for-each-ref` call gives the truth.
+fn ref_kinds(root: &Path) -> std::collections::HashMap<String, &'static str> {
+    let mut kinds = std::collections::HashMap::new();
+    let Ok(output) = Command::new("git")
+        .arg("for-each-ref")
+        .arg("--format=%(refname)")
+        .current_dir(root)
+        .output()
+    else {
+        return kinds;
+    };
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        if let Some(name) = line.strip_prefix("refs/heads/") {
+            kinds.insert(name.to_string(), "local");
+        } else if let Some(name) = line.strip_prefix("refs/remotes/") {
+            kinds.insert(name.to_string(), "remote");
+        } else if let Some(name) = line.strip_prefix("refs/tags/") {
+            kinds.insert(name.to_string(), "tag");
+        }
+    }
+    kinds
+}
+
 /// `%D` output: `HEAD -> main, origin/main, tag: v1`. Each name becomes a ref
 /// with the kind the contract declares — `local`, `remote`, `tag` or `head`.
-fn parse_refs(decorations: &str) -> Vec<Value> {
+fn parse_refs(decorations: &str, kinds: &std::collections::HashMap<String, &'static str>) -> Vec<Value> {
     let mut refs = Vec::new();
     for entry in decorations.split(", ") {
         let entry = entry.trim();
         if entry.is_empty() {
             continue;
         }
+        // `tag:` is the one prefix `%D` keeps, so a tag is recognisable on its
+        // own. Everything else is a bare name, and the full-ref map says which
+        // it is — a local `feature/x` and a remote `origin/feature/x` are the
+        // same string once the prefix is stripped.
         let (kind, name) = if let Some(rest) = entry.strip_prefix("HEAD -> ") {
-            // The branch HEAD points at: local, and the current one.
             ("local", rest)
         } else if entry == "HEAD" {
-            // A detached head names no branch.
             ("head", "")
         } else if let Some(rest) = entry.strip_prefix("tag: ") {
             ("tag", rest)
-        } else if entry.starts_with("refs/remotes/") {
-            ("remote", entry.trim_start_matches("refs/remotes/"))
-        } else if entry.starts_with("refs/") {
-            ("local", entry.trim_start_matches("refs/heads/"))
         } else {
-            // A bare name from `%D` is a local branch; anything with a slash and
-            // no refs/ prefix is a remote-tracking ref.
-            if entry.contains('/') {
-                ("remote", entry)
-            } else {
-                ("local", entry)
-            }
+            (kinds.get(entry).copied().unwrap_or("local"), entry)
         };
         if name.is_empty() {
             continue;
@@ -554,7 +575,14 @@ mod log_tests {
 
     #[test]
     fn decorations_become_refs_with_a_kind() {
-        let refs = parse_refs("HEAD -> main, origin/main, tag: v1");
+        // The kinds come from the full-ref map, not from the name: `origin/main`
+        // and a local `feature/x` are the same shape once `%D` strips the prefix.
+        let mut kinds = std::collections::HashMap::new();
+        kinds.insert("main".to_string(), "local");
+        kinds.insert("origin/main".to_string(), "remote");
+        kinds.insert("v1".to_string(), "tag");
+        kinds.insert("feature/x".to_string(), "local");
+        let refs = parse_refs("HEAD -> main, origin/main, tag: v1, feature/x", &kinds);
         let names: Vec<&str> = refs
             .iter()
             .filter_map(|entry| entry.get("name").and_then(Value::as_str))
@@ -578,6 +606,15 @@ mod log_tests {
             .find(|entry| entry.get("name").and_then(Value::as_str) == Some("origin/main"))
             .expect("the upstream");
         assert_eq!(remote.get("kind").and_then(Value::as_str), Some("remote"));
+        let slashed_local = refs
+            .iter()
+            .find(|entry| entry.get("name").and_then(Value::as_str) == Some("feature/x"))
+            .expect("the local branch");
+        assert_eq!(
+            slashed_local.get("kind").and_then(Value::as_str),
+            Some("local"),
+            "a local branch with a slash is not a remote ref"
+        );
     }
 }
 
@@ -1034,6 +1071,11 @@ fn pull(root: &Path, operation: &Value) -> Result<String, String> {
     let mut command = Command::new("git");
     command.arg("pull");
     match strategy {
+        // The safe default, and the one the panel's Pull button sends: it fails
+        // rather than creating a merge the user did not ask for.
+        "ff-only" => {
+            command.arg("--ff-only");
+        }
         "rebase" => {
             command.arg("--rebase");
         }
@@ -1176,7 +1218,7 @@ fn discard(root: &Path, operation: &Value) -> Result<String, String> {
         let Some(path) = path.as_str() else {
             return Err("a path was not text".to_string());
         };
-        if path.starts_with('-') || Path::new(path).is_absolute() || path.split('/').any(|p| p == "..") {
+        if path.starts_with('-') || Path::new(path).is_absolute() || escapes(path) {
             return Err(format!("refusing the path {path}"));
         }
         command.arg(path);
@@ -1342,10 +1384,18 @@ fn remote_remove(root: &Path, operation: &Value) -> Result<String, String> {
 /// worktree's path. The shell does not track worktree ids itself, so it uses the
 /// one the caller was given.
 fn worktree_path(id: &str) -> Result<&str, String> {
-    if id.is_empty() || id.starts_with('-') || Path::new(id).is_absolute() {
+    if id.is_empty() || id.starts_with('-') || Path::new(id).is_absolute() || escapes(id) {
         return Err(format!("refusing the worktree id {id}"));
     }
     Ok(id)
+}
+
+/// Whether a path walks out of where it started.
+///
+/// Both separators, because the shell ships on Windows and a `..\..\x` that
+/// only a `/`-split would miss is a real path there.
+pub fn escapes(path: &str) -> bool {
+    path.split(['/', '\\']).any(|part| part == "..")
 }
 
 fn worktree_create(root: &Path, operation: &Value) -> Result<String, String> {
@@ -1650,7 +1700,7 @@ pub fn file_tree(workspace_id: &str, path: Option<&str>) -> Value {
     let relative = raw.trim_matches('/');
     // A path that escapes the repository is refused rather than listed: the
     // tree is a view of the workspace, not of the filesystem.
-    if raw.starts_with('/') || Path::new(raw).is_absolute() || relative.split('/').any(|part| part == "..") {
+    if raw.starts_with('/') || Path::new(raw).is_absolute() || escapes(relative) {
         return json!({
             "workspaceId": workspace_id,
             "nodes": [],

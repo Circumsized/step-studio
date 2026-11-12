@@ -1056,10 +1056,12 @@ pub fn command(
         .get("requestId")
         .and_then(Value::as_str)
         .map(str::to_string);
-    // `git.execute` is answered by the pump like every other command, because the
-    // renderer waits for a receipt after the ack — and the pump's local arm is
-    // what produces both.
-    round_trip(&state, &name, input, &request_id.unwrap_or_default(), pump::Want::Result)
+    // `Want::Ack`, not `Want::Result`: a command is answered with its ack, and
+    // the result travels on the receipt the renderer waits for. Asking for the
+    // result here resolves `client.command` with the payload — which carries no
+    // `requestId` — so `waitReceipt(client, undefined, 60_000)` hangs for a
+    // minute and then reports a timeout.
+    round_trip(&state, &name, input, &request_id.unwrap_or_default(), pump::Want::Ack)
 }
 
 #[tauri::command]

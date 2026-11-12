@@ -490,6 +490,19 @@ force push 只以 `--force-with-lease` 发出，**从不发裸 `--force`**——
 
 测试：18 个 git 单测，含对真仓库的 stage→unstage 往返；scratch 文件测完即清（工作树干净时没有现成 diff 可测，而改已提交文件再还原会在测试失败时留下脏树）。
 
+### M3.5 对抗评审：两条 Critical + 七处 High/Medium（2026-11-12，已修）
+
+评审对象是刚落成的 `git.rs`。**两条 Critical 直接推翻「Git 面板全部接上」的结论**，且根因相同：模块测试全部直调函数，接线从未被验证。
+
+1. `resolve_operation` 的 git 臂手工挑字段而非 spread → `operation`/`path`/`target`/`paths` 全丢 → 每个 `git.execute` 因缺 operation 被拒、每个 `workspace.fileTree` 列仓库根、每个 `git.diff.get` 返回空 patch。
+2. `command` 传 `Want::Result` → `client.command` resolve 到无 `requestId` 的 payload → `waitReceipt(client, undefined, 60_000)` 挂一分钟。
+
+已修，并补经 `resolve_operation` 的接线测试（`the_git_queries_carry_their_whole_input_through_resolve`）。
+
+同批修掉：`pull` 的 match 漏 `ff-only` 臂（那是默认值也正是面板 Pull 按钮发的，每次必错）；`worktree_path` 漏 `..`（可在仓库外建 worktree）且三处 `..` 检查只 split `'/'`、漏 Windows 的 `..\..\x`；`unborn` 永不为真；`truncated` 在正好 `limit` 条时误报；`%D` 剥前缀导致本地/远端同名歧义（改完整 refname 映射）；**`revision` 从未发出使乐观并发检查在面板上全是死的**——我上一轮还在文档里写「破坏性操作一律带乐观并发检查」，那条宣称当时是假的。
+
+尚未修（下批）：`commit` 忽略 `paths` 会提交整个索引；rename/copy 的类型 2 行按普通变更解析、`originalPath` 从不发出；`discard` 对未跟踪文件直接失败；若干模型带了契约没有的 `unavailableReason` 键、`state('T')` 映射到契约外的 `"typechange"`；若干测试失败路径不清场。
+
 ### M3.3 文件树：`workspace.fileTree` 落地（2026-11-12 完成）
 
 渲染层按目录懒展开（`{ path: "src" }`），所以壳一次只列一层——首渲染就全走一遍会把 `node_modules` 走爆。跳过的正是让文件树变没用的那几个：`.git`/`node_modules`/`target`/`dist`/`.next`/`__pycache__`。目录优先、组内字母序。
