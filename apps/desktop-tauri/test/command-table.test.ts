@@ -70,3 +70,29 @@ describe("the Tauri command table covers the Host bridge completely", () => {
     assert.deepEqual(registered, invokable, "main.rs registers a command the table does not route to");
   });
 });
+
+// The event channel is the one that carries everything, and it is the one
+// channel `command-table` deliberately filters out of the invoke table — so it
+// has no other guard. `terminal-bridge.test.ts` already pins the terminal
+// channels byte-for-byte; this applies the same pattern to the event channel,
+// where a rename on either side would silently stop every event rather than
+// fail a command.
+describe("the event channel matches what Rust emits", () => {
+  test("the JS constant is byte-identical to the Rust one", () => {
+    // Same convention as the tests above: `packageRoot` is the app package, so
+    // the repo root is two up. It resolves differently when run from the source
+    // than from `dist/test/`, which is what the gate runs — hence the shared
+    // convention rather than a path from this file.
+    const packageRoot = join(import.meta.dirname, "..", "..");
+    const repoRoot = join(packageRoot, "..", "..");
+    const ts = readFileSync(
+      join(repoRoot, "packages", "transport-desktop", "src", "channels.ts"),
+      "utf8",
+    );
+    const rust = readFileSync(join(packageRoot, "src-tauri", "src", "pump.rs"), "utf8");
+    const js = ts.match(/event: "([^"]+)"/);
+    const rs = rust.match(/pub const EVENT_CHANNEL: &str = "([^"]+)"/);
+    assert.ok(js && rs, "the event channel must be declared on both sides");
+    assert.equal(js[1], rs[1], "the event channel differs between JS and Rust");
+  });
+});

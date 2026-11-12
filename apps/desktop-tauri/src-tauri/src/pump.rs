@@ -159,6 +159,14 @@ pub fn capability_manifest() -> Value {
     // `capabilities.get`, `session.create` and `conversation.open`, five names
     // this shell serves.
     for (from, to) in RENAMED {
+        // Skipped when the shell answers this name itself: its grade describes
+        // what the shell can deliver, which is not the adapter's grade for the
+        // operation it happens to resolve to. Claiming both emitted the id
+        // twice with conflicting grades — `models.get` as `stable` from its
+        // target and `limited` from the reshape.
+        if SHELL_ANSWERED.iter().any(|(id, _)| id == from) {
+            continue;
+        }
         let grade = ADAPTER_NATIVE
             .iter()
             .find(|(id, _)| id == to)
@@ -725,9 +733,27 @@ mod tests {
         for (from, _) in RENAMED.iter() {
             assert!(declared.contains(from), "{from} resolves but is not declared");
         }
+        // Counted, and de-duplicated. The first version of this assertion baked
+        // in the length of both tables, which pinned a duplicate: `usage.get`
+        // and `models.get` were claimed once from RENAMED and once from
+        // SHELL_ANSWERED, with conflicting grades, and the count still matched.
+        let mut sorted: Vec<&str> = declared.clone();
+        sorted.sort_unstable();
+        let unique = sorted.len();
+        sorted.dedup();
         assert_eq!(
-            declared.len(),
+            sorted.len(),
+            unique,
+            "an id is declared twice: {:?}",
+            sorted
+        );
+        assert_eq!(
+            unique,
             ADAPTER_NATIVE.len() + 1 + RENAMED.len() + SHELL_ANSWERED.len()
+                - RENAMED
+                    .iter()
+                    .filter(|(from, _)| SHELL_ANSWERED.iter().any(|(id, _)| id == from))
+                    .count()
         );
         assert!(declared.contains(&"core.prompt"));
         // `conversation.open` used to be excluded on the grounds that its target

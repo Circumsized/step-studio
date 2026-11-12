@@ -23,7 +23,7 @@
 | 1.1 | 顶部自定义标题栏：汉堡 / 品牌 / 搜索 / 未选项目 / New Chat / 右侧图标组 | 齐 |
 | 1.2 | 中央欢迎语与副标题（"Good evening, Studio" 一带） | 齐 |
 | 1.3 | Activity Heatmap：Jan-Dec 月份轴 + Mon/Wed/Fri 行轴 + 色阶图例 | **空**（原因诚实：面板已到桥，但无结构化数字可画） |
-| 1.4 | Recent Chats 区（空态文案 + All History 入口） | 齐 |
+| 1.4 | Recent Chats 区（空态文案 + All History 入口） | **空**（M1.7 改判：`history.list` 被 `resolve_operation` 拒绝，区域恒渲染「暂无最近对话」。原判把比对点收缩成空态本身，而空态正是被评判的对象） |
 | 1.5 | Composer：占位文案 / Dictate / 附件行 / 模型选择器 / thinking 档位 / 发送键 | 齐（模型选择器实测解析出 `step-3.7-flash`） |
 | 1.6 | 底部面板页签：Terminal / Problems / Tests / Output / Step Logs / Preview Logs | 齐 |
 | 1.7 | 侧栏：New Chat / Skills & Plugins / PROJECTS & CHATS / EXPLORER / 底部状态灯 | 齐（状态灯实测 "Step Ready"） |
@@ -58,7 +58,7 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 | # | 比对点 | 态 |
 |---|---|---|
 | 4.1 | 「角色 × 模型 × thinking 档位」表格结构 | **空**（结构在，行数据无来源：Step RPC 无角色概念） |
-| 4.2 | 模型列内容（实测 Step 仅 2 个模型，上游 11 角色 × 多模型） | **齐**（catalog 已到桥，composer 选择器可用） |
+| 4.2 | 模型列内容（实测 Step 仅 2 个模型，上游 11 角色 × 多模型） | **空**（M1.7 改判：原引证据「catalog 已到桥」说的是 composer 选择器（1.5），不是本表的角色表；`roles: []` 时没有模型列内容，与 4.1 同一理由） |
 
 版式在、数据空。方案 §9.6 已记「缩减」，属预期。
 
@@ -67,7 +67,7 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 | # | 比对点 | 态 |
 |---|---|---|
 | 5.1 | 三个 list 的呈现（扩展 / MCP / 命令） | **空**（适配器有 `session.extensions.list` / `session.commands.list` 且 stable，但壳未把它们暴露成 facade query，渲染层拿不到） |
-| 5.2 | 能力条目与 grade 徽标 | **齐**（`capabilities.get` 由壳本地作答，manifest 由派发表派生，双向不变式有单测夹住） |
+| 5.2 | 能力条目与 grade 徽标 | **空**（M1.7 改判：`capabilities.get` 返回的是壳自己的派发表清单，id 形如 `core.prompt`，与参考图里 Skills/Plugins/MCP/Slash 条目不是同一个能力集——正是 5.1 判空的那个集合） |
 
 方案 §9.6 记「基本齐」，但那是 adapter 已声明 `session.extensions.list` /
 `session.commands.list` 为 stable 的意思。**当前壳未把这两个 query 接给 renderer 的能力页**
