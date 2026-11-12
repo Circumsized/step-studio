@@ -56,6 +56,8 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
     // Answered by the shell from Step's own session store, which is a fact about
     // this machine rather than about the runtime.
     ("history.list", "limited"),
+    // The projects Step has sessions for, from the same store.
+    ("projects.list", "limited"),
 ];
 
 /// `core.prompt` sits apart because it is the one `Dispatch::Turn` operation.
@@ -549,6 +551,8 @@ fn pump(
                                 .cloned()
                                 .unwrap_or(Value::Null);
                             crate::git::execute(&operation)
+                        } else if job.command_name == "projects.list" {
+                            crate::history::projects()
                         } else if job.command_name == "history.list" {
                             let limit = job.operation.get("limit").and_then(Value::as_u64);
                             let workspace_id =

@@ -170,7 +170,7 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 
 | 大类 | 代表 kind | 原因 |
 |---|---|---|
-| 工作区 | `workspace.open` / `workspace.pick` / `workspace.fileTree` / `projects.list` |**部分到桥**：`workspace.fileTree` 由壳读盘本地作答；`process.tree.get` 由 daemon 自己作答（进程树只能由持有它的进程报告）；`workspace.open`/`pick`/`projects.list` 仍属 Host workspace registry，未接 |
+| 工作区 | `workspace.open` / `workspace.pick` / `workspace.fileTree` / `projects.list` |**部分到桥**：`workspace.fileTree` 由壳读盘本地作答；`process.tree.get` 由 daemon 自己作答；`projects.list` 与 `history.list` 由壳读 Step 自己的 session store；`workspace.open`/`pick` 仍未接 |
 | Git | `git.*`（约 12 个） | 自建于 M3/M4 |
 | 模型配置 | `models.get` / `models.provider.*` / `models.webSearch.*` | models.yml 管理在 Host |
 | 归档与历史 | `history.list` / `session.transcript.readPage` / `session.agents.list` | Host 的 archive reader |

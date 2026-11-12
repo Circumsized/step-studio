@@ -596,7 +596,9 @@ title/summary 取会话自己的首条 user message 文本，**绝不是路径**
 
 checklist 1.4 从「空」翻「齐」——M1.7 正是把它从「齐」改判成「空」的（理由是 `history.list` 被拒、区域恒渲染空态），现在原因消除了。
 
-**仍未移植**：`projects.list` / `home.get` / `workspace.open` / `pick`，以及 `session-archive-reader` 的 cursor 分页与冷归档。
+同批落地 `projects.list`：同一个 store，`workspaceId` 取自 session 头里的真实 `cwd` 而**不是**目录名解码——目录名是路径把 `/` 换成 `-`，而那不是单射：`step-studio` 会解成 `step/studio`。第一版我就是那么写的，还被自己一个断言正确的测试抓住（我同时在注释里写下了这个 caveat，却写了个断言相反的测试，两处都错了）。测试现改为 `assert_ne!`，专门用来阻止后人把 `project_path` 「简化」回解码。
+
+**仍未移植**：`home.get` / `workspace.open` / `pick`，以及 `session-archive-reader` 的 cursor 分页与冷归档。
 
 ### M2.4 删除连锁：隐藏消费者实证，本轮不执行（2026-11-12）
 

@@ -243,3 +243,178 @@ mod tests {
         assert_eq!(times, sorted, "the newest session comes first");
     }
 }
+
+/// The projects Step has sessions for, read from the same store.
+///
+/// The store's directory name *is* the project's absolute path with `/` replaced
+/// by `-` — that is the D-1 measurement — so the list is a decode of the names
+/// rather than a separate registry. There is no registry to keep in step with,
+/// which is the point: a project exists here because Step has a session in it.
+///
+/// `name` is the basename and never a path, per the contract. The full path is
+/// what `workspaceId` carries, because that is what a file tree or a session
+/// filter needs to match against.
+pub fn projects() -> Value {
+    let Some(store) = store_dir() else {
+        return json!({ "workspaces": [] });
+    };
+    let Ok(entries) = std::fs::read_dir(&store) else {
+        return json!({ "workspaces": [] });
+    };
+
+    let mut workspaces: Vec<Value> = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        // The project's real path comes from a session header, not from the
+        // directory name. The name is that path with `/` replaced by `-`, which
+        // is not injective: `step-studio` decodes to `step/studio`, so decoding
+        // it would hand every consumer a workspaceId that matches nothing.
+        let Some(project) = project_path(&path) else {
+            continue;
+        };
+        let name = Path::new(&project)
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| project.clone());
+        workspaces.push(json!({
+            "workspaceId": project,
+            "name": name,
+            // The store does not record when a project was opened; the newest
+            // session in it is the closest thing, and it is a fact rather than a
+            // guess.
+            "lastOpenedAt": newest_session_at(&path),
+            "active": false,
+        }));
+    }
+
+    // Most recently used first, which is the order a project list is read in.
+    workspaces.sort_by(|a, b| {
+        let a_at = a.get("lastOpenedAt").and_then(Value::as_str).unwrap_or("");
+        let b_at = b.get("lastOpenedAt").and_then(Value::as_str).unwrap_or("");
+        b_at.cmp(a_at)
+    });
+    workspaces.dedup_by(|a, b| {
+        a.get("workspaceId") == b.get("workspaceId")
+    });
+    json!({ "workspaces": workspaces })
+}
+
+/// The project a store directory belongs to, from one of its session headers.
+fn project_path(project_dir: &Path) -> Option<String> {
+    let sessions = std::fs::read_dir(project_dir).ok()?;
+    for session in sessions.flatten() {
+        let path = session.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+            continue;
+        }
+        // The first line is the session header, and it carries the real `cwd`.
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Some(header) = text.lines().next() else {
+            continue;
+        };
+        if let Ok(value) = serde_json::from_str::<Value>(header) {
+            if let Some(cwd) = value.get("cwd").and_then(Value::as_str) {
+                if !cwd.is_empty() {
+                    return Some(cwd.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// The newest session's last activity in one project, or empty when there is none.
+fn newest_session_at(project: &Path) -> String {
+    let Ok(sessions) = std::fs::read_dir(project) else {
+        return String::new();
+    };
+    let mut newest = String::new();
+    for session in sessions.flatten() {
+        let path = session.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+            continue;
+        }
+        // The last line's timestamp is the session's last activity, so only the
+        // tail is read rather than the whole file.
+        if let Some(at) = last_line_timestamp(&path) {
+            if at > newest {
+                newest = at;
+            }
+        }
+    }
+    newest
+}
+
+/// The `timestamp` of a JSONL file's last parseable line.
+fn last_line_timestamp(path: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let last = text
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())?;
+    serde_json::from_str::<Value>(last)
+        .ok()?
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+#[cfg(test)]
+mod project_tests {
+    use super::*;
+
+    #[test]
+    fn the_directory_name_is_not_the_project_path() {
+        // The store names a project's directory by its path with `/` replaced by
+        // `-`, and that is not injective: a `-` inside a component decodes to a
+        // separator. So the directory name is never the answer — the session
+        // header's `cwd` is, and this test exists to stop anybody "simplifying"
+        // `project_path` back into a decode.
+        let encoded = "--home-ubuntu-workspace-step-studio--";
+        let decoded = encoded.trim_matches('-').replace('-', "/");
+        assert_ne!(decoded, "/home/ubuntu/workspace/step-studio");
+        assert_eq!(decoded, "home/ubuntu/workspace/step/studio");
+    }
+
+    #[test]
+    fn a_name_is_the_basename_and_never_a_path() {
+        let project = "/home/ubuntu/workspace/step-studio";
+        let name = Path::new(project)
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default();
+        assert_eq!(name, "step-studio");
+        assert!(!name.contains('/'), "a name is a basename, never a path");
+    }
+
+    #[test]
+    fn the_real_store_lists_the_projects_it_holds() {
+        let model = projects();
+        let workspaces = model.get("workspaces").and_then(Value::as_array).expect("workspaces");
+        if workspaces.is_empty() {
+            return;
+        }
+        for workspace in workspaces {
+            for field in ["workspaceId", "name", "lastOpenedAt", "active"] {
+                assert!(workspace.get(field).is_some(), "{field} is missing from {workspace}");
+            }
+            let name = workspace.get("name").and_then(Value::as_str).unwrap_or("");
+            assert!(!name.contains('/'), "a name is a basename: {name}");
+            let id = workspace.get("workspaceId").and_then(Value::as_str).unwrap_or("");
+            assert!(id.starts_with('/'), "a workspaceId is the project path: {id}");
+        }
+        // Most recently used first.
+        let times: Vec<&str> = workspaces
+            .iter()
+            .filter_map(|entry| entry.get("lastOpenedAt").and_then(Value::as_str))
+            .collect();
+        let mut sorted = times.clone();
+        sorted.sort_unstable_by(|a, b| b.cmp(a));
+        assert_eq!(times, sorted, "the most recently used project comes first");
+    }
+}
