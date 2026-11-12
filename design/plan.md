@@ -860,6 +860,11 @@ flowchart LR
 | 新增 `BridgeSession::drain_events()` | 事件只在有命令 await 时被取走，两条命令之间没人取，回合事件会堆到 inbox 里直到下一条命令碰巧取走 | 让每次命令都顺带清空（丢事件或重复） | 不改 |
 | `EventSink` 是可注入闭包而非 `WebviewWindow` | 泵因此能在无窗口下被驱动，`STEP_STUDIO_SELF_CHECK` 靠它在无显示、无法操作 composer 的机器上证明整条回合链路；顺带让泵可测 | 直接持 `WebviewWindow` | 不改 |
 | 状态版本不随 delta 前进 | 适配器只对改变状态的事件递增 `stateVersion`（`main.ts:162-167`），`runtime-projection.ts:38-50` 记了每 token 重发未变 read model 是成本不是功能；镜像它，renderer 的 `advanceConnection` 取最大值才不失真 | 每事件递增（触发 renderer 全量重算） | 不改 |
+| 未送达的事件不得推进 `cursor` | bootstrap 把 `cursor: 0` 声明为续起点；被丢弃的事件（`subscribe` 之前的全部）若照常计数，第一个真事件就成了间隙，而间隙强制 `resync_required`（`reducer.ts:737`），且本壳不发 snapshot 所以永不消退 | 无条件递增（首个实现，实机截图抓出） | 不改 |
+| 回滚覆盖 `cursor` 与 `pending_turn` 两个字段 | `translate()` 合成回合结束回执时会消费 `pending_turn`；只回滚 cursor 会留下一个永不到达的回执 | 只回滚 cursor（第一版修法，被测试抓出） | 不改 |
+| 改名只动独立大写词 `\bOMP\b` | 这一条限定同时保护了三类不该动的东西：`OMP_STUDIO_CLIENT`（`_` 是词字符）、全小写的 `omp-studio` / `@omp-studio` / `ompStudio`、真实配置路径 `~/.omp/agent/config.yml` | 全文替换 OMP（会破坏注入点与路径字面量） | 不改 |
+| `tauri.conf.json` 的 identifier 保持 `com.snowpear.omp-studio` | 改它等于迁移安装目录与 app-data 目录，会让已有 profile 失效；它不是界面显示 | 改成 `com.snowpear.step-studio` | 用户明确要求迁移安装身份时 |
+| **Host 边车：不起 Node 边车就不是复刻，是重写** | 查证见 `status.md`「Host 边车方案查证结论」：`createDesktopHostComposition` 可在无 Electron 的 Node 进程驱动（裸 Node 跑既有契约套件 22 过 1 跳 0 失败），五方法面由 composition 自己构造，renderer 零 diff，一次拿到约 160 个操作。逐个把 chrome 的 40 个 Host 方法移植进 Rust 是纯浪费 | 把 Host 服务逐个移植进 Rust | M1.2c-M1.7 复刻阶段开始时实施；边车走 stdio NDJSON 而非 `transport-web` HTTP（后者无 WS 服务端、origins 必填、配对码 60s TTL） |
 **待用户签字项（AT-1 二审要求）**：像素级复刻的范围是否包含窗口拓扑。当前文档口径：像素级 = WebView 承载面的逐页比对，窗口拓扑不在内（终端/diff 若回 WebView 则拓扑也一致，此项自然消解；若 go/no-go 通过走原生独立窗，则必须重新签字）。
 
 可推翻上述任一条的条件：新的实测数据，或用户明确的方向变更。

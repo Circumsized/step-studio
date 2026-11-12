@@ -244,6 +244,79 @@ DPI 150%/200%、IME、xterm.js 帧时与 RSS）；`cargo test --workspace` 并�
 单独跑 8/8 过、复跑两次全绿，未定位到具体用例（最可能是打真实 CLI 与模型 API 的那个在并行
 负载下超时），记为已知抖动。
 
+### 改名：OMP → Step（2026-11-12 完成）
+
+用户要求的复刻条件里有一条是「除把 omp 改为 step之外基本复刻」。此前只有 Tauri 窗口标题是
+Step Studio，界面内全是 OMP。本次把**可见文案**里的 OMP 全部改成 Step：侧栏 brand、就绪状态、
+控制台标题、诊断报告头、审批卡片主语、各设置页对 Runtime 行为的说明、`<title>`。
+
+共 207 处、51 个文件，外加 `index.html` 的 `<title>`。
+
+替换只针对**独立大写词** `\bOMP\b`，这一条限定就是安全性的来源：
+- `OMP_STUDIO_CLIENT` 不动——`_` 是词字符，`P` 后没有词边界；
+- `omp-studio`、`@omp-studio`、`ompStudio` 全小写，永不匹配；
+- 真实配置路径 `~/.omp/agent/config.yml` 全小写，也不会被误伤。
+
+**两个标识符故意不改**，都记录在案而不是默默跳过：
+- `tauri.conf.json` 的 `com.snowpear.omp-studio`。改它等于迁移安装目录与 app-data 目录，
+  会让已有 profile 失效。它不是界面显示。
+- `OMP_STUDIO_CLIENT`，跨语言注入点。
+
+44 条测试断言跟着改——它们钉的就是显示文案，文案动了它们必须动。
+
+实机验证：侧栏「Step Studio」、状态「Step Ready」、底部页签「Step Logs」。
+**踩到一个只有真机能发现的问题**：改完 dist 后界面仍是旧文案，原因是 Tauri 在**编译期**把
+`frontendDist` 嵌进二进制，光重建 renderer dist 不够，必须重新 `cargo build --release`。
+同理 `index.html` 的 `<title>` 也在嵌入范围内。
+
+### resync 横幅回归与修复（2026-11-12 完成）
+
+改名后实机截图暴露出一个**新回归**：界面顶部常驻
+「Resync required · Restoring latest Runtime state; sensitive operations are paused.」
+
+根因：bootstrap 把 `cursor: 0` 声明为订阅续起点，但泵的计数器对**被丢弃的事件也照常前进**——
+而 `subscribe` 之前的事件全部被丢弃（适配器启动chatter、self-check 回合）。于是第一个真正
+送达的事件在 renderer 眼里成了「间隙」，而间隙会强制 `resync_required`
+（`packages/client/src/reducer.ts:737`）。这个壳从不发 snapshot 事件，所以横幅再也不会消。
+
+修法：sink 现在回报「是否真的送达」，两条派发路径在未送达时把流回滚。回滚覆盖**两个字段**
+而不只是一个：`translate()` 在合成回合结束回执时会 `.take()` 掉 `pending_turn`，只回滚 cursor
+会留下一个「回执已构造、已丢弃、且永远不能再构造」的 prompt。
+
+三个测试钉住这个不变量，其中 `pending_turn` 那条正是第一版修法写错的地方——`checkpoint()`
+最初用 `.take()` 实现，把配对关系偷走了，`translate()` 从此看不到它。测试先红，改成 clone 后才绿。
+
+### Host 边车方案查证结论（2026-11-12，尚未实施）
+
+M1.2c 开工前先回答了一个问题：chrome 的 40 个 Host 背后方法，值得逐个移植进 Rust 吗？
+查证结论是**不值得，而且没必要**——`createDesktopHostComposition` 可以在无 Electron 的普通
+Node 进程里驱动：
+
+- `host-composition.ts` 自身零 electron import；全仓只有 `host-factory.ts:41` 一条
+  `import { app, dialog } from "electron"`，且只被 3 个调用点用到（`app.isPackaged` ×2、
+  `process.resourcesPath` ×1），都是普通参数而非依赖。
+- 实证：在裸 Node 里跑既有契约套件 `node --test apps/desktop/dist/test/desktop-composition.test.js`
+  → 22 过 1 跳 0 失败，且该套件用的是真的 `createDesktopRuntimeSessionPort`。
+- 七个必填 port 的实现（platform / authorityLock / privateEndpoint / runtimeSession 等）
+  全部在 `@omp-studio/platform` 与 `apps/desktop/src` 的非 electron 模块里，electron-free。
+- **五方法面由 composition 自己构造**：`host-composition.ts:1106-1108` 的
+  `get transport() { return this.#facade; }`，而 `#facade` 就是
+  `StudioHostClientFacade implements ClientTransport`，后者恰好是
+  `{bootstrap, query, command, subscribe, close}`。Electron 只在这之上加 IPC 转发。
+
+也就是说：起一个 Node Host 边车、Tauri 壳只做转发，可以一次拿到全部约 160 个操作，
+**renderer 零 diff**。工作量估算：约 200-300 行新 TS 边车胶水 + 约 350 行从 electron 模块里
+搬出来的生产服务 + Rust 侧约 250-400 行代理（替代现有 603 行）。
+
+两个已知代价，记下来免得后面才发现：
+- `transport-web` 的 HTTP 服务不能直接复用：没有 WebSocket 服务端（事件流要新写约 60-100 行）、
+  `origins` 必填且各平台不同、配对码一次性 60 秒 TTL、默认 `maxOutstandingCommands: 8`。
+  走 stdio NDJSON 更干净。
+- 两个壳共用同一个 per-profile authority lock（`environmentKey: "desktop"`）。Electron 与
+  Tauri 同时跑会互斥；要并行就得让 `environmentKey` 按壳区分。
+
+这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
+
 ### M1.2c-chrome：`ompStudioChrome` 壳级子集（2026-11-12 完成）
 
 `vite-env.d.ts:51-290` 声明了 139 个 chrome 条目。切开看：后半是自动更新器
