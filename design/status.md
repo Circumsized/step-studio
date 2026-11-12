@@ -407,6 +407,44 @@ Node 进程里驱动：
 
 这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
 
+### M1.2c-terminal：`ompStudioTerminal` 真 PTY（2026-11-12 完成）
+
+底部 Terminal 接上真 PTY（`portable-pty` 0.9），不是行缓冲——AGENTS.md 明确要求
+「Terminal 两种模式都用本机 Shell」。壳级 `$SHELL`，TERM 设为 `xterm-256color`，
+输出由独立 reader 线程读，经 `omp-studio:terminal:data` / `:exit` 两个 Tauri 事件
+通道送出，JS 侧单 listen 扇出到 Set（与 desktop sender 同一个理由：Tauri 的 `listen`
+返回 Promise，逐订阅注册会让早于 resolve 的 unsubscribe 找不到目标）。
+
+实现上三个决定：
+
+1. **清理靠 `Drop`，不靠显式 shutdown**。最初写了个 `shutdown()` 函数，然后发现没人调——
+   死代码警告逼我面对一个问题：显式调用要在每条退出路径都记得，忘一次就留下孤儿 shell
+   占着 workspace。改成 `Terminal` 的 `Drop` kill child，Tauri 关闭时自动销毁托管状态，
+   覆盖包括 panic 在内的所有路径。
+2. **PTY 核心从 Tauri 命令里拆出来**。`open_shell(id, cols, rows)` 不碰 AppHandle、不碰
+   状态，于是真行为可测——见下面那个集成测试。
+3. **`write`/`resize`/`dispose` 同样拆成自由函数**，命令只是 Tauri 边界。
+
+**真 PTY 集成测试**（不是 mock）：开真 PTY、起真 shell、写
+`printf 'PONYTAIL_OK\n'` + `exit`、读回输出、断言含 `PONYTAIL_OK`，再 drop 句柄。
+另一个测试证明 `take_writer` 之后 master 仍可 `resize`（portable-pty 的 `take_writer`
+内部克隆 fd，这点值得钉住，否则将来有人「优化」成 move 就会静默破坏 resize）。
+
+新增 `test/terminal-bridge.test.ts`（5 个用例）：扇出的同步性与身份精确性、JS 与 Rust
+双向命令名对齐、两个事件通道名逐字节相同、recording 三件套保持缺席。
+
+未接的部分，与 chrome 同一条边界：`recordingStart/Stop/Status` 要 Host 的 artifact
+library 才能产出 `artifactId`，留空，renderer 禁用录音按钮。`workspaceId` 接收但忽略——
+把 workspace id 映射到目录需要 Host 的 workspace registry，终端因此起在壳自己的工作目录。
+这是相对 omp-studio 的真实缺口，记录下来而不是糊过去。
+
+**UI 侧未能实机验证**，原因明确且不在本桥：`TerminalPane` 的 `canCreate` 要求
+execution target 处于 connected（`TerminalPane.tsx:43`），而当前没有 workspace 打开
+（Host 未接），所以不会自动建终端。这不是终端桥的缺陷，是同一个 Host 缺口的另一面。
+另外过程里发现两个自己的操作错误：`pkill -f step-studio-desktop-tauri` 会匹配到
+Bash 工具自己的命令行从而自杀（改用 `pkill -f "step-studio-deskto[p]-tauri"`）；
+以及 Xvfb 捕获图是 1400x900 而窗口只占 1280x800，按捕获图坐标点窗口外的黑区会全部落空。
+
 ### M1.2c-chrome：`ompStudioChrome` 壳级子集（2026-11-12 完成）
 
 `vite-env.d.ts:51-290` 声明了 139 个 chrome 条目。切开看：后半是自动更新器

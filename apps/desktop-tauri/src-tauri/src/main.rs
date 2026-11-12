@@ -8,6 +8,7 @@
 mod bridge;
 mod chrome;
 mod pump;
+mod terminal;
 
 use std::sync::{Arc, Mutex};
 
@@ -75,6 +76,10 @@ fn main() {
             chrome::set_conversation_view_state,
             chrome::report_payload_health,
             chrome::report_performance_sample,
+            terminal::create,
+            terminal::write,
+            terminal::resize,
+            terminal::dispose,
         ])
         // `move`: the closure hands the window handle to the pump, which
         // outlives this function.
@@ -126,6 +131,7 @@ fn main() {
             // wrapping it here would store a different type and every lookup
             // would miss. The clone is for the self-check turn below.
             app.manage(state);
+            app.manage(terminal::TerminalState::default());
 
             // The self-check turn. Sent after the state is managed so the reply
             // has somewhere to land, and on its own thread so `setup` returns.
