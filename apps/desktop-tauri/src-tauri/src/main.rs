@@ -8,6 +8,7 @@
 mod bridge;
 mod chrome;
 mod git;
+mod history;
 mod pump;
 mod terminal;
 

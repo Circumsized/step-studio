@@ -53,6 +53,9 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
     // the relay reaches the adapter. It travels the same wire, so it routes the
     // same way.
     ("process.tree.get", "limited"),
+    // Answered by the shell from Step's own session store, which is a fact about
+    // this machine rather than about the runtime.
+    ("history.list", "limited"),
 ];
 
 /// `core.prompt` sits apart because it is the one `Dispatch::Turn` operation.
@@ -519,12 +522,12 @@ fn pump(
                 });
                 match job.dispatch {
                     Dispatch::Local => {
-                        // Two shell-local answers, and they are both here for the
-                        // same reason: each is something the shell already knows,
-                        // so asking the adapter for it would be a round trip to
-                        // learn it. The manifest is derived from these very
-                        // dispatch tables; the repository state is a fact about
-                        // the workspace, read from the `git` CLI.
+                        // Shell-local answers, all for the same reason: each is
+                        // something the shell already knows, so asking the adapter
+                        // for it would be a round trip to learn it. The manifest
+                        // is derived from these very dispatch tables; the git
+                        // state is a fact about the workspace; the history is a
+                        // fact about this machine's session store.
                         let answer = if job.command_name == "git.repository.get" {
                             let workspace_id = job
                                 .operation
@@ -546,6 +549,11 @@ fn pump(
                                 .cloned()
                                 .unwrap_or(Value::Null);
                             crate::git::execute(&operation)
+                        } else if job.command_name == "history.list" {
+                            let limit = job.operation.get("limit").and_then(Value::as_u64);
+                            let workspace_id =
+                                job.operation.get("workspaceId").and_then(Value::as_str);
+                            crate::history::list(limit, workspace_id)
                         } else if job.command_name == "workspace.fileTree" {
                             let workspace_id = job
                                 .operation

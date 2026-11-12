@@ -586,6 +586,18 @@ max 0.988 ms 远低于 §14.6 的 33 ms 帧预算，p99.9 也只有一个数量�
 
 按 §14.6 的门禁统计量口径：报 p50/p99/p99.9 与连续掉帧计数，max 只记录不用作门禁（GC 让单帧超限正常）。
 
+### M2.3 会话目录第一块：`history.list` 落地（2026-11-12）
+
+数据源是 D-1 定案时查清的那个：`~/.stepcode/agent/sessions/<project>/<session>.jsonl`，一个项目一个目录、一个会话一个文件。首行是 session 头（`cwd`/`id`/`timestamp`），其余是 entry。
+
+**只移植渲染层要的**：TS 那份 1615 行的 reader 带着 cursor、gzip 冷归档树、512 MB 单文件上限、2 万文件扫描上限、8 条快照缓存——全是为几万会话的开发者 profile 准备的。这里一个都不满足，所以一个都不建。建的是 renderer 实际读的十个字段，最新在前。
+
+title/summary 取会话自己的首条 user message 文本，**绝不是路径**——契约明说 summary never a path，而路径写进那个字段是泄露用户在哪工作。测试里有一条专门断言这点。
+
+checklist 1.4 从「空」翻「齐」——M1.7 正是把它从「齐」改判成「空」的（理由是 `history.list` 被拒、区域恒渲染空态），现在原因消除了。
+
+**仍未移植**：`projects.list` / `home.get` / `workspace.open` / `pick`，以及 `session-archive-reader` 的 cursor 分页与冷归档。
+
 ### M2.4 删除连锁：隐藏消费者实证，本轮不执行（2026-11-12）
 
 规划阶段预警的 R5 已实证。`packages/runtime-stepcode/test/host-integration.test.ts:14-22` 与 `real-cli.test.ts:19` 经**相对路径** import `../../studio-host/dist/src/bridge-client.js`，两个测试**都在核心门禁名单**（`scripts/core-suites.mjs:12,15`）且当前通过。它们驱动的是 **TS 适配器回退路径**：没有 Rust 二进制的机器靠它跑。

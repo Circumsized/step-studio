@@ -23,7 +23,7 @@
 | 1.1 | 顶部自定义标题栏：汉堡 / 品牌 / 搜索 / 未选项目 / New Chat / 右侧图标组 | 齐 |
 | 1.2 | 中央欢迎语与副标题（"Good evening, Studio" 一带） | 齐 |
 | 1.3 | Activity Heatmap：Jan-Dec 月份轴 + Mon/Wed/Fri 行轴 + 色阶图例 | **空**（原因诚实：面板已到桥，但无结构化数字可画） |
-| 1.4 | Recent Chats 区（空态文案 + All History 入口） | **空**（M1.7 改判：`history.list` 被 `resolve_operation` 拒绝，区域恒渲染「暂无最近对话」。原判把比对点收缩成空态本身，而空态正是被评判的对象） |
+| 1.4 | Recent Chats 区（空态文案 + All History 入口） | **齐**（`history.list` 由壳读 Step 自己的 session store 本地作答：十个字段全覆盖，最新在前；5 个单测含对真 store 的一条） |
 | 1.5 | Composer：占位文案 / Dictate / 附件行 / 模型选择器 / thinking 档位 / 发送键 | 齐（模型选择器实测解析出 `step-3.7-flash`） |
 | 1.6 | 底部面板页签：Terminal / Problems / Tests / Output / Step Logs / Preview Logs | 齐 |
 | 1.7 | 侧栏：New Chat / Skills & Plugins / PROJECTS & CHATS / EXPLORER / 底部状态灯 | 齐（状态灯实测 "Step Ready"） |
