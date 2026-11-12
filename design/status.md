@@ -476,7 +476,7 @@ Node 进程里驱动：
 1. **peer-uid 校验**。`UnixStream::peer_cred` 仍 unstable，workspace 禁 `unsafe`。因此任何能连上 socket 的本地用户都可驱动会话——这是本次评审认定「唯一实质性变差」的一条（旧实现把 socket 放在用户自己的 0755 目录里）。目录 0700 已挡住 umask 000 与路径抢占，但挡不住同 uid 的其他进程。随 M5.1 平台能力一起做。
 2. **Windows `#[cfg(not(unix))]` 分支只保证编译**。其中 `serve` 臂的 `Ok(Err(Acquire::AlreadyRunning))` 与 `bind` 的真实返回类型不符，**本来根本编不过**（已顺手修）。其余待真机。
 3. **`usage.get` 阻塞泵最多 30 秒**，且每次轮询都往活动会话注入一条 prompt，方案 §9.6 要求这类 prompt 不占会话轮次而适配器既未保证也未验证。正确修法是让 `/usage` 走事件回传而非占用一次 invoke，属协议形状改变，留到 M2.3。
-4. **HomePage 的 KPI 瓦片把空数组渲染成 "0 / 0 / 0"**。`days` 恒空（数据不在），瓦片却无条件显示年度总量/近 7 天均值/峰值，而 CLI 面板里的真实总量被丢掉。与「分档扮 token 数」同源，只是从另一个方向到达。属渲染层改动。
+4. ~~**HomePage 的 KPI 瓦片把空数组渲染成 "0 / 0 / 0"**~~ **已修**（`34fdbba` + 本轮）：`usage.get` 现在成功返回（空数组 + 理由 + 面板原文），而 HomePage 只在 catch 分支读 `unavailableReason`，理由永不到达。改为 `days` 为空时显示理由并附上面板原文；热力图格子本身也一并 gate 掉——全零格子同样在说「你一年没用过」。顺带修掉 `save_avatar` 不删其他扩展名导致 `load_avatar` 返回旧头像（M1.7 报的真实 bug）。
 
 ### M2.2-D1：杀壳重连 / epoch / daemon 熔断演练（2026-11-12 完成并实证）
 

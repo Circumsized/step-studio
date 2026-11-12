@@ -958,7 +958,14 @@ function TokenUsageCard({ client, onOpenStats }: { client?: StudioClient; onOpen
           style={{ ["--weeks" as string]: weeks }}
           onMouseLeave={onCalLeave}
         >
-          {cells.map((cell, index) => {
+          {/*
+            Without per-day numbers every cell is zero, and an all-zero grid
+            says "you used nothing all year" rather than "this Runtime does not
+            report it". The month axis and the scale are left in place: they are
+            the frame, and the frame being there is what makes the empty state
+            legible.
+          */}
+          {hasUsageDays ? cells.map((cell, index) => {
             if (!cell) return <span key={`pad-${index}`} className="tk-cell tk-empty" />;
             const future = cell.ts > today;
             const isToday = cell.ts === today;
@@ -978,7 +985,7 @@ function TokenUsageCard({ client, onOpenStats }: { client?: StudioClient; onOpen
                 onFocus={() => onCellEnter(cell.ts)}
               />
             );
-          })}
+          }) : null}
         </div>
         <div className="tk-cal-months" style={{ ["--weeks" as string]: weeks }}>
           {monthLabels.map((month) => (

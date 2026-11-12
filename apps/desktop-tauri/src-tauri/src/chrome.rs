@@ -105,6 +105,19 @@ pub fn save_avatar(
     let path = avatar_path(&dir, &mime)?;
     std::fs::write(&path, &bytes)
         .map_err(|error| ChromeError::failed(format!("cannot write the avatar: {error}")))?;
+    // Every other extension goes. `load_avatar` scans in a fixed order and
+    // returns the first hit, so leaving a previous format on disk means saving
+    // PNG over an existing JPG still loads the JPG — the user sees the avatar
+    // they just replaced.
+    for (known, _) in AVATAR_EXTENSIONS {
+        if *known == mime {
+            continue;
+        }
+        let stale = avatar_path(&dir, known)?;
+        // A file that is not there is the common case, and a removal that fails
+        // is not worth failing the save over: the write above already succeeded.
+        let _ = std::fs::remove_file(stale);
+    }
     Ok(json!({ "ok": true }))
 }
 
