@@ -600,7 +600,11 @@ checklist 1.4 从「空」翻「齐」——M1.7 正是把它从「齐」改判�
 
 同批落地 `home.get`：**纯聚合，没有新数据源**。authority/runtime 来自本会话的 epoch，snapshot 来自泵的 `Stream`（`spawn_pump` 多带一个参数——renderer 已经有这份字节，再走一次往返是花往返学已知的事），两个列表来自 session store。`Stream` 现在还会在 `session.state` 回来时更新快照，所以后面的 `home.get` 答的是当前状态而不是壳启动时那份。
 
-**仍未移植**：`workspace.open` / `pick`，以及 `session-archive-reader` 的 cursor 分页与冷归档。
+同批落地 `workspace.open`：把项目标为激活并返回列表。**没有 history 的项目也能开**——用户刚打开的目录本来就不在 store 里，拒绝它会让「新建项目后第一次打开」这条路径直接断掉，而那正是这条命令存在的理由。
+
+`workspace.pick` **未做**：它要开系统目录选择器，需要原生对话框（Tauri 的 dialog 插件）。壳现在没有那个依赖，为一个尚未有人调用的入口引一个插件不值得——渲染层的 `pick` 入口在有 `executionTarget` 时走的是 `openDirectory()`，不走这条。
+
+**仍未移植**：`workspace.pick`，以及 `session-archive-reader` 的 cursor 分页与冷归档。
 
 ### M2.4 删除连锁：隐藏消费者实证，本轮不执行（2026-11-12）
 

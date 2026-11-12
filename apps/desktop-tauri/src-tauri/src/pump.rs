@@ -61,6 +61,7 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
     // Assembled from what the shell already holds, so it is local: no new data
     // source, and no round trip for bytes the renderer already has.
     ("home.get", "limited"),
+    ("workspace.open", "limited"),
 ];
 
 /// `core.prompt` sits apart because it is the one `Dispatch::Turn` operation.
@@ -564,6 +565,13 @@ fn pump(
                                 .cloned()
                                 .unwrap_or(Value::Null);
                             crate::git::execute(&operation)
+                        } else if job.command_name == "workspace.open" {
+                            let workspace_id = job
+                                .operation
+                                .get("workspaceId")
+                                .and_then(Value::as_str)
+                                .unwrap_or("");
+                            crate::history::open(workspace_id)
                         } else if job.command_name == "home.get" {
                             // An assembly, not a fetch: authority and runtime
                             // come from this session's epochs, the snapshot from

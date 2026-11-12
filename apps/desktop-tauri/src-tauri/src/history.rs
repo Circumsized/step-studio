@@ -418,3 +418,77 @@ mod project_tests {
         assert_eq!(times, sorted, "the most recently used project comes first");
     }
 }
+
+/// Mark a project active. Returns the list with that project flagged, which is
+/// what `workspace.open` answers with.
+pub fn open(workspace_id: &str) -> Value {
+    let mut model = projects();
+    if let Some(workspaces) = model.get_mut("workspaces").and_then(Value::as_array_mut) {
+        for workspace in workspaces.iter_mut() {
+            let is_active = workspace.get("workspaceId").and_then(Value::as_str) == Some(workspace_id);
+            workspace["active"] = Value::Bool(is_active);
+        }
+        // A project Step has no sessions for is not in the list, and opening one
+        // must still work: the shell is in that directory whether or not it has
+        // history. So it is added rather than refused.
+        if !workspaces.iter().any(|workspace| {
+            workspace.get("workspaceId").and_then(Value::as_str) == Some(workspace_id)
+        }) {
+            let name = Path::new(workspace_id)
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| workspace_id.to_string());
+            workspaces.insert(
+                0,
+                json!({
+                    "workspaceId": workspace_id,
+                    "name": name,
+                    "lastOpenedAt": "",
+                    "active": true,
+                }),
+            );
+        }
+    }
+    model["activeWorkspaceId"] = json!(workspace_id);
+    model
+}
+
+#[cfg(test)]
+mod workspace_tests {
+    use super::*;
+
+    #[test]
+    fn opening_a_project_flags_it_and_names_it_active() {
+        let model = open("/home/ubuntu/workspace/step-studio");
+        assert_eq!(
+            model.get("activeWorkspaceId").and_then(Value::as_str),
+            Some("/home/ubuntu/workspace/step-studio")
+        );
+        let workspaces = model.get("workspaces").and_then(Value::as_array).expect("workspaces");
+        let active: Vec<&Value> = workspaces
+            .iter()
+            .filter(|workspace| workspace.get("active").and_then(Value::as_bool) == Some(true))
+            .collect();
+        assert_eq!(active.len(), 1, "exactly one project is active");
+        assert_eq!(
+            active[0].get("workspaceId").and_then(Value::as_str),
+            Some("/home/ubuntu/workspace/step-studio")
+        );
+    }
+
+    #[test]
+    fn opening_a_project_with_no_history_still_works() {
+        // A directory the user just opened has no sessions, so it is not in the
+        // store's list. Refusing would make the first open of a new project
+        // impossible, which is the one case the command exists for.
+        let fresh = "/tmp/a-project-with-no-sessions";
+        let model = open(fresh);
+        let workspaces = model.get("workspaces").and_then(Value::as_array).expect("workspaces");
+        assert!(
+            workspaces.iter().any(|workspace| {
+                workspace.get("workspaceId").and_then(Value::as_str) == Some(fresh)
+            }),
+            "a project with no history is still openable"
+        );
+    }
+}
