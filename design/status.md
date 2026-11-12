@@ -286,6 +286,50 @@ Step Studio，界面内全是 OMP。本次把**可见文案**里的 OMP 全部�
 三个测试钉住这个不变量，其中 `pending_turn` 那条正是第一版修法写错的地方——`checkpoint()`
 最初用 `.take()` 实现，把配对关系偷走了，`translate()` 从此看不到它。测试先红，改成 clone 后才绿。
 
+### Host 归属决策的实测数据（2026-11-12）
+
+用户要求按四个标准裁决 Host 逻辑放哪：高性能低开销、step cli 原生化、Windows 优化、
+保持 omp studio 逻辑。先把可量化的测出来，再让专家按这些数字审议。
+
+**进程树实测**（Xvfb，Linux，release 二进制，干净启动无残留进程）：
+
+| 组件 | RSS | 占比 |
+|---|---|---|
+| WebKitWebProcess（renderer） | 501.0 MB | 55.2% |
+| Tauri 壳（Rust） | 183.3 MB | 20.2% |
+| step CLI（114 MB 二进制） | 168.5 MB | 18.6% |
+| WebKitNetworkProcess | 50.4 MB | 5.6% |
+| step-studio-runtime（Rust 适配器） | 4.0 MB | 0.4% |
+| **合计** | **907.2 MB** | |
+
+**Node 侧实测**：裸 `node` 42.3 MB；加载完整 Host 组合图
+（`host-composition` + `facade`）后 **79.2 MB**，即 Host 自身约 37 MB。
+作为边车接入，总树从 907.2 → 986.4 MB，**+8.7%**；但相对于「壳自己」的
+183.3 + 4.0 + 50.4 = 237.7 MB，是 **+33%**。
+
+**一个此前的错误认知，实测纠正**：曾以为「Node 已经在进程树里」（依据是
+`packages/runtime-stepcode`）。不成立——当前壳 spawn 的是 **Rust 适配器**
+`step-studio-runtime`（4.0 MB），Node 适配器只在找不到 Rust 二进制时才是回退。
+所以边车方案是**新增**一个 Node 进程，不是复用已有的。
+
+**step 原生 RPC 覆盖面对比**：`step --mode rpc` 只暴露 10 个方法——
+`prompt` / `new_session` / `fork` / `get_state` / `get_entries` / `set_model` /
+`set_thinking_level` / `get_available_models` / `get_available_thinking_levels` /
+`get_commands`，全部是对话面。契约里共有 249 个 operation，facade 有 105 个分派分支
+（46 query + 51 command）。**step 原生覆盖 10 个，其余约 150 个是 Host 独有**：
+多会话列表与归档、workspace 注册表、git、models.yml 管理、MCP/skills 发现、
+Agent Hub / subagent、telemetry。适配器自己的注释也写着「Step Code has no OMP
+operators, agents, jobs or permissions model to expose」。
+
+这与复刻目标直接冲突：九张基准图里的 hub / roles / capabilities / telemetry / git
+全是 Host 数据面。所以「全靠 step 原生化」这条路被实测否掉——step 的 RPC 不是为
+桌面控制台设计的。
+
+**另一个警讯**：G-1 门禁的前置条件是「WebView2 + renderer 实测 ≤ 165 MB」，而我实测
+renderer 501 MB（Linux/WebKitGTK，与 WebView2 不可直接比，但量级差 3 倍）。方案自己
+认定的内存第一杠杆是**终端原生化**，不是 Host。若 G-1 前置条件真不成立，该先查的是
+renderer 与终端，而不是省 Host 这 79 MB。
+
 ### Host 边车方案查证结论（2026-11-12，尚未实施）
 
 M1.2c 开工前先回答了一个问题：chrome 的 40 个 Host 背后方法，值得逐个移植进 Rust 吗？
