@@ -72,6 +72,7 @@ const SHELL_ANSWERED: &[(&str, &str)] = &[
     // `limited` because the history page is read but not written: commits are
     // still made elsewhere.
     ("git.log.list", "limited"),
+    ("git.branches.list", "limited"),
 ];
 
 const RENAMED: &[(&str, &str)] = &[
@@ -124,7 +125,7 @@ pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)>
     if name == "capabilities.get" {
         return Some((json!({}), Dispatch::Local));
     }
-    if name == "git.repository.get" || name == "git.log.list" {
+    if name == "git.repository.get" || name == "git.log.list" || name == "git.branches.list" {
         // The workspace the query named, and the page the caller asked for, so
         // the answer can be attributed and paged.
         let mut operation = json!({
@@ -519,6 +520,13 @@ fn pump(
                                 .and_then(Value::as_str)
                                 .unwrap_or("");
                             crate::git::repository_get(workspace_id)
+                        } else if job.command_name == "git.branches.list" {
+                            let workspace_id = job
+                                .operation
+                                .get("workspaceId")
+                                .and_then(Value::as_str)
+                                .unwrap_or("");
+                            crate::git::branches_list(workspace_id)
                         } else if job.command_name == "git.log.list" {
                             let workspace_id = job
                                 .operation

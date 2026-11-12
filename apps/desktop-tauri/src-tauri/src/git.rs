@@ -494,3 +494,128 @@ mod log_tests {
         assert_eq!(remote.get("kind").and_then(Value::as_str), Some("remote"));
     }
 }
+
+/// Every branch, local and remote-tracking, with the counts the panel shows.
+///
+/// `git for-each-ref` reports the name, the oid, the upstream and the ahead/behind
+/// track in one call per ref, which is `GitBranchRecord` in full. The
+/// ahead/behind pair comes from `%(upstream:track)`, whose `[ahead 105]` form is
+/// parsed rather than assumed.
+pub fn branches_list(workspace_id: &str) -> Value {
+    let Some(root) = repo_root() else {
+        return json!({ "workspaceId": workspace_id, "branches": [] });
+    };
+    let output = Command::new("git")
+        .arg("for-each-ref")
+        .arg("--format=%(refname)%1f%(objectname)%1f%(upstream)%1f%(upstream:track)%1f%(HEAD)")
+        .arg("refs/heads")
+        .arg("refs/remotes")
+        .current_dir(&root)
+        .output();
+    let Ok(output) = output else {
+        return json!({
+            "workspaceId": workspace_id,
+            "branches": [],
+            "unavailableReason": "git is not installed",
+        });
+    };
+    if !output.status.success() {
+        return json!({
+            "workspaceId": workspace_id,
+            "branches": [],
+            "unavailableReason": "git for-each-ref failed",
+        });
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+
+    let mut branches: Vec<Value> = Vec::new();
+    for line in text.lines() {
+        let mut fields = line.split('\u{1f}');
+        let Some(reference) = fields.next() else { continue };
+        let oid = fields.next().unwrap_or("");
+        let upstream = fields.next().unwrap_or("");
+        let track = fields.next().unwrap_or("");
+        let head = fields.next().unwrap_or("");
+        if oid.is_empty() {
+            continue;
+        }
+        // `refs/remotes/origin/HEAD` is a symbolic ref that points at another
+        // ref rather than at a commit; listing it would duplicate
+        // `origin/main` under a name the user never typed.
+        if reference == "refs/remotes/origin/HEAD" {
+            continue;
+        }
+        let (remote, name) = if let Some(rest) = reference.strip_prefix("refs/heads/") {
+            (false, rest)
+        } else if let Some(rest) = reference.strip_prefix("refs/remotes/") {
+            (true, rest)
+        } else {
+            continue;
+        };
+        let (ahead, behind) = parse_track(track);
+        branches.push(json!({
+            "name": name,
+            "remote": remote,
+            "current": head.trim() == "*",
+            "headOid": oid,
+            // Empty when the branch has no upstream, which is the truth rather
+            // than a gap.
+            "upstream": if upstream.is_empty() { Value::Null } else { json!(upstream) },
+            "ahead": ahead,
+            "behind": behind,
+        }));
+    }
+    json!({ "workspaceId": workspace_id, "branches": branches })
+}
+
+/// `[ahead 105]`, `[behind 3]`, `[ahead 2, behind 5]`, or empty.
+fn parse_track(track: &str) -> (u64, u64) {
+    let mut ahead = 0;
+    let mut behind = 0;
+    for part in track.trim_matches(|c| c == '[' || c == ']').split(", ") {
+        if let Some(rest) = part.strip_prefix("ahead ") {
+            ahead = rest.parse().unwrap_or(0);
+        } else if let Some(rest) = part.strip_prefix("behind ") {
+            behind = rest.parse().unwrap_or(0);
+        }
+    }
+    (ahead, behind)
+}
+
+#[cfg(test)]
+mod branch_tests {
+    use super::*;
+
+    #[test]
+    fn the_track_field_becomes_ahead_and_behind() {
+        assert_eq!(parse_track("[ahead 105]"), (105, 0));
+        assert_eq!(parse_track("[behind 3]"), (0, 3));
+        assert_eq!(parse_track("[ahead 2, behind 5]"), (2, 5));
+        // A branch with no upstream reports nothing, and that is not an error.
+        assert_eq!(parse_track(""), (0, 0));
+        assert_eq!(parse_track("[gone]"), (0, 0));
+    }
+
+    #[test]
+    fn the_real_repository_lists_its_branches() {
+        let model = branches_list("ws-1");
+        let branches = model.get("branches").and_then(Value::as_array).expect("branches");
+        assert!(!branches.is_empty(), "this workspace has branches");
+        for branch in branches {
+            let name = branch.get("name").and_then(Value::as_str).unwrap_or("");
+            assert!(!name.is_empty(), "every branch has a name");
+            // Exactly one is current, and it is a local branch.
+            if branch.get("current").and_then(Value::as_bool) == Some(true) {
+                assert_eq!(branch.get("remote").and_then(Value::as_bool), Some(false));
+            }
+        }
+        // The symbolic `origin/HEAD` is not listed: it duplicates `origin/main`
+        // under a name the user never typed.
+        assert!(
+            !branches.iter().any(|branch| {
+                branch.get("name").and_then(Value::as_str) == Some("origin/HEAD")
+            }),
+            "the symbolic remote HEAD is filtered out"
+        );
+    }
+}
