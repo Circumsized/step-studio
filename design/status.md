@@ -474,7 +474,9 @@ gix 仍记为目标，留到子进程成本在某个测量里显现。这是 §1
 
 契约的 `GitOperation` 有约 30 种 kind。实现 Git 面板变更列表真正发出的三个——`stage` / `unstage` / `commit`——**其余明确拒绝并在 message 里说明未接**，而不是装作操作面是全的。渲染层把 message 显示出来，所以用户看到的是「未接」而不是静默无操作。
 
-路径安全：每个 path 都是单 argv 元素、不过 shell；前导 `-`（会被当成选项）、绝对路径、含 `..` 段的一律拒绝。`commit` 空 message 拒绝；`sign` 默认关（默认签名的壳在没有密钥的机器上每次提交都会失败）。
+路径安全：每个 path 与分支名都是单 argv 元素、不过 shell；前导 `-`（会被当成选项）、绝对路径、含 `..` 段的一律拒绝。`commit` 空 message 拒绝；`sign` 默认关（默认签名的壳在没有密钥的机器上每次提交都会失败）。
+
+第二批接上四个 branch operation。其中 `branch.delete` 的 `expectedRevision` 是契约的乐观并发检查：调用方看到的是某个 head，若 head 已经移动，用户想删的分支未必就是将要被删的那个，所以拒绝而不是猜。有单测用一个假 revision 钉住「拒绝」而非「猜」。
 
 `git.execute` 走泵的 `Dispatch::Local` 而不是在 `command` 里直接答——渲染层的 `execute` 是「先收 ack，再等终态回执」，而泵的 local 臂正好产出这两个。第一版我在 `command` 里直接返回，那会让 `waitReceipt` 永远等不到回执。
 

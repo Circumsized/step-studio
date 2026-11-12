@@ -771,6 +771,10 @@ pub fn execute(operation: &Value) -> Value {
         "stage" => paths_op(&root, &["add", "--"], operation.get("paths"), true),
         "unstage" => paths_op(&root, &["restore", "--staged", "--"], operation.get("paths"), true),
         "commit" => commit(&root, operation),
+        "branch.create" => branch_create(&root, operation),
+        "branch.switch" => branch_switch(&root, operation),
+        "branch.rename" => branch_rename(&root, operation),
+        "branch.delete" => branch_delete(&root, operation),
         other => {
             return json!({
                 "operation": other,
@@ -791,6 +795,108 @@ pub fn execute(operation: &Value) -> Value {
             "message": reason,
         }),
     }
+}
+
+/// Create a branch, optionally starting it somewhere other than HEAD and
+/// optionally checking it out.
+fn branch_create(root: &Path, operation: &Value) -> Result<String, String> {
+    let name = operation.get("name").and_then(Value::as_str).unwrap_or("").trim();
+    if name.is_empty() {
+        return Err("a branch needs a name".to_string());
+    }
+    // A name is passed as one argv element, and a leading dash would be read as
+    // an option.
+    if name.starts_with('-') {
+        return Err(format!("refusing the branch name {name}"));
+    }
+    let mut command = Command::new("git");
+    command.arg("branch").arg(name);
+    if let Some(start) = operation.get("startPoint").and_then(Value::as_str) {
+        if start.is_empty() || start.starts_with('-') {
+            return Err(format!("refusing the start point {start}"));
+        }
+        command.arg(start);
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    if operation.get("checkout").and_then(Value::as_bool) == Some(true) {
+        branch_switch(root, &json!({ "kind": "branch.switch", "name": name }))?;
+    }
+    Ok(format!("branch {name}"))
+}
+
+fn branch_switch(root: &Path, operation: &Value) -> Result<String, String> {
+    let name = operation.get("name").and_then(Value::as_str).unwrap_or("").trim();
+    if name.is_empty() || name.starts_with('-') {
+        return Err(format!("refusing the branch name {name}"));
+    }
+    let output = Command::new("git")
+        .arg("checkout")
+        .arg(name)
+        .current_dir(root)
+        .output()
+        .map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("switched to {name}"))
+}
+
+fn branch_rename(root: &Path, operation: &Value) -> Result<String, String> {
+    let new_name = operation.get("newName").and_then(Value::as_str).unwrap_or("").trim();
+    if new_name.is_empty() || new_name.starts_with('-') {
+        return Err(format!("refusing the branch name {new_name}"));
+    }
+    // `oldName` is optional in the contract: without it git renames the current
+    // branch, which is what the panel asks for.
+    let mut command = Command::new("git");
+    command.arg("branch").arg("-m");
+    if let Some(old) = operation.get("oldName").and_then(Value::as_str) {
+        if old.starts_with('-') {
+            return Err(format!("refusing the branch name {old}"));
+        }
+        command.arg(old);
+    }
+    command.arg(new_name).current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("renamed to {new_name}"))
+}
+
+/// Delete a local branch, honouring the contract's optimistic-concurrency check.
+///
+/// `expectedRevision` is the head the caller saw. If the head has moved since,
+/// the branch the user meant to delete may not be the one that would be
+/// deleted, so the operation is refused rather than guessed at.
+fn branch_delete(root: &Path, operation: &Value) -> Result<String, String> {
+    let name = operation.get("name").and_then(Value::as_str).unwrap_or("").trim();
+    if name.is_empty() || name.starts_with('-') {
+        return Err(format!("refusing the branch name {name}"));
+    }
+    if let Some(expected) = operation.get("expectedRevision").and_then(Value::as_str) {
+        let actual = head_revision(root);
+        if actual != expected {
+            return Err(format!(
+                "the repository moved since this branch was listed ({expected} -> {actual}); refresh and try again"
+            ));
+        }
+    }
+    let mut command = Command::new("git");
+    command.arg("branch").arg("-d");
+    if operation.get("force").and_then(Value::as_bool) == Some(true) {
+        command.arg("-D");
+    }
+    command.arg(name).current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("deleted {name}"))
 }
 
 fn refused(operation: &Value, reason: &str) -> Value {
@@ -880,6 +986,33 @@ mod write_tests {
         let Some(root) = repo_root() else { return };
         let result = commit(&root, &json!({ "kind": "commit", "message": "  " }));
         assert!(result.is_err(), "an empty message is not a commit");
+    }
+
+    #[test]
+    fn a_branch_name_that_looks_like_an_option_is_refused() {
+        let Some(root) = repo_root() else { return };
+        for bad in ["-d", "--force"] {
+            let created = branch_create(&root, &json!({ "kind": "branch.create", "name": bad }));
+            assert!(created.is_err(), "{bad} must be refused, not passed to git");
+        }
+    }
+
+    #[test]
+    fn a_stale_expected_revision_refuses_the_delete() {
+        let Some(root) = repo_root() else { return };
+        let result = branch_delete(
+            &root,
+            &json!({ "kind": "branch.delete", "name": "no-such-branch", "expectedRevision": "deadbeef" }),
+        );
+        assert!(
+            result.is_err(),
+            "a head that moved must stop the delete, not let it guess"
+        );
+        let message = result.unwrap_err();
+        assert!(
+            message.contains("moved since"),
+            "the message says why: {message}"
+        );
     }
 
     #[test]
