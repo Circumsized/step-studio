@@ -71,6 +71,9 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
     // them: no adapter round trip for information it already has.
     ("environment.get", "limited"),
     ("diagnostics.get", "limited"),
+    // The sub-agent sessions Step keeps on disk. Step excludes them from every
+    // RPC list, so the store is the source.
+    ("session.agents.list", "limited"),
 ];
 
 /// `core.prompt` sits apart because it is the one `Dispatch::Turn` operation.
@@ -574,6 +577,8 @@ fn pump(
                                 .cloned()
                                 .unwrap_or(Value::Null);
                             crate::git::execute(&operation)
+                        } else if job.command_name == "session.agents.list" {
+                            crate::history::agents()
                         } else if job.command_name == "environment.get" {
                             crate::diagnostics::environment(stream.runtime_id.clone(), stream.authority_epoch, stream.runtime_epoch)
                         } else if job.command_name == "diagnostics.get" {

@@ -102,7 +102,7 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 
 | # | 比对点 | 态 |
 |---|---|---|
-| 7.1 | 子代理列表与状态 | **缺**（数据源） |
+| 7.1 | 子代理列表与状态 | **部分**：数据源**可达**——Step 故意把子代理会话从所有 RPC 列表里排除，但它们是 store 里的独立 session 文件，header 带 `origin: "subagent"` 或 id 前缀 `subagent-`/`workflow-`。`session.agents.list` 由壳扫 store 作答。**状态只能是 `idle`**：文件不是进程，而本壳不枚举进程，所以 `hasLiveSession: false`——不假装有活着的代理 |
 | 7.2 | 子代理详情 / token 归属 | **缺** |
 
 方案 §9.6 已查实：子代理会话文件真实存在于 `<agentDir>/sessions`，带

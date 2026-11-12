@@ -492,3 +492,220 @@ mod workspace_tests {
         );
     }
 }
+
+/// The sub-agent sessions Step keeps on disk, as the Agent Hub reads them.
+///
+/// Step deliberately excludes these from every list and search — 40-odd RPC
+/// commands and not one enumerates them — but the sessions are real files under
+/// the same store, marked by `origin: "subagent"` in the header or an id prefixed
+/// `subagent-`/`workflow-`. That is the data source, and reading it is a scan of
+/// the store the shell already reads for history.
+///
+/// The shape is honest about what a file can and cannot say: `status` is
+/// `idle`, because a session on disk is not running — a live one would be a
+/// process, and nothing here enumerates processes. `hasLiveSession` is therefore
+/// false, and `hasTranscript` is true, because the file *is* the transcript.
+pub fn agents() -> Value {
+    let Some(store) = store_dir() else {
+        return json!({ "agents": [] });
+    };
+    let Ok(projects) = std::fs::read_dir(&store) else {
+        return json!({ "agents": [] });
+    };
+
+    let mut agents: Vec<Value> = Vec::new();
+    for project in projects.flatten() {
+        let project_dir = project.path();
+        if !project_dir.is_dir() {
+            continue;
+        }
+        let Ok(sessions) = std::fs::read_dir(&project_dir) else {
+            continue;
+        };
+        for session in sessions.flatten() {
+            let path = session.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let Some(agent) = read_agent(&path) else {
+                continue;
+            };
+            agents.push(agent);
+        }
+    }
+
+    // Newest first, the order every other list here is read in.
+    agents.sort_by(|a, b| {
+        let a_at = a.get("updatedAt").and_then(Value::as_str).unwrap_or("");
+        let b_at = b.get("updatedAt").and_then(Value::as_str).unwrap_or("");
+        b_at.cmp(a_at)
+    });
+    json!({ "agents": agents })
+}
+
+/// One session file as an agent row, or `None` when it is not a sub-agent's.
+fn read_agent(path: &Path) -> Option<Value> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut lines = text.lines();
+    let header: Value = serde_json::from_str(lines.next()?).ok()?;
+    if header.get("type").and_then(Value::as_str) != Some("session") {
+        return None;
+    }
+    let session_id = header.get("id").and_then(Value::as_str).unwrap_or("");
+    // Either marker: the header's `origin`, or the id prefix the store uses.
+    let marked = header.get("origin").and_then(Value::as_str) == Some("subagent")
+        || session_id.starts_with("subagent-")
+        || session_id.starts_with("workflow-");
+    if !marked {
+        return None;
+    }
+    let started_at = header.get("timestamp").and_then(Value::as_str).unwrap_or("");
+
+    let mut updated_at = started_at.to_string();
+    let mut unread = 0u64;
+    for line in lines {
+        let Ok(entry) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        if let Some(at) = entry.get("timestamp").and_then(Value::as_str) {
+            updated_at = at.to_string();
+        }
+        if entry.get("type").and_then(Value::as_str) == Some("message") {
+            unread += 1;
+        }
+    }
+
+    let cwd = header.get("cwd").and_then(Value::as_str).unwrap_or("");
+    Some(json!({
+        "agentId": session_id,
+        "generation": 1,
+        "kind": "subagent",
+        "displayName": session_id,
+        "status": "idle",
+        "summary": "",
+        "startedAt": started_at,
+        "updatedAt": updated_at,
+        // A file is not a process: nothing here enumerates processes, so a
+        // session on disk is not live.
+        "hasLiveSession": false,
+        "hasTranscript": true,
+        "unreadCount": unread,
+        "activeJobIds": [],
+        "workspaceId": cwd,
+    }))
+}
+
+#[cfg(test)]
+mod agent_tests {
+    use super::*;
+
+    /// A session store with one ordinary session and one sub-agent's, so the
+    /// marker is what separates them.
+    ///
+    /// The files are written as JSON rather than as strings, so the fixture
+    /// cannot drift from the shape the reader expects.
+    fn store_with(subagent_id: &str, marked_by_header: bool) -> (std::path::PathBuf, String) {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "step-studio-agents-{}-{unique}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let project = dir.join("--tmp-proj--");
+        std::fs::create_dir_all(&project).expect("project dir");
+
+        let ordinary = json!({
+            "type": "session",
+            "id": "sess-1",
+            "cwd": "/tmp/proj",
+            "timestamp": "2026-01-01T00:00:00Z",
+        });
+        std::fs::write(
+            project.join("ordinary.jsonl"),
+            format!("{}\n", serde_json::to_string(&ordinary).expect("serialize")),
+        )
+        .expect("write the ordinary session");
+
+        let mut header = json!({
+            "type": "session",
+            "id": subagent_id,
+            "cwd": "/tmp/proj",
+            "timestamp": "2026-01-02T00:00:00Z",
+        });
+        if marked_by_header {
+            header["origin"] = json!("subagent");
+        }
+        let message = json!({
+            "type": "message",
+            "id": "m1",
+            "timestamp": "2026-01-02T00:01:00Z",
+            "message": { "role": "user", "content": [{ "type": "text", "text": "go" }] },
+        });
+        let body = format!(
+            "{}\n{}\n",
+            serde_json::to_string(&header).expect("serialize"),
+            serde_json::to_string(&message).expect("serialize")
+        );
+        std::fs::write(project.join(format!("{subagent_id}.jsonl")), body)
+            .expect("write the sub-agent session");
+        (dir, subagent_id.to_string())
+    }
+
+    #[test]
+    fn a_session_marked_in_its_header_is_an_agent() {
+        let (dir, id) = store_with("subagent-abc", true);
+        let agents = agents_in(&dir);
+        assert_eq!(agents.len(), 1, "only the marked session is an agent");
+        assert_eq!(agents[0].get("agentId").and_then(Value::as_str), Some(id.as_str()));
+        // A file is not a process, and the shape says so rather than implying a
+        // live agent.
+        assert_eq!(agents[0].get("hasLiveSession").and_then(Value::as_bool), Some(false));
+        assert_eq!(agents[0].get("hasTranscript").and_then(Value::as_bool), Some(true));
+        assert_eq!(agents[0].get("status").and_then(Value::as_str), Some("idle"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_session_marked_only_by_its_id_prefix_is_an_agent() {
+        // Either marker is enough; the store uses both.
+        let (dir, id) = store_with("workflow-xyz", false);
+        let agents = agents_in(&dir);
+        assert_eq!(agents.len(), 1, "the id prefix alone marks it");
+        assert_eq!(agents[0].get("agentId").and_then(Value::as_str), Some(id.as_str()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_ordinary_session_is_not_an_agent() {
+        let (dir, _) = store_with("subagent-abc", true);
+        let ordinary = std::fs::read_to_string(
+            dir.join("--tmp-proj--").join("ordinary.jsonl"),
+        )
+        .expect("read");
+        assert!(ordinary.contains("sess-1"));
+        // The count is the assertion: the ordinary session was not counted.
+        assert_eq!(agents_in(&dir).len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `agents` against a specific store, so the tests do not depend on what
+    /// this machine happens to have run.
+    fn agents_in(store: &Path) -> Vec<Value> {
+        let Ok(projects) = std::fs::read_dir(store) else {
+            return Vec::new();
+        };
+        let mut found: Vec<Value> = Vec::new();
+        for project in projects.flatten() {
+            let Ok(sessions) = std::fs::read_dir(project.path()) else {
+                continue;
+            };
+            for session in sessions.flatten() {
+                if let Some(agent) = read_agent(&session.path()) {
+                    found.push(agent);
+                }
+            }
+        }
+        found
+    }
+}

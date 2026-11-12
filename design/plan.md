@@ -496,7 +496,7 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 | 供应商管理 | `models.png` | **大幅缩减** | Step 单供应商；上游的多供应商列表、开关、端点、`modelProviderOrder` 大部分空置。版式保留，内容按 Step 实况 |
 | 角色配置 | `roles.png` | 缩减 | 「角色 × 模型 × thinking 档位」结构在；实测 Step 仅 2 个模型（上游 11 角色 × 多模型） |
 | 能力中心 | `capabilities.png` | 基本齐 | 三个 list 命令已声明为 stable |
-| Agent Hub | `hub.png` | 可达但需自建 | 子代理会话真实存在：`<agentDir>/sessions` 下的独立 session 文件，header 带 `origin: "subagent"` 或 id 前缀 `subagent-`/`workflow-`（`isChildAgentSession`）。Step **故意**把它们从所有列表与搜索中排除（`session-index.md`），所以 40 余个 RPC 命令里没有枚举命令——`get_state` 无 children 字段，`get_tree` 是单会话内的消息树。数据可达，路径是自扫会话目录（Step 自己的 `/usage` Overview 就这么统计子代理 token 归属）。见决策 D-3 |
+| Agent Hub | `hub.png` | **部分可达**（列表已自扫 store 落地；live 状态仍缺，见 M4.2） | 子代理会话真实存在：`<agentDir>/sessions` 下的独立 session 文件，header 带 `origin: "subagent"` 或 id 前缀 `subagent-`/`workflow-`（`isChildAgentSession`）。Step **故意**把它们从所有列表与搜索中排除（`session-index.md`），所以 40 余个 RPC 命令里没有枚举命令——`get_state` 无 children 字段，`get_tree` 是单会话内的消息树。数据可达，路径是自扫会话目录（Step 自己的 `/usage` Overview 就这么统计子代理 token 归属）。见决策 D-3 |
 | Git 面板 | `git.png` | 齐（自建） | gix 读 + CLI 写，M3 已排 |
 
 **三条待决策岔路**（都不阻塞 M1.1-M1.4 的脚手架与挂载，但分别在 M1 首页、M4 用量、M4 Agent Hub 动工前必须定）：
