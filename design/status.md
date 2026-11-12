@@ -260,6 +260,35 @@ SSH 子系统（部署、网络代理、本地 vault、provisioning、环境安�
 
 M1.2 至此完成：6 个 Desktop IPC channel 全部接上真实会话，三条桥按方案范围裁剪落地。
 
+### M1.3 窗口铬 / Vite base / CSP / DPI（2026-11-12 完成）
+
+四项里两项查证后确认无需改动，一项实测通过，一项只测了一半——分开记。
+
+**Vite base：无需改动。** `apps/renderer/vite.config.ts:35` 已是 `base: "./"`（相对路径），
+Tauri 的 `WebviewUrl::App("index.html")` 下相对资源正确解析。截图已实证资源加载正常。
+
+**CSP：无需改动，且确认是单点。** 策略由 renderer 自己在构建期注入
+`<meta http-equiv="Content-Security-Policy">`（`vite.config.ts:16-28` 的
+`packagedCspPlugin`），Tauri 侧 `security.csp` 保持 `null` 不加第二份。一处真相，
+不会出现两份策略互相覆盖。
+
+**窗口铬重校：没有要删的东西。** 原先以为顶部「File / Edit / View / Help」是 GTK 原生
+菜单栏、纯 Tauri 会带进来、需要删掉。查证后**这个判断是错的**：Tauri 与 tao 的源码里都
+不建菜单栏，那条栏是 renderer 自己画的 `TitleMenu`（`App.tsx:8701-8732`），属于应用
+自定义标题栏、也就是要复刻的 UI 本身。所以窗口铬这一项无事可做。
+
+**DPI 150% / 200%：实测通过，但只测了一半，必须说清。**
+Xvfb 分别以 `-dpi 144` 与 `-dpi 192` 起显示，跑 release 二进制并截图：两档下侧栏、
+composer、底部面板、转写全部正常，无裁切、无缺失文本、无布局破裂。
+
+**局限（这条比结论重要）**：Linux/Xvfb 的 `-dpi` 只改变 X 服务器上报的 DPI，WebKitGTK
+用它做物理尺寸换算，**CSS 像素布局不变**。而 Windows 的「150% / 200% 显示缩放」是另一
+回事——操作系统施加缩放，WebView 上报对应的 devicePixelRatio，应用看到的是物理像素变多。
+所以这次证明的是「不同上报 DPI 下不破裂」，**不是**「Windows 显示缩放下正确」。
+方案 M1.3 真正要求的 WebView2 DPI 两档仍未验证，需要真机。连同 init script 是否同样
+绕过 WebView2 的 `script-src`、自定义协议在 WebView2 上的资源服务、桥注入时机，
+一起记在未验证清单里。
+
 ### 改名：OMP → Step（2026-11-12 完成）
 
 用户要求的复刻条件里有一条是「除把 omp 改为 step之外基本复刻」。此前只有 Tauri 窗口标题是
