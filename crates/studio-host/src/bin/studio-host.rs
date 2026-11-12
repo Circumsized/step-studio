@@ -43,6 +43,13 @@ const POLL_SLICE: Duration = Duration::from_millis(250);
 /// turned away.
 const ADAPTER_WAIT: Duration = Duration::from_secs(20);
 
+/// How long a halted daemon keeps holding the endpoint before giving up.
+///
+/// Long enough for a shell that is already connecting to arrive and ask for the
+/// retry that revives it; short enough that a daemon nobody wants does not sit
+/// there answering nothing.
+const HALTED_GRACE: Duration = Duration::from_secs(30);
+
 struct Config {
     endpoint: String,
     adapter_endpoint: String,
@@ -181,6 +188,8 @@ fn main() {
 fn supervise(daemon: Arc<Daemon>) {
     let mut supervisor = Supervisor::new(Policy::default());
     let mut halted_reported = false;
+    // How long the supervisor has been halted with nobody asking for a retry.
+    let mut halted_for = Duration::ZERO;
     loop {
         if daemon.stopping.load(Ordering::Relaxed) {
             return;
@@ -203,10 +212,33 @@ fn supervise(daemon: Arc<Daemon>) {
                     supervisor.retry(daemon.started.elapsed());
                     halted_reported = false;
                     eprintln!("step-studio-host: retrying the adapter at a surface's request");
+                    continue;
                 }
+                // Nothing is asking for the runtime, and the budget is spent.
+                // Sitting here would be worse than leaving: the daemon would
+                // hold the endpoint and answer nothing, so a surface would wait
+                // out its connect timeout and the launcher would never count a
+                // failure — which is exactly the "the daemon cannot start"
+                // terminal state the plan asks to be visible.
+                if halted_for > HALTED_GRACE {
+                    eprintln!(
+                        "step-studio-host: exiting after {} failed starts and no retry request",
+                        supervisor.failed_starts()
+                    );
+                    daemon.stopping.store(true, Ordering::Relaxed);
+                    return;
+                }
+                halted_for += POLL_SLICE;
                 std::thread::sleep(POLL_SLICE);
+                // Without this the arm falls through to `bring_up` below and
+                // spawns anyway — which is how a halted supervisor ends up
+                // logging "halted after 3", "halted after 4", … forever.
+                continue;
             }
-            Next::Wait(delay) => std::thread::sleep(delay.min(POLL_SLICE)),
+            Next::Wait(delay) => {
+                std::thread::sleep(delay.min(POLL_SLICE));
+                continue;
+            }
             Next::Spawn => {}
         }
 
@@ -386,14 +418,27 @@ fn serve(daemon: Arc<Daemon>) {
                 return;
             }
         };
+        // Non-blocking, so this loop notices `stopping`. A blocking accept
+        // would sit here forever after the supervisor gave up, and the daemon
+        // would hold the endpoint while answering nothing — which is the
+        // degraded state that made the breaker impossible to reach.
+        listener
+            .set_nonblocking(true)
+            .expect("the listener can be made non-blocking");
         loop {
             if daemon.stopping.load(Ordering::Relaxed) {
                 return;
             }
-            match transport::accept(listener.try_clone().expect("the listener duplicates")) {
-                Ok(connection) => {
+            match listener.accept() {
+                Ok((stream, _)) => {
                     let daemon = Arc::clone(&daemon);
-                    std::thread::spawn(move || serve_surface(connection, daemon));
+                    std::thread::spawn(move || {
+                        serve_surface(transport::Accepted::Stream(stream), daemon)
+                    });
+                }
+                // Nobody connecting is the normal state for an idle daemon.
+                Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(POLL_SLICE);
                 }
                 Err(error) => eprintln!("step-studio-host: accept failed: {error}"),
             }

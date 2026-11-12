@@ -7,7 +7,7 @@
 
 #![cfg(unix)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
@@ -435,4 +435,63 @@ fn a_model_catalog_reaches_the_shell_through_the_bridge() {
             "every catalog entry carries a selector: {model}"
         );
     }
+}
+
+#[test]
+fn a_daemon_whose_adapter_cannot_start_exits_instead_of_degrading() {
+    // Sitting there would be worse than leaving: the daemon would hold the
+    // endpoint and answer nothing, a surface would wait out its connect timeout,
+    // and the launcher would never count a failure — so the "the daemon cannot
+    // start" terminal state could never be reached.
+    let dir = std::env::temp_dir().join(format!("host-daemon-halt-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("make a temp dir");
+    let root = repo_root();
+    let endpoint = dir.join("daemon.sock").to_string_lossy().to_string();
+    let child = Command::new(root.join("target/debug/step-studio-host"))
+        .arg("--endpoint")
+        .arg(&endpoint)
+        .arg("--adapter-endpoint")
+        .arg(dir.join("adapter.sock"))
+        .arg("--cwd")
+        .arg(&dir)
+        .arg("--repo-root")
+        .arg(&root)
+        // A CLI that does not exist, so every adapter start fails.
+        .arg("--step-cmd")
+        .arg(dir.join("no-such-step"))
+        .arg("--grace")
+        .arg("5")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("spawn the daemon");
+
+    // Three failed starts, then the halt grace. Bounded so a hang fails rather
+    // than stalls the suite: `wait_with_output` takes the child, so it is tried
+    // once and the deadline is enforced by killing instead.
+    let mut child = child;
+    let deadline = Instant::now() + Duration::from_secs(90);
+    let output = loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break child.wait_with_output().expect("collect the daemon's output"),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(200));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("the daemon never exited, so it would have degraded in place");
+            }
+            Err(error) => panic!("waiting for the daemon: {error}"),
+        }
+    };
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("exiting after"),
+        "the daemon should say why it is leaving: {stderr}"
+    );
+    // It left the endpoint behind for nobody.
+    assert!(!Path::new(&endpoint).exists(), "the socket file was cleaned up");
+    let _ = std::fs::remove_dir_all(&dir);
 }
