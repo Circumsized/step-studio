@@ -41,6 +41,12 @@ export const CORE_NODE_SUITES = [
   // listener, and the rejection re-wrap that keeps Electron's error shape.
   "apps/desktop-tauri/dist/test/tauri-sender.test.js",
   "apps/desktop-tauri/dist/test/command-table.test.js",
+  // The chrome and terminal bridges. Same reason as `command-table`: a renamed
+  // `#[tauri::command]` or a moved argument key compiles, typechecks, and then
+  // fails only at runtime, so the JS and Rust sources are read back and aligned
+  // in both directions. The terminal one also pins the single-`listen` fan-out.
+  "apps/desktop-tauri/dist/test/chrome-bridge.test.js",
+  "apps/desktop-tauri/dist/test/terminal-bridge.test.js",
   "packages/runtime-installer/dist/test/installer.test.js",
   "packages/runtime-installer/dist/test/update-v2.test.js",
 ];
