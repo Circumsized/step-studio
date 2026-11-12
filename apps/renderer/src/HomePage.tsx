@@ -503,6 +503,9 @@ function TokenUsageCard({ client, onOpenStats }: { client?: StudioClient; onOpen
   const usage = preview ? previewUsage : (liveUsage ?? EMPTY_USAGE);
   const loading = !preview && liveUsage === null;
   const modelIds = useMemo(() => usage.models.map((entry) => entry.id), [usage]);
+  // Without per-day numbers the KPI tiles have nothing to say, and an all-zero
+  // grid would claim "you used nothing all year".
+  const hasUsageDays = usage.days.length > 0;
   const totalsByDay = useMemo(() => {
     const map = new Map<number, number>();
     for (const day of usage.days) {
@@ -833,11 +836,32 @@ function TokenUsageCard({ client, onOpenStats }: { client?: StudioClient; onOpen
           ))}
         </div>
       </div>
+      {/*
+        Empty arrays with a reason is the honest shape the Host returns when the
+        data is not there. Rendering the KPI tiles from it shows "0 / 0 / 0"
+        under 年度总用量 / 近7天均值 / 年度峰值, which reads as "I used nothing"
+        rather than "this Runtime does not report it" — the same discipline
+        failure as dressing intensity buckets up as token counts, reached from
+        the other direction.
+      */}
+      {hasUsageDays ? (
       <div className="tk-kpis">
         <div className="tk-kpi"><span className="tk-kpi-v mono">{fmtTokens(yearTotal)}</span><span className="tk-kpi-l"><i className="tk-dot total" />{t("home.yearTotalUsage")}</span></div>
         <div className="tk-kpi"><span className="tk-kpi-v mono">{fmtTokens(avg7)}</span><span className="tk-kpi-l">{t("home.last7DaysAvg")}</span></div>
         <div className="tk-kpi"><span className="tk-kpi-v mono">{fmtTokens(peakTotal)}</span><span className="tk-kpi-l">{t("home.yearPeak")}</span></div>
       </div>
+      ) : (
+        <div className="tk-kpis tk-kpis-empty">
+          <p className="ctx-project-empty">
+            {usage.unavailableReason ?? t("home.usageLoadFailed")}
+          </p>
+          {usage.panel === undefined ? null : (
+            // The CLI's own panel, verbatim: real data the user asked for, and
+            // the only usage figure this Runtime actually produces.
+            <pre className="tk-panel">{usage.panel}</pre>
+          )}
+        </div>
+      )}
       {modelIds.length > 0 ? (
         <div className="tk-legend">
           {modelIds.map((id) => (
