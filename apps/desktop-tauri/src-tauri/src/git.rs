@@ -271,3 +271,226 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+/// The commit history, in the shape the Git panel's log view reads.
+///
+/// Same CLI-read decision as [`repository_get`]: one `git log` call with a
+/// record separator gives oid, parents, subject, author, date and every ref
+/// pointing at the commit, which is `GitLogCommitRecord` in full.
+pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Value {
+    let Some(root) = repo_root() else {
+        return json!({
+            "workspaceId": workspace_id,
+            "commits": [],
+            "truncated": false,
+            "ahead": 0,
+            "behind": 0,
+        });
+    };
+    // One more than asked for, so `truncated` means "there is more" rather than
+    // "exactly this many existed".
+    let count = limit.unwrap_or(50).min(500) + 1;
+    let mut command = Command::new("git");
+    command
+        .arg("log")
+        .arg(format!("-n{count}"))
+        .arg(format!("--skip={}", skip.unwrap_or(0)))
+        // A record separator and a unit separator, so a subject containing the
+        // record separator cannot split a commit in two.
+        .arg("--pretty=format:%H%x1f%P%x1f%s%x1f%an%x1f%aI%x1f%D%x1e")
+        .current_dir(&root);
+    let Ok(output) = command.output() else {
+        return unavailable_log(workspace_id, "git is not installed");
+    };
+    if !output.status.success() {
+        return unavailable_log(workspace_id, "git log failed");
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+
+    let mut commits: Vec<Value> = Vec::new();
+    for record in text.split('\u{1e}') {
+        let record = record.trim_start_matches('\n');
+        if record.is_empty() {
+            continue;
+        }
+        let mut fields = record.split('\u{1f}');
+        let Some(oid) = fields.next() else { continue };
+        let parents = fields
+            .next()
+            .unwrap_or("")
+            .split(' ')
+            .filter(|parent| !parent.is_empty())
+            .map(|parent| json!(parent))
+            .collect::<Vec<_>>();
+        let subject = fields.next().unwrap_or("");
+        let author = fields.next().unwrap_or("");
+        let date = fields.next().unwrap_or("");
+        let refs = parse_refs(fields.next().unwrap_or(""));
+        commits.push(json!({
+            "oid": oid,
+            "parents": parents,
+            "subject": subject,
+            "authorName": author,
+            "authorDate": date,
+            "refs": refs,
+            "relation": "common",
+        }));
+        if commits.len() as u64 >= count - 1 {
+            break;
+        }
+    }
+
+    // The extra commit means there is more to read.
+    let truncated = commits.len() as u64 >= count - 1 && limit.is_some_and(|asked| asked < 500);
+    let head = commits.first().map(|commit| commit.get("oid").cloned().unwrap_or(Value::Null));
+    json!({
+        "workspaceId": workspace_id,
+        "commits": commits,
+        "truncated": truncated,
+        "headOid": head,
+        "ahead": 0,
+        "behind": 0,
+    })
+}
+
+fn unavailable_log(workspace_id: &str, reason: &str) -> Value {
+    json!({
+        "workspaceId": workspace_id,
+        "commits": [],
+        "truncated": false,
+        "ahead": 0,
+        "behind": 0,
+        "unavailableReason": reason,
+    })
+}
+
+/// `%D` output: `HEAD -> main, origin/main, tag: v1`. Each name becomes a ref
+/// with the kind the contract declares — `local`, `remote`, `tag` or `head`.
+fn parse_refs(decorations: &str) -> Vec<Value> {
+    let mut refs = Vec::new();
+    for entry in decorations.split(", ") {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        let (kind, name) = if let Some(rest) = entry.strip_prefix("HEAD -> ") {
+            // The branch HEAD points at: local, and the current one.
+            ("local", rest)
+        } else if entry == "HEAD" {
+            // A detached head names no branch.
+            ("head", "")
+        } else if let Some(rest) = entry.strip_prefix("tag: ") {
+            ("tag", rest)
+        } else if entry.starts_with("refs/remotes/") {
+            ("remote", entry.trim_start_matches("refs/remotes/"))
+        } else if entry.starts_with("refs/") {
+            ("local", entry.trim_start_matches("refs/heads/"))
+        } else {
+            // A bare name from `%D` is a local branch; anything with a slash and
+            // no refs/ prefix is a remote-tracking ref.
+            if entry.contains('/') {
+                ("remote", entry)
+            } else {
+                ("local", entry)
+            }
+        };
+        if name.is_empty() {
+            continue;
+        }
+        refs.push(json!({ "name": name, "kind": kind, "current": false }));
+    }
+    // The branch HEAD points at is the current one. `%D` marks it with the
+    // `HEAD -> ` prefix, so that entry is the one to flag.
+    if let Some(current) = refs.iter_mut().find(|entry| {
+        entry.get("kind").and_then(Value::as_str) == Some("local")
+            && entry.get("current").and_then(Value::as_bool) == Some(false)
+    }) {
+        if let Some(object) = current.as_object_mut() {
+            object.insert("current".to_string(), json!(true));
+        }
+    }
+    refs
+}
+
+#[cfg(test)]
+mod log_tests {
+    use super::*;
+
+    #[test]
+    fn the_real_repository_reports_its_history() {
+        let model = log_list("ws-1", Some(3), None);
+        let commits = model.get("commits").and_then(Value::as_array).expect("commits");
+        assert!(!commits.is_empty(), "this workspace has history");
+        let first = &commits[0];
+        for field in ["oid", "subject", "authorName", "authorDate"] {
+            assert!(
+                first.get(field).and_then(Value::as_str).is_some_and(|value| !value.is_empty()),
+                "{field} is reported for the newest commit"
+            );
+        }
+        assert!(first.get("parents").and_then(Value::as_array).is_some(), "parents are a list");
+    }
+
+    #[test]
+    fn asking_for_one_more_than_exist_is_not_truncated() {
+        let model = log_list("ws-1", Some(500), None);
+        assert_eq!(
+            model.get("truncated").and_then(Value::as_bool),
+            Some(false),
+            "the history is shorter than what was asked for"
+        );
+    }
+
+    #[test]
+    fn a_subject_containing_the_separator_does_not_split_a_commit() {
+        // The record separator is \x1e and the field separator \x1f; a subject
+        // holding a newline is the realistic case, and it must not become two
+        // commits.
+        let text = "oid1\x1f\x1fsubject line one\nline two\x1fa\x1f2026-01-01T00:00:00Z\x1f\x1e";
+        let mut commits = Vec::new();
+        for record in text.split('\u{1e}') {
+            let record = record.trim_start_matches('\n');
+            if record.is_empty() {
+                continue;
+            }
+            let mut fields = record.split('\u{1f}');
+            let oid = fields.next().unwrap_or("");
+            let _parents = fields.next().unwrap_or("");
+            let subject = fields.next().unwrap_or("");
+            commits.push(json!({ "oid": oid, "subject": subject }));
+        }
+        assert_eq!(commits.len(), 1, "one record stays one commit");
+        assert_eq!(
+            commits[0].get("subject").and_then(Value::as_str),
+            Some("subject line one\nline two")
+        );
+    }
+
+    #[test]
+    fn decorations_become_refs_with_a_kind() {
+        let refs = parse_refs("HEAD -> main, origin/main, tag: v1");
+        let names: Vec<&str> = refs
+            .iter()
+            .filter_map(|entry| entry.get("name").and_then(Value::as_str))
+            .collect();
+        assert!(names.contains(&"main"), "the current branch is a ref");
+        assert!(names.contains(&"origin/main"), "the upstream is a ref");
+        assert!(names.contains(&"v1"), "the tag is a ref");
+        let tag = refs
+            .iter()
+            .find(|entry| entry.get("name").and_then(Value::as_str) == Some("v1"))
+            .expect("the tag");
+        assert_eq!(tag.get("kind").and_then(Value::as_str), Some("tag"));
+        let branch = refs
+            .iter()
+            .find(|entry| entry.get("name").and_then(Value::as_str) == Some("main"))
+            .expect("the branch");
+        assert_eq!(branch.get("kind").and_then(Value::as_str), Some("local"));
+        assert_eq!(branch.get("current").and_then(Value::as_bool), Some(true));
+        let remote = refs
+            .iter()
+            .find(|entry| entry.get("name").and_then(Value::as_str) == Some("origin/main"))
+            .expect("the upstream");
+        assert_eq!(remote.get("kind").and_then(Value::as_str), Some("remote"));
+    }
+}

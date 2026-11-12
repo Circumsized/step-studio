@@ -66,9 +66,12 @@ const SHELL_ANSWERED: &[(&str, &str)] = &[
     ("models.get", "limited"),
     // Answered by the shell from its own dispatch table.
     ("capabilities.get", "stable"),
-    // A fact about the workspace, not about the runtime: the shell reads it from
+    // Facts about the workspace, not about the runtime: the shell reads them from
     // the `git` CLI. The adapter has no git capability to offer.
     ("git.repository.get", "limited"),
+    // `limited` because the history page is read but not written: commits are
+    // still made elsewhere.
+    ("git.log.list", "limited"),
 ];
 
 const RENAMED: &[(&str, &str)] = &[
@@ -121,10 +124,19 @@ pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)>
     if name == "capabilities.get" {
         return Some((json!({}), Dispatch::Local));
     }
-    if name == "git.repository.get" {
-        // The workspace the query named, so the answer can be attributed to it.
-        let workspace_id = input.get("workspaceId").and_then(Value::as_str).unwrap_or("");
-        return Some((json!({ "workspaceId": workspace_id }), Dispatch::Local));
+    if name == "git.repository.get" || name == "git.log.list" {
+        // The workspace the query named, and the page the caller asked for, so
+        // the answer can be attributed and paged.
+        let mut operation = json!({
+            "workspaceId": input.get("workspaceId").and_then(Value::as_str).unwrap_or(""),
+        });
+        if let Some(limit) = input.get("limit") {
+            operation["limit"] = limit.clone();
+        }
+        if let Some(skip) = input.get("skip") {
+            operation["skip"] = skip.clone();
+        }
+        return Some((operation, Dispatch::Local));
     }
     let kind = if let Some((_, renamed)) = RENAMED.iter().find(|(from, _)| *from == name) {
         *renamed
@@ -507,6 +519,17 @@ fn pump(
                                 .and_then(Value::as_str)
                                 .unwrap_or("");
                             crate::git::repository_get(workspace_id)
+                        } else if job.command_name == "git.log.list" {
+                            let workspace_id = job
+                                .operation
+                                .get("workspaceId")
+                                .and_then(Value::as_str)
+                                .unwrap_or("");
+                            crate::git::log_list(
+                                workspace_id,
+                                job.operation.get("limit").and_then(Value::as_u64),
+                                job.operation.get("skip").and_then(Value::as_u64),
+                            )
                         } else {
                             capability_manifest()
                         };

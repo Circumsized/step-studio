@@ -460,7 +460,9 @@ Git 面板 12 个 query 里的第一个，也是渲染层真正的入口（`GitS
 
 gix 仍记为目标，留到子进程成本在某个测量里显现。这是 §10.3 的逐个案通道，本案的实测依据就是「一次 porcelain 覆盖必填项」。
 
-**checklist 3.1 部分翻转**：变更列表已到桥；diff 视图、暂存与提交仍未接。3.2 分支列表、3.3 提交历史仍未接。
+**checklist 3.3 翻「齐」**（提交历史：oid/parents/subject/author/date/refs/relation 全覆盖）；3.1 部分翻转（变更列表已到桥，diff 视图/暂存/提交未接）；3.2 分支列表未接。
+
+同一刀加做 `git.log.list`：与 `repository_get` 同形，`git log` 带 `%x1f`/`%x1e` 分隔符一次给出 `GitLogCommitRecord` 全部必填项。多取一条来判断 `truncated`——「还有更多」而不是「正好这么多」。修掉一处自己引入的类型错误：`GitLogRefKind` 是 `local`/`remote`/`tag`/`head`，我第一版写了 `branch`。
 
 ### M3.2 / M3.3 起点实证（2026-11-12）
 

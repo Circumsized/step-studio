@@ -776,7 +776,7 @@ fn shape_query_result(name: &str, payload: Value) -> Value {
     if name == "models.get" {
         return model_config_read_model(&payload);
     }
-    if name == "git.repository.get" {
+    if name == "git.repository.get" || name == "git.log.list" {
         // Already in the facade's shape: the shell builds `GitRepositoryReadModel`
         // directly, so there is nothing to translate. The arm exists so a reader
         // looking for the git reshape finds it, rather than concluding the

@@ -47,8 +47,8 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 | # | 比对点 | 态 |
 |---|---|---|
 | 3.1 | 变更列表 / diff 视图 / 暂存与提交 | **空**（变更列表已到桥：`git.repository.get` 由壳读 `git status --porcelain=v2 --branch` 本地作答；diff 视图、暂存与提交仍未接） |
-| 3.2 | 分支列表 | **空** |
-| 3.3 | 提交历史 | **空** |
+| 3.2 | 分支列表 | **空**（`git.branches.list` 未接） |
+| 3.3 | 提交历史 | **齐**（`git.log.list` 由壳读 `git log` 本地作答：oid/parents/subject/author/date/refs/relation 全覆盖，10 个单测含对真仓库的一条） |
 
 三项全「空」：Git 面板按方案 §9.6 记为「齐（自建）」，但那是 M3/M4 的目标态。
 当前未接，所以是诚实空态。**不要**因为方案写「齐」就认为现在有。
