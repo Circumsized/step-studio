@@ -9,7 +9,7 @@
 //! models/usage/settings/diagnostics surfaces (M2.4). Until then it forwards
 //! bytes and supervises.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -73,13 +73,22 @@ struct Daemon {
     /// One slot, not one per surface: the adapter broadcasts, and two surfaces
     /// reading one stream would split it between them. A second surface waits
     /// rather than competing.
-    to_surface: Mutex<Option<Sender<Vec<u8>>>>,
+    /// `(sender, adapter serial)`. The serial is what lets a pump tell whether
+    /// the slot still belongs to it: `mpsc::Sender` has no identity to compare,
+    /// and clearing a replacement adapter's sender would drop a healthy
+    /// adapter's frames into a socket nobody closes.
+    to_surface: Mutex<Option<(Sender<Vec<u8>>, u64)>>,
     /// Set once the daemon has decided to go away, so the supervisor does not
     /// restart the adapter it just drained.
     stopping: AtomicBool,
     /// Set by a surface attaching. A halted supervisor is revived by a caller
     /// that actually wants the runtime, which is the only honest probe.
     retry_requested: AtomicBool,
+    /// Which adapter the current `to_surface` sender belongs to.
+    adapter_serial: AtomicU64,
+    /// Whether this process bound the endpoint, so it is the only one that may
+    /// unlink it.
+    bound_endpoint: AtomicBool,
     /// Whether a surface currently owns the relay.
     active: Mutex<bool>,
     /// Signalled when the active surface lets go.
@@ -155,6 +164,8 @@ fn main() {
         epoch,
         adapter: Mutex::new(None),
         to_surface: Mutex::new(None),
+        adapter_serial: AtomicU64::new(0),
+        bound_endpoint: AtomicBool::new(false),
         stopping: AtomicBool::new(false),
         retry_requested: AtomicBool::new(false),
         active: Mutex::new(false),
@@ -253,13 +264,14 @@ fn supervise(daemon: Arc<Daemon>) {
         let (handle, reader) = handle;
         let uptime_at_death = {
             let alive = Arc::clone(&handle.alive);
+            let serial = daemon.adapter_serial.fetch_add(1, Ordering::Relaxed) + 1;
             let mut slot = daemon.adapter.lock().unwrap_or_else(|p| p.into_inner());
             *slot = Some(handle);
             drop(slot);
             // One pump thread per adapter, not per surface: it owns the read
             // half for the adapter's whole life, and hands frames to whichever
             // surface is currently active.
-            spawn_pump(Arc::clone(&daemon), reader, alive);
+            spawn_pump(Arc::clone(&daemon), reader, alive, serial);
             wait_for_adapter(&daemon)
         };
         let uptime = uptime_at_death.unwrap_or(Duration::ZERO);
@@ -340,13 +352,18 @@ fn native_runtime_command(repo_root: &str) -> Vec<String> {
 /// keep waiting on a channel nobody closes, and the socket would stay open on
 /// both sides — so the shell's session would never die and its pump would never
 /// reconnect.
-fn spawn_pump(daemon: Arc<Daemon>, mut reader: transport::Stream, alive: Arc<AtomicBool>) {
+fn spawn_pump(
+    daemon: Arc<Daemon>,
+    mut reader: transport::Stream,
+    alive: Arc<AtomicBool>,
+    serial: u64,
+) {
     std::thread::spawn(move || {
         let outcome = relay::pump_frames_to(&mut reader, |frame| {
             // Nobody attached is a normal state, not an error: the frames are
             // dropped, because there is nobody to deliver them to.
             let slot = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(sender) = slot.as_ref() {
+            if let Some((sender, _)) = slot.as_ref() {
                 let _ = sender.send(frame);
             }
             Ok(())
@@ -356,9 +373,17 @@ fn spawn_pump(daemon: Arc<Daemon>, mut reader: transport::Stream, alive: Arc<Ato
         }
         // The adapter is gone, so whatever it was feeding is over: release the
         // surface, and say so.
+        //
+        // Only if the slot still holds *this* pump's sender. The slot is global
+        // and a replacement adapter may already have published its own, and
+        // clearing that one would drop frames from a healthy adapter into a
+        // socket nobody closes — the shell would sit on a silent connection and
+        // every command would block in `await_reply` forever.
         {
             let mut slot = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
-            *slot = None;
+            if slot.as_ref().is_some_and(|(_, held)| *held == serial) {
+                *slot = None;
+            }
         }
         adapter::mark_dead(&alive);
     });
@@ -401,7 +426,14 @@ fn serve(daemon: Arc<Daemon>) {
     #[cfg(unix)]
     {
         let listener = match lifecycle::bind(&endpoint) {
-            Ok(Some(listener)) => listener,
+            Ok(Some(listener)) => {
+                // Recorded so `shutdown` knows this process may unlink it. Two
+                // daemons can race for the endpoint, and the loser deleting the
+                // winner's socket file leaves every later connect with ENOENT
+                // against a listener that still holds the inode.
+                daemon.bound_endpoint.store(true, Ordering::Relaxed);
+                listener
+            }
             // Somebody else won the race to bind. Not an error.
             Ok(None) => {
                 eprintln!(
@@ -447,8 +479,11 @@ fn serve(daemon: Arc<Daemon>) {
     #[cfg(not(unix))]
     {
         let mut listener = match lifecycle::bind(&endpoint) {
-            Ok(Ok(listener)) => listener,
-            Ok(Err(Acquire::AlreadyRunning)) => {
+            Ok(Some(listener)) => {
+                daemon.bound_endpoint.store(true, Ordering::Relaxed);
+                listener
+            }
+            Ok(None) => {
                 eprintln!(
                     "step-studio-host: another daemon owns {}",
                     daemon.config.endpoint
@@ -556,8 +591,9 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     // what ends the writer thread below, which is what closes the socket.
     let (sender, receiver) = mpsc::channel::<Vec<u8>>();
     {
+        let serial = daemon.adapter_serial.load(Ordering::Relaxed);
         let mut slot = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
-        *slot = Some(sender.clone());
+        *slot = Some((sender.clone(), serial));
     }
 
     // The writer owns the surface's write half and drains until the sender is
@@ -745,9 +781,13 @@ fn shutdown(daemon: &Arc<Daemon>) {
         adapter::drain(&mut handle, DRAIN_DEADLINE);
     }
     // A Unix socket is a file; a Windows pipe name is not, so there is nothing
-    // to remove there.
+    // to remove there. Only if this process bound it: two daemons can race, and
+    // the loser used to delete the winner's socket file, leaving every later
+    // connect with ENOENT against a listener that still held the inode.
     #[cfg(unix)]
-    let _ = std::fs::remove_file(&daemon.config.endpoint);
+    if daemon.bound_endpoint.load(Ordering::Relaxed) {
+        let _ = std::fs::remove_file(&daemon.config.endpoint);
+    }
     eprintln!("step-studio-host: exiting");
 }
 

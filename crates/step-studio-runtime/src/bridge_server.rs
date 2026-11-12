@@ -279,8 +279,13 @@ impl Session {
                 continue;
             };
             let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            // `notify` is a general presentation method — extensions and OAuth
+            // login progress both use it — so the path is what identifies the
+            // `/usage` panel. Taking the first notify would deliver some other
+            // extension's message to the contract as the usage panel.
             if kind == "extension_ui_request"
                 && event.get("method").and_then(|v| v.as_str()) == Some("notify")
+                && event.get("extensionPath").and_then(|v| v.as_str()) == Some("command:usage")
             {
                 panel = event.get("message").and_then(|v| v.as_str()).map(str::to_string);
                 break;

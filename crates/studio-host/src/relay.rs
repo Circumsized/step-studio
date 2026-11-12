@@ -31,7 +31,20 @@ pub fn next_frame<R: Read>(from: &mut R) -> std::io::Result<Option<Vec<u8>>> {
         ));
     }
     // The payload length covers the header length and everything after it, so
-    // the first four bytes of it have already been read.
+    // the first four bytes of it have already been read. A length below that is
+    // what `frame.rs` rejects as `TooSmall`, and it has to be rejected here too:
+    // resizing to fewer than the 8 bytes already read and then slicing at 8
+    // panics, and a panic in the adapter's pump thread unwinds past the cleanup
+    // that releases the surface — the exact failure the reconnect path depends
+    // on not happening.
+    if payload_length < LENGTH_PREFIX_BYTES {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!(
+                "frame payload length {payload_length} is below the {LENGTH_PREFIX_BYTES}-byte minimum"
+            ),
+        ));
+    }
     let mut frame = prefix.to_vec();
     frame.resize(
         LENGTH_PREFIX_BYTES * 2 + payload_length - LENGTH_PREFIX_BYTES,
@@ -161,6 +174,28 @@ mod tests {
         assert_eq!(seen.len(), 1, "one frame, reassembled from single bytes");
         // The pump hands back exactly what went in, header and all.
         assert!(seen[0].len() > 500, "the whole frame arrived");
+    }
+
+    #[test]
+    fn a_frame_whose_length_is_below_the_minimum_is_refused_not_panicked_on() {
+        // A length below the 8 bytes already read used to resize the buffer
+        // under the slice index and panic — and a panic in the adapter's pump
+        // skips the cleanup that releases the surface, so the shell would hang
+        // on a silent socket instead of reconnecting.
+        let (mut ours, mut theirs) = std::os::unix::net::UnixStream::pair().expect("a socket pair");
+        let mut prefix = Vec::new();
+        prefix.extend_from_slice(&0u32.to_be_bytes());
+        prefix.extend_from_slice(&0u32.to_be_bytes());
+        theirs.write_all(&prefix).expect("write a zero length");
+        drop(theirs);
+
+        let mut out = Vec::new();
+        let error = pump_frames(&mut ours, &mut out).expect_err("must refuse, not panic");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(
+            error.to_string().contains("minimum"),
+            "the error says why: {error}"
+        );
     }
 
     #[test]

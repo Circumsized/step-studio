@@ -10,6 +10,22 @@
 use std::io;
 use std::time::Duration;
 
+/// Who owns the daemon's endpoint directory.
+///
+/// The socket lives in a shared temp directory, so the per-user subdirectory is
+/// the only thing standing between this daemon and another local user. It is
+/// created `0700` and checked for ownership, because a directory an attacker
+/// can write lets them either squat the path (impersonating the daemon) or make
+/// it read-only (denying the user a daemon at all).
+#[cfg(unix)]
+fn own_uid() -> u32 {
+    use std::os::unix::fs::MetadataExt;
+    std::env::current_exe()
+        .and_then(std::fs::metadata)
+        .map(|meta| meta.uid())
+        .unwrap_or(0)
+}
+
 use step_studio_bridge::transport;
 
 /// The endpoint the daemon owns, per user.
@@ -97,12 +113,43 @@ pub fn bind(endpoint: &str) -> io::Result<Option<transport::Listener>> {
     // A Unix socket is a file, so its directory has to exist first. The
     // endpoint lives in a per-user temp subdirectory precisely to keep the path
     // short, and nothing else creates it.
+    //
+    // Created `0700` and owned by us, or not used at all: `create_dir_all`
+    // derives its mode from the umask, and under `umask 000` the socket ends up
+    // world-writable — which turns every finding about relayed frames into a
+    // local attack.
     #[cfg(unix)]
-    if let Some(parent) = std::path::Path::new(endpoint).parent() {
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let parent = std::path::Path::new(endpoint)
+            .parent()
+            .ok_or_else(|| io::Error::other("the endpoint has no directory"))?;
         std::fs::create_dir_all(parent)?;
+        let metadata = std::fs::metadata(parent)?;
+        let owner = metadata.uid();
+        if owner != own_uid() {
+            // Somebody else owns the path. Refusing is the honest answer: binding
+            // would either fail with a confusing EACCES or, worse, succeed next
+            // to a directory an attacker controls.
+            return Err(io::Error::other(format!(
+                "{} is owned by uid {owner}, not uid {}",
+                parent.display(),
+                own_uid()
+            )));
+        }
+        std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))?;
     }
     match transport::bind(endpoint) {
-        Ok(listener) => Ok(Some(listener)),
+        Ok(listener) => {
+            // The socket itself: `bind` derives its mode from the umask too, and
+            // a world-writable socket is the whole finding.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(endpoint, std::fs::Permissions::from_mode(0o600));
+            }
+            Ok(Some(listener))
+        }
         Err(error) => {
             if transport::connect(&target).is_ok() {
                 return Ok(None);

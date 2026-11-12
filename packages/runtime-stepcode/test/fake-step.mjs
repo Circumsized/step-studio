@@ -90,6 +90,7 @@ rl.on("line", line => {
         type: "extension_ui_request",
         id: "fake-usage",
         method: "notify",
+        extensionPath: "command:usage",
         notifyType: "info",
         message: [
           "Usage",

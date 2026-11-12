@@ -12,6 +12,13 @@ workspace = true
 [target.'cfg(windows)'.dependencies]
 named_pipe = "0.4"
 
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "hot-paths"
+harness = false
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true

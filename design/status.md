@@ -452,6 +452,32 @@ Node 进程里驱动：
 
 这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
 
+### M2.6：三路对抗评审（2026-11-12 完成，30 条 finding，24 条已修）
+
+三路并行，各自读码不构建：并发/死锁、信任边界、数据诚实。**5 条是本 session 自己引入的**，说明 C1/C2/C3 那三个「接近零成本」的接面并不零成本。
+
+**本 session 引入、已修**：
+
+| finding | 后果 |
+|---|---|
+| `Dispatch::Local` 把 ack 当结果返回，无视 `job.want` | `capabilities.get` 交回回执形状的对象，渲染层 `usableCapabilityManifest` 读 `.capabilities.length` → TypeError，首屏后即崩 |
+| `providers[].models` 缺失（`ModelProviderRecord` 必填） | composer 选择器与 `ModelConfigPage` 的 `provider.models.map` 在 `availableModels` 非空时 throw——而实测正是 2 模型 × 1 供应商 |
+| `webSearch` 缺 `timeoutSeconds`/`geminiModel`/`providers`/`advanced` 四个必填成员 | Web Search 面板挂载即 throw |
+| `next_frame` 对 `payload_length < 4`  panic | panic 在适配器泵线程里展开，**跳过 B1 依赖的 surface 释放清理**——壳会挂在一条静默 socket 上永不重连 |
+| 全局 `to_surface` 被陈旧泵线程无条件清空 | 与已修的 `alive` 竞态同形：替换适配器已发布自己的 sender，旧泵一退就把healthy adapter 的帧丢进没人关的 socket，壳侧 `await_reply` 永久阻塞 |
+| `auth.type: "none"` / `local: false` / `enabled: true` 是无据断言 | catalog 不含这些字段；`local-gateway` 很可能就是 local。已改为 `auth.type: "unknown"` 并在 `unavailableReason` 点名哪些是占位 |
+| 任意 `notify` 被当成 `/usage` 面板 | `notify` 是通用呈现方法，扩展与 OAuth 登录都用它。已按方案早记录的 `extensionPath: "command:usage"` 判别 |
+| 双向不变式漏了 RENAMED 表 | `session.create` / `conversation.open` 能 resolve 但未声明，`can()` 对两个壳确实服务的名字返回 false。已改为**从 RENAMED 表派生**，不再手抄第二份名单 |
+
+**既有代码里抓到、已修**：`/tmp` 端点无属主/权限校验（目录 0700 + 属主校验 + socket 0600，任何 umask 下成立——`umask 000` 下原来会产出 world-writable socket）；bind 竞争失败者删掉赢家的 socket 文件；panic 的泵被 `join().ok()` 当成正常退出，监督者永久退光；`BridgeSession::drain_child` 跨 3 秒 sleep 持有 stream 锁；默认 `--adapter-endpoint` 不按用户隔离。
+
+**记为缺口、本轮不修**：
+
+1. **peer-uid 校验**。`UnixStream::peer_cred` 仍 unstable，workspace 禁 `unsafe`。因此任何能连上 socket 的本地用户都可驱动会话——这是本次评审认定「唯一实质性变差」的一条（旧实现把 socket 放在用户自己的 0755 目录里）。目录 0700 已挡住 umask 000 与路径抢占，但挡不住同 uid 的其他进程。随 M5.1 平台能力一起做。
+2. **Windows `#[cfg(not(unix))]` 分支只保证编译**。其中 `serve` 臂的 `Ok(Err(Acquire::AlreadyRunning))` 与 `bind` 的真实返回类型不符，**本来根本编不过**（已顺手修）。其余待真机。
+3. **`usage.get` 阻塞泵最多 30 秒**，且每次轮询都往活动会话注入一条 prompt，方案 §9.6 要求这类 prompt 不占会话轮次而适配器既未保证也未验证。正确修法是让 `/usage` 走事件回传而非占用一次 invoke，属协议形状改变，留到 M2.3。
+4. **HomePage 的 KPI 瓦片把空数组渲染成 "0 / 0 / 0"**。`days` 恒空（数据不在），瓦片却无条件显示年度总量/近 7 天均值/峰值，而 CLI 面板里的真实总量被丢掉。与「分档扮 token 数」同源，只是从另一个方向到达。属渲染层改动。
+
 ### M2.2-D1：杀壳重连 / epoch / daemon 熔断演练（2026-11-12 完成并实证）
 
 三项演练。前两项的机制在 M2.1 / M2.2 已有测试，本次补的是**熔断演练**，而它抓出了两个叠加的 bug：

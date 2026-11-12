@@ -859,16 +859,32 @@ fn model_config_read_model(payload: &Value) -> Value {
         })
         .collect();
 
-    // One record per distinct provider. Step is single-provider in practice, so
-    // this is usually one entry — derived, not assumed.
+    // One record per distinct provider, carrying the models that belong to it.
+    //
+    // `models` is required by `ModelProviderRecord`, and the composer's picker
+    // maps over it — a record without it throws once `availableModels` is
+    // non-empty, which is exactly the case that matters.
     let mut providers: Vec<Value> = Vec::new();
     for entry in entries {
         let id = entry.get("provider").and_then(Value::as_str).unwrap_or("");
         if id.is_empty() || providers.iter().any(|p| p.get("id") == Some(&json!(id))) {
             continue;
         }
+        let mine: Vec<Value> = entries
+            .iter()
+            .filter(|other| other.get("provider").and_then(Value::as_str) == Some(id))
+            .map(|other| {
+                json!({
+                    "id": other.get("id").and_then(Value::as_str).unwrap_or(""),
+                    "selector": other.get("selector").and_then(Value::as_str).unwrap_or(""),
+                    "name": other.get("name").and_then(Value::as_str).unwrap_or(""),
+                })
+            })
+            .collect();
         providers.push(json!({
             "id": id,
+            // The catalog gives no display name, so the id is the name. Better
+            // than inventing one.
             "name": id,
             "source": "runtime",
             "status": "available",
@@ -876,8 +892,10 @@ fn model_config_read_model(payload: &Value) -> Value {
             "api": entry.get("api").and_then(Value::as_str).unwrap_or(""),
             "local": false,
             "enabled": true,
-            // The CLI holds the credentials; this shell never sees them.
-            "auth": { "type": "none", "hasSecret": false },
+            "models": mine,
+            // The shell never sees the CLI's credentials, so it asserts nothing
+            // about them: `hasSecret: false` would be a claim, not a fact.
+            "auth": { "type": "unknown", "hasSecret": false },
         }));
     }
 
@@ -899,9 +917,20 @@ fn model_config_read_model(payload: &Value) -> Value {
         "modelProviderOrder": providers.iter().filter_map(|p| p.get("id").and_then(Value::as_str)).map(str::to_string).collect::<Vec<_>>(),
         "fallbackChains": {},
         "fallbackRevertPolicy": "never",
-        "webSearch": { "enabled": false, "order": [], "exclude": [] },
+        // Every member `WebSearchConfigReadModel` requires. The shell has no
+        // web-search configuration to report, so each is the empty value rather
+        // than a claim about the CLI's settings.
+        "webSearch": {
+            "enabled": false,
+            "order": [],
+            "exclude": [],
+            "timeoutSeconds": 0,
+            "geminiModel": "",
+            "providers": [],
+            "advanced": {},
+        },
         "unavailableReason":
-            "Step RPC 只暴露模型 catalog；角色、预设、循环顺序、回退链、登录供应商与 webSearch 路由均无对应数据，故留空。",
+            "Step RPC 只暴露模型 catalog；角色、预设、循环顺序、回退链、登录供应商、webSearch 配置与各供应商的              本地/启用/凭据状态均无对应数据。providers[].local、enabled、auth 是占位而非实测，             auth.type 为 unknown 即表示本壳看不到凭据。",
     })
 }
 

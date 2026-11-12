@@ -55,12 +55,10 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
 const PROMPT_CAPABILITY: (&str, &str) = ("core.prompt", "stable");
 
 /// Facade names the adapter spells differently.
-/// Facade names the shell answers or reshapes, with the grade the data earns.
-///
-/// Separate from `ADAPTER_NATIVE` because these are not adapter operation ids:
-/// they are the renderer's spellings, and their grade describes what the shell
-/// can actually deliver rather than what the adapter implements.
-const FACADE_ONLY: &[(&str, &str)] = &[
+/// Facade names the shell answers or reshapes itself, with the grade the data
+/// earns. These are not adapter operation ids, so there is nothing to derive
+/// their grade from.
+const SHELL_ANSWERED: &[(&str, &str)] = &[
     // The CLI's `/usage` panel as ANSI text: no per-hour or per-model numbers.
     ("usage.get", "limited"),
     // The catalog only. Roles, presets, cycle order and fallback chains have no
@@ -152,10 +150,30 @@ pub fn capability_manifest() -> Value {
             "evidence": "step-studio-tauri",
         }));
     }
-    // The facade spellings, which resolve_operation renames. Claiming only the
-    // adapter's ids would leave the renderer's `can()` false for every name it
-    // actually uses.
-    for (id, grade) in FACADE_ONLY {
+    // Every facade spelling the renderer actually uses, with the grade of
+    // whatever it resolves to.
+    //
+    // Derived rather than listed: a second list of names is a second thing to
+    // keep in step with the tables, and the first version of this claimed only
+    // `ADAPTER_NATIVE` — which left `can()` false for `usage.get`, `models.get`,
+    // `capabilities.get`, `session.create` and `conversation.open`, five names
+    // this shell serves.
+    for (from, to) in RENAMED {
+        let grade = ADAPTER_NATIVE
+            .iter()
+            .find(|(id, _)| id == to)
+            .map(|(_, grade)| *grade)
+            .unwrap_or("limited");
+        capabilities.push(json!({
+            "id": from,
+            "grade": grade,
+            "version": 1,
+            "evidence": "step-studio-tauri",
+        }));
+    }
+    // The three the shell answers or reshapes itself, whose grade describes what
+    // the shell can deliver rather than what the adapter implements.
+    for (id, grade) in SHELL_ANSWERED {
         capabilities.push(json!({
             "id": id,
             "grade": grade,
@@ -471,7 +489,15 @@ fn pump(
                                 json!({ "result": manifest }),
                             )
                         });
-                        let _ = job.reply.send(Ok(ack));
+                        // The caller asked for the result, so it gets the
+                        // result. Replying with the ack here hands the renderer
+                        // a receipt where it expects a manifest, and
+                        // `usableCapabilityManifest` reads `.capabilities.length`
+                        // off it — a TypeError on the first render after load.
+                        let _ = job.reply.send(match job.want {
+                            Want::Ack => Ok(ack),
+                            Want::Result => Ok(manifest),
+                        });
                     }
                     Dispatch::Turn => {
                         stream.pending_turn = Some((job.request_id.clone(), job.command_name.clone()));
@@ -690,12 +716,26 @@ mod tests {
         for id in &declared {
             assert!(resolve_operation(id, &json!({})).is_some(), "{id} is declared but does not resolve");
         }
-        for id in FACADE_ONLY.iter().map(|(id, _)| *id) {
+        // Both tables of facade spellings, not just one: `session.create` and
+        // `conversation.open` resolve through RENAMED and were missing, so
+        // `can()` returned false for two names this shell serves.
+        for id in SHELL_ANSWERED.iter().map(|(id, _)| *id) {
             assert!(declared.contains(&id), "{id} resolves but is not declared");
         }
-        assert_eq!(declared.len(), ADAPTER_NATIVE.len() + 1 + FACADE_ONLY.len());
+        for (from, _) in RENAMED.iter() {
+            assert!(declared.contains(from), "{from} resolves but is not declared");
+        }
+        assert_eq!(
+            declared.len(),
+            ADAPTER_NATIVE.len() + 1 + RENAMED.len() + SHELL_ANSWERED.len()
+        );
         assert!(declared.contains(&"core.prompt"));
-        assert!(!declared.iter().any(|id| id.starts_with("conversation.")));
+        // `conversation.open` used to be excluded on the grounds that its target
+        // was declared instead — which left `can()` false for a name the
+        // renderer calls. The invariant is the other way round: every name the
+        // renderer can call must be declared under that name.
+        assert!(declared.contains(&"conversation.open"));
+        assert!(declared.contains(&"session.create"));
         // The hash is over the capability list, so it is stable across boots.
         assert_eq!(manifest["hash"], capability_manifest()["hash"]);
         assert_eq!(manifest["hash"].as_str().expect("hash is text").len(), 64);
