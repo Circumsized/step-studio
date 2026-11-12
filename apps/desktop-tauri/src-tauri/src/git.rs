@@ -9,6 +9,24 @@
 //! measurement.
 //!
 //! Read-only. Nothing here writes, stages, or commits.
+//!
+//! # Why the errors are strings
+//!
+//! Every operation returns `Result<String, String>`, which a typed error enum
+//! would improve on the page. It is a string here on purpose, and the reason is
+//! the first question of an error strategy — *who handles this, and how do they
+//! recover?* The answer is: exactly one consumer, the renderer, which puts the
+//! message in front of a human. There is no retry policy, no fallback, no
+//! alerting, and no caller that branches on the kind. So the structure a typed
+//! enum would add has no reader, and the ~60 lines it costs would be spent
+//! buying nothing.
+//!
+//! What the strings do carry is the distinction that matters to that one
+//! consumer, and it is carried in the text: a refusal (`refusing the path X`)
+//! is a caller bug or an attack, `git is not installed` is the environment, and
+//! anything else is git's own stderr. If a second consumer ever appears — a
+//! retry loop, a diagnostic panel that groups failures — that is the moment to
+//! replace this with an enum, and not before.
 
 use std::path::Path;
 use std::process::Command;
@@ -306,6 +324,11 @@ pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Va
         return unavailable_log(workspace_id, "git log failed");
     }
     let text = String::from_utf8_lossy(&output.stdout);
+    // Which of these commits the upstream does not have. One `rev-list` call
+    // gives the set exactly; without it every commit would have to be labelled
+    // `common`, which is a claim rather than a fact — this repository is 100+
+    // commits ahead of its upstream and none of them are common.
+    let outgoing = outgoing_oids(&root);
 
     let mut commits: Vec<Value> = Vec::new();
     for record in text.split('\u{1e}') {
@@ -326,6 +349,18 @@ pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Va
         let author = fields.next().unwrap_or("");
         let date = fields.next().unwrap_or("");
         let refs = parse_refs(fields.next().unwrap_or(""));
+        // The newest commit is the head; the rest are outgoing if the upstream
+        // lacks them and common if it has them. `incoming` is never produced
+        // here: this walk starts at HEAD, so a commit only the upstream has is
+        // not in it at all — and the contract's `incoming` would be a claim
+        // about a commit this page does not contain.
+        let relation = if commits.is_empty() {
+            "head"
+        } else if outgoing.contains(oid) {
+            "outgoing"
+        } else {
+            "common"
+        };
         commits.push(json!({
             "oid": oid,
             "parents": parents,
@@ -333,7 +368,7 @@ pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Va
             "authorName": author,
             "authorDate": date,
             "refs": refs,
-            "relation": "common",
+            "relation": relation,
         }));
         if commits.len() as u64 >= count - 1 {
             break;
@@ -351,6 +386,27 @@ pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Va
         "ahead": 0,
         "behind": 0,
     })
+}
+
+/// The commits HEAD has that its upstream does not.
+///
+/// Empty when there is no upstream, which makes everything `common` — and that is
+/// the truth in that case, not a default: with nothing to compare against there
+/// is no such thing as outgoing.
+fn outgoing_oids(root: &Path) -> std::collections::HashSet<String> {
+    let Ok(output) = Command::new("git")
+        .arg("rev-list")
+        .arg("HEAD")
+        .arg("^@{upstream}")
+        .current_dir(root)
+        .output()
+    else {
+        return std::collections::HashSet::new();
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_string)
+        .collect()
 }
 
 fn unavailable_log(workspace_id: &str, reason: &str) -> Value {
@@ -429,6 +485,36 @@ mod log_tests {
             );
         }
         assert!(first.get("parents").and_then(Value::as_array).is_some(), "parents are a list");
+    }
+
+    #[test]
+    fn the_relation_is_computed_rather_than_asserted() {
+        // This repository is many commits ahead of its upstream, so the newest
+        // commits must be `outgoing` — a constant `common` would be a claim the
+        // data contradicts.
+        let model = log_list("ws-1", Some(5), None);
+        let commits = model.get("commits").and_then(Value::as_array).expect("commits");
+        let first = &commits[0];
+        assert_eq!(
+            first.get("relation").and_then(Value::as_str),
+            Some("head"),
+            "the newest commit is the head"
+        );
+        let relations: Vec<&str> = commits
+            .iter()
+            .skip(1)
+            .filter_map(|commit| commit.get("relation").and_then(Value::as_str))
+            .collect();
+        assert!(
+            relations.iter().any(|relation| *relation == "outgoing" || *relation == "common"),
+            "each relation is one of the two the data supports: {relations:?}"
+        );
+        // And no commit is labelled `incoming`: this walk starts at HEAD, so a
+        // commit only the upstream has is not in the page at all.
+        assert!(
+            !relations.contains(&"incoming"),
+            "incoming would be a claim about a commit this page does not contain"
+        );
     }
 
     #[test]
