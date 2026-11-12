@@ -570,10 +570,9 @@ browser observation、service definitions。**这次只做壳自己那部分**�
   在回合中不刷新。选这个方向是因为反方向（snapshot 里 stateVersion 比 bootstrap 旧）会被
   `reduceSnapshot` 当陈旧丢弃，需要额外对齐。升级路径：回合结束时读一次 `session.state` 再发
   `snapshot` 事件。
-- **GTK 菜单栏（File / Edit / View / Help）还在**。Linux 上 Tauri 默认带上，omp-studio 没有这一条，
-  属 M1.3 窗口铬的范围。
-- **界面文案仍是 OMP**。侧栏 logo 与状态写的是 "OMP Studio" / "OMP Ready"，窗口标题才是
-  "Step Studio"。用户要求除 omp 改 step 之外基本复刻，这属于待办的改名项，不属 M1.2b 功能范围。
+- ~~GTK 菜单栏（File / Edit / View / Help）还在~~ **此条判断错误，已纠正**：那条栏不是原生菜单，
+  是 renderer 自己画的 `TitleMenu`（`App.tsx:8701-8732`，应用自定义标题栏的一部分）。
+  Tauri 与 tao 都不建 GTK 菜单栏（已在两者源码里查证），所以它属于要复刻的 UI，不该删。
 
 ### 续接是怎么接上的
 
