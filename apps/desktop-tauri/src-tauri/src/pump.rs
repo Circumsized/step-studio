@@ -72,6 +72,9 @@ const SHELL_ANSWERED: &[(&str, &str)] = &[
     // The write side. `limited` because three of the contract's ~30 operation
     // kinds are wired; the rest are refused with a message that says so.
     ("git.execute", "limited"),
+    // The workspace's files, read from disk by the shell. The adapter has no
+    // filesystem capability to offer.
+    ("workspace.fileTree", "limited"),
     // `limited` because the history page is read but not written: commits are
     // still made elsewhere.
     ("git.log.list", "limited"),
@@ -134,6 +137,7 @@ pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)>
         || name == "git.branches.list"
         || name == "git.diff.get"
         || name == "git.execute"
+        || name == "workspace.fileTree"
     {
         // The workspace the query named, and the page the caller asked for, so
         // the answer can be attributed and paged.
@@ -543,6 +547,14 @@ fn pump(
                                 .cloned()
                                 .unwrap_or(Value::Null);
                             crate::git::execute(&operation)
+                        } else if job.command_name == "workspace.fileTree" {
+                            let workspace_id = job
+                                .operation
+                                .get("workspaceId")
+                                .and_then(Value::as_str)
+                                .unwrap_or("");
+                            let path = job.operation.get("path").and_then(Value::as_str);
+                            crate::git::file_tree(workspace_id, path)
                         } else if job.command_name == "git.diff.get" {
                             let workspace_id = job
                                 .operation

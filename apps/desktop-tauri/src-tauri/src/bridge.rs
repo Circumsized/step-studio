@@ -780,6 +780,7 @@ fn shape_query_result(name: &str, payload: Value) -> Value {
         || name == "git.log.list"
         || name == "git.branches.list"
         || name == "git.diff.get"
+        || name == "workspace.fileTree"
     {
         // Already in the facade's shape: the shell builds `GitRepositoryReadModel`
         // directly, so there is nothing to translate. The arm exists so a reader

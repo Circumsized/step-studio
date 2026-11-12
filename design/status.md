@@ -490,6 +490,14 @@ force push 只以 `--force-with-lease` 发出，**从不发裸 `--force`**——
 
 测试：18 个 git 单测，含对真仓库的 stage→unstage 往返；scratch 文件测完即清（工作树干净时没有现成 diff 可测，而改已提交文件再还原会在测试失败时留下脏树）。
 
+### M3.3 文件树：`workspace.fileTree` 落地（2026-11-12 完成）
+
+渲染层按目录懒展开（`{ path: "src" }`），所以壳一次只列一层——首渲染就全走一遍会把 `node_modules` 走爆。跳过的正是让文件树变没用的那几个：`.git`/`node_modules`/`target`/`dist`/`.next`/`__pycache__`。目录优先、组内字母序。
+
+抓到一个真 bug：越界检查写在 `trim_matches('/')` **之后**，于是 `/etc` 被 trim 成 `etc` 就看起来是相对路径、检查通过。改成先查原始值。
+
+`workspace.open`/`pick`/`projects.list` 仍属 Host workspace registry，未接——那是 M2.3 会话目录的同一块。
+
 ### M3.4 PTY 满速最长帧（2026-11-12 完成）
 
 §14.6 的 PTY 门禁项。用壳同款的 `portable-pty` 驱动，10 MB 持续输出，报最长帧而非均值——「均值快但每秒卡 200 ms」的终端用户是感觉得到的。

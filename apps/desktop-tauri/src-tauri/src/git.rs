@@ -1543,3 +1543,153 @@ mod write_tests {
         let _ = Command::new("git").arg("rm").arg("--cached").arg(&name).current_dir(&root).output();
     }
 }
+
+/// One directory of the workspace, as the file tree reads it.
+///
+/// The renderer asks per directory (`{ path: "src" }`) rather than for the whole
+/// tree, and expands lazily — so this lists one level and the caller asks again
+/// when a directory is opened. Listing everything would mean walking `node_modules`
+/// on the first render.
+///
+/// Ignored paths are the ones that make a file tree useless: `node_modules`,
+/// `target`, `.git`. They are skipped rather than hidden, because a hidden entry
+/// still costs a stat and a hidden directory still costs a walk into it.
+pub fn file_tree(workspace_id: &str, path: Option<&str>) -> Value {
+    let Some(root) = repo_root() else {
+        return json!({ "workspaceId": workspace_id, "nodes": [] });
+    };
+    // Checked before the slashes are trimmed: trimming `/etc` to `etc` would
+    // make it look relative and the check would pass.
+    let raw = path.unwrap_or("");
+    let relative = raw.trim_matches('/');
+    // A path that escapes the repository is refused rather than listed: the
+    // tree is a view of the workspace, not of the filesystem.
+    if raw.starts_with('/') || Path::new(raw).is_absolute() || relative.split('/').any(|part| part == "..") {
+        return json!({
+            "workspaceId": workspace_id,
+            "nodes": [],
+            "unavailableReason": format!("refusing the path {relative}"),
+        });
+    }
+    let directory = if relative.is_empty() {
+        root.clone()
+    } else {
+        root.join(relative)
+    };
+    let Ok(entries) = std::fs::read_dir(&directory) else {
+        return json!({
+            "workspaceId": workspace_id,
+            "nodes": [],
+            "unavailableReason": format!("cannot read {relative}"),
+        });
+    };
+
+    let mut nodes: Vec<Value> = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if is_ignored(&name) {
+            continue;
+        }
+        let Ok(file_type) = entry.file_type() else { continue };
+        let node_path = if relative.is_empty() {
+            name.clone()
+        } else {
+            format!("{relative}/{name}")
+        };
+        if file_type.is_dir() {
+            nodes.push(json!({ "type": "dir", "name": name, "path": node_path }));
+        } else if file_type.is_file() {
+            nodes.push(json!({ "type": "file", "name": name, "path": node_path }));
+        }
+        // Anything else — a symlink to nowhere, a socket — is not a node the
+        // tree can show.
+    }
+    // Directories first, then alphabetical within each group: the order a file
+    // tree is read in.
+    nodes.sort_by(|a, b| {
+        let a_dir = a.get("type").and_then(Value::as_str) == Some("dir");
+        let b_dir = b.get("type").and_then(Value::as_str) == Some("dir");
+        b_dir.cmp(&a_dir).then_with(|| {
+            a.get("name")
+                .and_then(Value::as_str)
+                .cmp(&b.get("name").and_then(Value::as_str))
+        })
+    });
+    json!({ "workspaceId": workspace_id, "nodes": nodes })
+}
+
+/// Entries that make a file tree useless. `.git` is not noise, it is the one
+/// directory a user never opens and the one that costs the most to list.
+fn is_ignored(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | "node_modules" | "target" | "dist" | ".next" | "__pycache__"
+    )
+}
+
+#[cfg(test)]
+mod tree_tests {
+    use super::*;
+
+    #[test]
+    fn the_real_repository_lists_its_root() {
+        let model = file_tree("ws-1", None);
+        let nodes = model.get("nodes").and_then(Value::as_array).expect("nodes");
+        assert!(!nodes.is_empty(), "this workspace has a root");
+        // Directories come first, which is the order a tree is read in.
+        let first_file = nodes
+            .iter()
+            .position(|node| node.get("type").and_then(Value::as_str) == Some("file"));
+        let last_dir = nodes
+            .iter()
+            .rposition(|node| node.get("type").and_then(Value::as_str) == Some("dir"));
+        if let (Some(file_index), Some(dir_index)) = (first_file, last_dir) {
+            assert!(dir_index < file_index, "directories sort before files");
+        }
+        // The directories that make the tree useless are not listed.
+        for ignored in ["node_modules", "target", ".git"] {
+            assert!(
+                !nodes.iter().any(|node| node.get("name").and_then(Value::as_str) == Some(ignored)),
+                "{ignored} is skipped"
+            );
+        }
+    }
+
+    #[test]
+    fn a_subdirectory_lists_only_that_directory() {
+        let model = file_tree("ws-1", Some("crates"));
+        let nodes = model.get("nodes").and_then(Value::as_array).expect("nodes");
+        assert!(!nodes.is_empty(), "crates exists in this workspace");
+        for node in nodes {
+            let path = node.get("path").and_then(Value::as_str).unwrap_or("");
+            assert!(
+                path.starts_with("crates/"),
+                "paths are relative to the workspace, not the filesystem: {path}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_path_that_escapes_the_workspace_is_refused() {
+        for bad in ["../..", "/etc"] {
+            let model = file_tree("ws-1", Some(bad));
+            let reason = model.get("unavailableReason").and_then(Value::as_str).unwrap_or("");
+            assert!(reason.contains("refusing"), "{bad} must be refused: {reason}");
+            assert_eq!(
+                model.get("nodes").and_then(Value::as_array).map(Vec::len),
+                Some(0),
+                "a refused path lists nothing"
+            );
+        }
+    }
+
+    #[test]
+    fn ignored_entries_are_the_ones_that_make_a_tree_useless() {
+        for name in [".git", "node_modules", "target", "dist", "__pycache__"] {
+            assert!(is_ignored(name), "{name} must be skipped");
+        }
+        for name in ["src", "main.rs", ".github"] {
+            assert!(!is_ignored(name), "{name} must be listed");
+        }
+    }
+}
