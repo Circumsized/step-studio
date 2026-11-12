@@ -614,7 +614,7 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 
 | 表面 | 门禁段（可归因） | 阈值 | 单列实测段（不设门禁） |
 |---|---|---|---|
-| daemon | connect 就绪 < 200 ms | 未知，M2 回填 | 无 |
+| daemon | connect 就绪 < 200 ms | **实测 53 ms**（p50，release，n=10；含 daemon 拉起适配器并完成握手。纯 daemon 自身段——进程起来到端点接受连接——**实测 2-3 ms**） | 无 |
 | egui 壳 | 进程启动→窗口出现 < 0.5 s | 未知（3.4 s 基线中此段未分离，需重测） | 窗口→首快照 e2e：基线 3.4 s，大头是 step 启动（不承诺） |
 | Tauri 壳 | 窗口出现 < 0.5 s | 未知 | WebView2 初始化 2-3 s 参考口径（tauri#10822），同机实测前不判决 |
 | Tauri 壳 | webview 就绪→可交互（renderer 侧）< 1.0 s | 估算（延迟初始化 + 骨架屏后） | e2e 冷启动到可交互：记录值，按段分解汇报 |
