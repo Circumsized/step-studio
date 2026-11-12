@@ -452,6 +452,14 @@ Node 进程里驱动：
 
 这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
 
+### M2.4 删除连锁：隐藏消费者实证，本轮不执行（2026-11-12）
+
+规划阶段预警的 R5 已实证。`packages/runtime-stepcode/test/host-integration.test.ts:14-22` 与 `real-cli.test.ts:19` 经**相对路径** import `../../studio-host/dist/src/bridge-client.js`，两个测试**都在核心门禁名单**（`scripts/core-suites.mjs:12,15`）且当前通过。它们驱动的是 **TS 适配器回退路径**：没有 Rust 二进制的机器靠它跑。
+
+`scripts/architecture.test.mjs` 只读 `package.json` 的 dependencies，**看不见这条相对路径**——所以删 `bridge-client.ts` 会让门禁红，而红的地方不在被删的模块上，也没有任何工具会指认它。
+
+因此本轮不删。2507 行（`omp-usage-adapter.ts` 448 + `session-catalog.ts` 444 + `session-archive-reader.ts` 1615）的删除必须与下面这件同时发生：关掉回退路径，或把这两个测试改指 Rust 适配器。回退路径的去留属于 M5.6「Electron 删除」，在那之前删除连锁不动。
+
 ### M2.6：三路对抗评审（2026-11-12 完成，30 条 finding，24 条已修）
 
 三路并行，各自读码不构建：并发/死锁、信任边界、数据诚实。**5 条是本 session 自己引入的**，说明 C1/C2/C3 那三个「接近零成本」的接面并不零成本。
