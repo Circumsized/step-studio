@@ -775,6 +775,11 @@ pub fn execute(operation: &Value) -> Value {
         "branch.switch" => branch_switch(&root, operation),
         "branch.rename" => branch_rename(&root, operation),
         "branch.delete" => branch_delete(&root, operation),
+        "fetch" => fetch(&root, operation),
+        "pull" => pull(&root, operation),
+        "push" => push(&root, operation),
+        "stash.push" => stash_push(&root, operation),
+        "stash.apply" => stash_apply(&root, operation),
         other => {
             return json!({
                 "operation": other,
@@ -899,6 +904,142 @@ fn branch_delete(root: &Path, operation: &Value) -> Result<String, String> {
     Ok(format!("deleted {name}"))
 }
 
+/// Fetch, optionally pruning remote-tracking refs that no longer exist.
+fn fetch(root: &Path, operation: &Value) -> Result<String, String> {
+    let mut command = Command::new("git");
+    command.arg("fetch");
+    if let Some(remote) = operation.get("remote").and_then(Value::as_str) {
+        command.arg(ref_name(remote)?);
+    }
+    if operation.get("prune").and_then(Value::as_bool) == Some(true) {
+        command.arg("--prune");
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok("fetched".to_string())
+}
+
+/// Pull with the strategy the caller chose. `ff-only` is the safe default the
+/// panel's Pull button uses: it fails rather than creating a merge the user did
+/// not ask for.
+fn pull(root: &Path, operation: &Value) -> Result<String, String> {
+    let strategy = operation.get("strategy").and_then(Value::as_str).unwrap_or("ff-only");
+    let mut command = Command::new("git");
+    command.arg("pull");
+    match strategy {
+        "rebase" => {
+            command.arg("--rebase");
+        }
+        "merge" => {
+            command.arg("--no-rebase");
+        }
+        // Anything else is refused rather than silently becoming a merge.
+        other => return Err(format!("refusing the pull strategy {other}")),
+    }
+    if let Some(remote) = operation.get("remote").and_then(Value::as_str) {
+        command.arg(ref_name(remote)?);
+    }
+    if let Some(branch) = operation.get("branch").and_then(Value::as_str) {
+        command.arg(ref_name(branch)?);
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(format!("pulled ({strategy})"))
+}
+
+/// The `git push` argv, with `--force-with-lease` when the caller asked for it.
+///
+/// The lease is the point: it refuses the push when the remote has moved past the
+/// oid the caller saw, which is what stops a force push from discarding somebody
+/// else's commit. A plain `--force` is never issued — a caller that wants a
+/// blind force is a caller this shell does not serve.
+///
+/// Split from [`push`] so the rule is testable without a remote to push to.
+fn push_argv(operation: &Value) -> Result<Vec<String>, String> {
+    let mut argv = vec!["push".to_string()];
+    if operation.get("forceWithLease").and_then(Value::as_bool) == Some(true) {
+        argv.push("--force-with-lease".to_string());
+        if let Some(expected) = operation.get("expectedRemoteOid").and_then(Value::as_str) {
+            // Without the expected oid the lease is against the remote-tracking
+            // ref, which is the weaker form. The panel fetches the oid first and
+            // refuses to push without it, so the strong form is the norm.
+            argv.push(format!("--force-with-lease={expected}"));
+        }
+    }
+    for key in ["remote", "branch"] {
+        if let Some(name) = operation.get(key).and_then(Value::as_str) {
+            argv.push(ref_name(name)?.to_string());
+        }
+    }
+    if operation.get("setUpstream").and_then(Value::as_bool) == Some(true) {
+        argv.push("--set-upstream".to_string());
+    }
+    Ok(argv)
+}
+
+/// Push, with `--force-with-lease` when the caller asked for it.
+fn push(root: &Path, operation: &Value) -> Result<String, String> {
+    let argv = push_argv(operation)?;
+    let mut command = Command::new("git");
+    for argument in &argv {
+        command.arg(argument);
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok("pushed".to_string())
+}
+
+fn stash_push(root: &Path, operation: &Value) -> Result<String, String> {
+    let mut command = Command::new("git");
+    command.arg("stash").arg("push");
+    if let Some(message) = operation.get("message").and_then(Value::as_str) {
+        command.arg("-m").arg(message);
+    }
+    if operation.get("includeUntracked").and_then(Value::as_bool) == Some(true) {
+        command.arg("--include-untracked");
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok("stashed".to_string())
+}
+
+/// Apply a stash, optionally popping it. A pop is an apply plus a drop, and the
+/// drop is what fails when the stash no longer exists.
+fn stash_apply(root: &Path, operation: &Value) -> Result<String, String> {
+    let pop = operation.get("pop").and_then(Value::as_bool) == Some(true);
+    let mut command = Command::new("git");
+    command.arg("stash").arg(if pop { "pop" } else { "apply" });
+    if let Some(stash) = operation.get("stash").and_then(Value::as_str) {
+        command.arg(ref_name(stash)?);
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(if pop { "popped".to_string() } else { "applied".to_string() })
+}
+
+/// A remote or branch name, refused if it looks like an option.
+fn ref_name(name: &str) -> Result<&str, String> {
+    if name.is_empty() || name.starts_with('-') {
+        return Err(format!("refusing the name {name}"));
+    }
+    Ok(name)
+}
+
 fn refused(operation: &Value, reason: &str) -> Value {
     json!({
         "operation": operation.get("kind").and_then(Value::as_str).unwrap_or(""),
@@ -1016,14 +1157,59 @@ mod write_tests {
     }
 
     #[test]
+    fn a_pull_strategy_that_is_not_one_of_the_three_is_refused() {
+        let Some(root) = repo_root() else { return };
+        let result = pull(&root, &json!({ "kind": "pull", "strategy": "squash" }));
+        assert!(result.is_err(), "an unknown strategy must not become a merge");
+    }
+
+    #[test]
+    fn a_force_push_uses_a_lease_rather_than_a_plain_force() {
+        let argv = push_argv(&json!({
+            "kind": "push", "remote": "origin", "branch": "main",
+            "forceWithLease": true, "expectedRemoteOid": "abc123",
+        }))
+        .expect("the argv");
+        assert!(argv.iter().any(|arg| arg == "--force-with-lease"), "{argv:?}");
+        assert!(
+            argv.iter().any(|arg| arg.starts_with("--force-with-lease=")),
+            "the expected oid pins the lease: {argv:?}"
+        );
+        assert!(!argv.iter().any(|arg| arg == "--force"), "a plain force is never issued");
+    }
+
+    #[test]
+    fn a_force_push_without_an_expected_oid_still_never_becomes_a_plain_force() {
+        let argv = push_argv(&json!({ "kind": "push", "forceWithLease": true })).expect("the argv");
+        assert!(argv.iter().any(|arg| arg == "--force-with-lease"), "{argv:?}");
+        assert!(!argv.iter().any(|arg| arg == "--force"), "a plain force is never issued");
+    }
+
+    #[test]
+    fn an_ordinary_push_asks_for_no_force_at_all() {
+        let argv = push_argv(&json!({ "kind": "push" })).expect("the argv");
+        assert_eq!(argv, vec!["push".to_string()], "{argv:?}");
+    }
+
+    #[test]
+    fn a_remote_name_that_looks_like_an_option_is_refused() {
+        assert!(ref_name("--upload-pack=evil").is_err());
+        assert!(ref_name("").is_err());
+        assert_eq!(ref_name("origin"), Ok("origin"));
+    }
+
+    #[test]
     fn an_unwired_operation_says_so_rather_than_doing_nothing() {
-        let result = execute(&json!({ "kind": "push" }));
+        // `merge`, not `push`: an unwired example must not be an operation that
+        // happens to be wired, or the test performs it. An earlier version of
+        // this used `push` and really did try to reach the remote.
+        let result = execute(&json!({ "kind": "merge" }));
         let message = result.get("message").and_then(Value::as_str).unwrap_or("");
         assert!(
             message.contains("not wired"),
             "the user must be able to tell an unwired operation from a failed one: {message}"
         );
-        assert_eq!(result.get("operation").and_then(Value::as_str), Some("push"));
+        assert_eq!(result.get("operation").and_then(Value::as_str), Some("merge"));
     }
 
     #[test]

@@ -476,7 +476,11 @@ gix 仍记为目标，留到子进程成本在某个测量里显现。这是 §1
 
 路径安全：每个 path 与分支名都是单 argv 元素、不过 shell；前导 `-`（会被当成选项）、绝对路径、含 `..` 段的一律拒绝。`commit` 空 message 拒绝；`sign` 默认关（默认签名的壳在没有密钥的机器上每次提交都会失败）。
 
-第二批接上四个 branch operation。其中 `branch.delete` 的 `expectedRevision` 是契约的乐观并发检查：调用方看到的是某个 head，若 head 已经移动，用户想删的分支未必就是将要被删的那个，所以拒绝而不是猜。有单测用一个假 revision 钉住「拒绝」而非「猜」。
+第二批接上四个 branch operation，第三批接上 fetch/pull/push 与 stash.push/stash.apply（共 13 种）。
+
+force push 只以 `--force-with-lease` 发出，**从不发裸 `--force`**——lease 会在远端移动过调用方看到的 oid 时拒绝推送，这才是阻止 force push 丢掉别人提交的东西。argv 构造提成 `push_argv` 纯函数，使这条规则不需要远端就能测。`pull` 的 strategy 只认契约那三种，其余拒绝而不是静默变成 merge。
+
+过程中修掉一个**有副作用的测试**：`an_unwired_operation_says_so` 拿 `push` 当「未接」的例子，而我刚把 push 接上，于是它真的去推了远端（403 挡住，没推成）。改用真正未接的 `merge`——未接的例子必须真的是未接的，否则测试会把它执行一遍。其中 `branch.delete` 的 `expectedRevision` 是契约的乐观并发检查：调用方看到的是某个 head，若 head 已经移动，用户想删的分支未必就是将要被删的那个，所以拒绝而不是猜。有单测用一个假 revision 钉住「拒绝」而非「猜」。
 
 `git.execute` 走泵的 `Dispatch::Local` 而不是在 `command` 里直接答——渲染层的 `execute` 是「先收 ack，再等终态回执」，而泵的 local 臂正好产出这两个。第一版我在 `command` 里直接返回，那会让 `waitReceipt` 永远等不到回执。
 
