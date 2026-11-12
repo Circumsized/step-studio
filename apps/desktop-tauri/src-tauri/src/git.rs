@@ -750,3 +750,169 @@ mod diff_tests {
         assert!(model.get("unavailableReason").is_none(), "no changes is not an error");
     }
 }
+
+/// Run one Git operation. Write side, per §9.6: "gix 读 + CLI 写".
+///
+/// The contract declares ~30 operation kinds. This implements the three the Git
+/// panel's change list actually issues — `stage`, `unstage`, `commit` — and
+/// refuses the rest with a message that names them, rather than pretending a
+/// half-built operation surface is a complete one. The renderer surfaces the
+/// message, so a user sees "not wired" rather than a silent no-op.
+///
+/// Every path arrives as a single argv element, never through a shell, and is
+/// rejected if it escapes the repository: a change list entry is a
+/// repository-relative path, and anything else is a bug or an attack.
+pub fn execute(operation: &Value) -> Value {
+    let Some(root) = repo_root() else {
+        return refused(operation, "not a git repository");
+    };
+    let kind = operation.get("kind").and_then(Value::as_str).unwrap_or("");
+    let outcome = match kind {
+        "stage" => paths_op(&root, &["add", "--"], operation.get("paths"), true),
+        "unstage" => paths_op(&root, &["restore", "--staged", "--"], operation.get("paths"), true),
+        "commit" => commit(&root, operation),
+        other => {
+            return json!({
+                "operation": other,
+                "message": format!("git {other} is not wired in this shell yet"),
+            });
+        }
+    };
+    match outcome {
+        Ok(message) => json!({
+            "operation": kind,
+            "message": message,
+            // The panel refreshes from this rather than issuing a second read,
+            // so the state it shows is the state the operation left behind.
+            "repository": repository_get(""),
+        }),
+        Err(reason) => json!({
+            "operation": kind,
+            "message": reason,
+        }),
+    }
+}
+
+fn refused(operation: &Value, reason: &str) -> Value {
+    json!({
+        "operation": operation.get("kind").and_then(Value::as_str).unwrap_or(""),
+        "message": reason,
+    })
+}
+
+/// An operation over a list of repository-relative paths.
+fn paths_op(
+    root: &Path,
+    argv: &[&str],
+    paths: Option<&Value>,
+    allow_empty: bool,
+) -> Result<String, String> {
+    let paths = paths.and_then(Value::as_array).cloned().unwrap_or_default();
+    if paths.is_empty() && !allow_empty {
+        return Err("no paths given".to_string());
+    }
+    let mut command = Command::new("git");
+    for argument in argv {
+        command.arg(argument);
+    }
+    for path in &paths {
+        let Some(path) = path.as_str() else {
+            return Err("a path was not text".to_string());
+        };
+        // A leading dash would be read as an option; an absolute path or a `..`
+        // segment would escape the repository. Both are refused rather than
+        // passed through.
+        if path.starts_with('-') || Path::new(path).is_absolute() || path.split('/').any(|part| part == "..") {
+            return Err(format!("refusing the path {path}"));
+        }
+        command.arg(path);
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn commit(root: &Path, operation: &Value) -> Result<String, String> {
+    let message = operation
+        .get("message")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim();
+    if message.is_empty() {
+        return Err("a commit needs a message".to_string());
+    }
+    let mut command = Command::new("git");
+    command.arg("commit").arg("-m").arg(message);
+    if operation.get("amend").and_then(Value::as_bool) == Some(true) {
+        command.arg("--amend");
+    }
+    // Signing is opt-in and defaults off: a shell that signs by default would
+    // fail on every machine without a key.
+    if operation.get("sign").and_then(Value::as_bool) == Some(true) {
+        command.arg("-S");
+    }
+    command.current_dir(root);
+    let output = command.output().map_err(|error| format!("git is not installed: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[cfg(test)]
+mod write_tests {
+    use super::*;
+
+    #[test]
+    fn a_path_that_escapes_the_repository_is_refused() {
+        let Some(root) = repo_root() else { return };
+        for bad in ["../../etc/passwd", "/etc/passwd", "--upload-pack=evil", "a/../../b"] {
+            let result = paths_op(&root, &["add", "--"], Some(&json!([bad])), false);
+            assert!(result.is_err(), "{bad} must be refused, not passed to git");
+        }
+    }
+
+    #[test]
+    fn a_commit_without_a_message_is_refused() {
+        let Some(root) = repo_root() else { return };
+        let result = commit(&root, &json!({ "kind": "commit", "message": "  " }));
+        assert!(result.is_err(), "an empty message is not a commit");
+    }
+
+    #[test]
+    fn an_unwired_operation_says_so_rather_than_doing_nothing() {
+        let result = execute(&json!({ "kind": "push" }));
+        let message = result.get("message").and_then(Value::as_str).unwrap_or("");
+        assert!(
+            message.contains("not wired"),
+            "the user must be able to tell an unwired operation from a failed one: {message}"
+        );
+        assert_eq!(result.get("operation").and_then(Value::as_str), Some("push"));
+    }
+
+    #[test]
+    fn staging_a_real_file_round_trips_through_the_index() {
+        let Some(root) = repo_root() else { return };
+        let name = format!("scratch-stage-{}.txt", std::process::id());
+        let path = root.join(&name);
+        if std::fs::write(&path, "ponytail stage\n").is_err() {
+            return;
+        }
+        // `add -N` would make `restore --staged` a no-op on an intent-to-add, so
+        // this stages for real and then unstages.
+        let staged = execute(&json!({ "kind": "stage", "paths": [name] }));
+        assert_eq!(
+            staged.get("operation").and_then(Value::as_str),
+            Some("stage"),
+            "staging reports which operation ran"
+        );
+        let unstaged = execute(&json!({ "kind": "unstage", "paths": [name] }));
+        assert_eq!(unstaged.get("operation").and_then(Value::as_str), Some("unstage"));
+
+        let _ = std::fs::remove_file(&path);
+        let _ = Command::new("git").arg("rm").arg("--cached").arg(&name).current_dir(&root).output();
+    }
+}

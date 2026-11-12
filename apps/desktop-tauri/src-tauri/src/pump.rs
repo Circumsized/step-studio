@@ -69,6 +69,9 @@ const SHELL_ANSWERED: &[(&str, &str)] = &[
     // Facts about the workspace, not about the runtime: the shell reads them from
     // the `git` CLI. The adapter has no git capability to offer.
     ("git.repository.get", "limited"),
+    // The write side. `limited` because three of the contract's ~30 operation
+    // kinds are wired; the rest are refused with a message that says so.
+    ("git.execute", "limited"),
     // `limited` because the history page is read but not written: commits are
     // still made elsewhere.
     ("git.log.list", "limited"),
@@ -130,6 +133,7 @@ pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)>
         || name == "git.log.list"
         || name == "git.branches.list"
         || name == "git.diff.get"
+        || name == "git.execute"
     {
         // The workspace the query named, and the page the caller asked for, so
         // the answer can be attributed and paged.
@@ -532,6 +536,13 @@ fn pump(
                                 .and_then(Value::as_str)
                                 .unwrap_or("");
                             crate::git::branches_list(workspace_id)
+                        } else if job.command_name == "git.execute" {
+                            let operation = job
+                                .operation
+                                .get("operation")
+                                .cloned()
+                                .unwrap_or(Value::Null);
+                            crate::git::execute(&operation)
                         } else if job.command_name == "git.diff.get" {
                             let workspace_id = job
                                 .operation

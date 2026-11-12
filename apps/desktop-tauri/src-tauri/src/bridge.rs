@@ -1044,17 +1044,21 @@ mod usage_tests {
 pub fn command(
     state: tauri::State<'_, SessionState>,
     request: serde_json::Value,
-) -> Result<serde_json::Value, IpcError> {
+) -> Result<Value, IpcError> {
     let name = request
         .get("commandName")
         .and_then(Value::as_str)
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .to_string();
     let input = request.get("input").cloned().unwrap_or(Value::Null);
     let request_id = request
         .get("requestId")
         .and_then(Value::as_str)
-        .unwrap_or_default();
-    round_trip(&state, name, input, request_id, pump::Want::Ack)
+        .map(str::to_string);
+    // `git.execute` is answered by the pump like every other command, because the
+    // renderer waits for a receipt after the ack — and the pump's local arm is
+    // what produces both.
+    round_trip(&state, &name, input, &request_id.unwrap_or_default(), pump::Want::Result)
 }
 
 #[tauri::command]
