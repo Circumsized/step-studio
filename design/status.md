@@ -452,6 +452,16 @@ Node 进程里驱动：
 
 这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
 
+### M3.3 第一刀：`git.repository.get` 落地（2026-11-12）
+
+Git 面板 12 个 query 里的第一个，也是渲染层真正的入口（`GitStatusPanel.tsx:58`）。由**壳本地作答**——它是工作区的事实，不是 runtime 的事实，适配器没有 git 能力可提供。
+
+§9.6 的目标是「gix 读 + CLI 写」。第一刀用 CLI 读：`git status --porcelain=v2 --branch` **一次调用即覆盖 `GitRepositoryReadModel` 的必填项**（分支、upstream、ahead/behind、每个文件的 index/worktree 双侧状态），外加一次 `git stash list` 计数。当天可对真仓库验证——6 个单测里有一条直接打本仓库，断言 branch/headOid/stashCount 都拿得到。
+
+gix 仍记为目标，留到子进程成本在某个测量里显现。这是 §10.3 的逐个案通道，本案的实测依据就是「一次 porcelain 覆盖必填项」。
+
+**checklist 3.1 部分翻转**：变更列表已到桥；diff 视图、暂存与提交仍未接。3.2 分支列表、3.3 提交历史仍未接。
+
 ### M3.2 / M3.3 起点实证（2026-11-12）
 
 **M3.2 进程树**：契约里没有对应 query，九张基准图里也没有它，方案自己写「无像素级义务」。所以它不是接一个已有面，而是新设计一个面。唯一已确认的真实数据源是 **daemon 自己的进程树**（daemon → 适配器 → step），OS 事实而非 RPC 事实；「用户机器上所有相关进程」没有数据源（Step RPC 不暴露 subagent 列表，`hub.png` 早已记为数据源缺失）。定案前不动 UI。

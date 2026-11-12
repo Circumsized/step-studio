@@ -776,6 +776,13 @@ fn shape_query_result(name: &str, payload: Value) -> Value {
     if name == "models.get" {
         return model_config_read_model(&payload);
     }
+    if name == "git.repository.get" {
+        // Already in the facade's shape: the shell builds `GitRepositoryReadModel`
+        // directly, so there is nothing to translate. The arm exists so a reader
+        // looking for the git reshape finds it, rather than concluding the
+        // payload was passed through by accident.
+        return payload;
+    }
     if name != "conversation.open" {
         return payload;
     }

@@ -66,6 +66,9 @@ const SHELL_ANSWERED: &[(&str, &str)] = &[
     ("models.get", "limited"),
     // Answered by the shell from its own dispatch table.
     ("capabilities.get", "stable"),
+    // A fact about the workspace, not about the runtime: the shell reads it from
+    // the `git` CLI. The adapter has no git capability to offer.
+    ("git.repository.get", "limited"),
 ];
 
 const RENAMED: &[(&str, &str)] = &[
@@ -117,6 +120,11 @@ pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)>
     }
     if name == "capabilities.get" {
         return Some((json!({}), Dispatch::Local));
+    }
+    if name == "git.repository.get" {
+        // The workspace the query named, so the answer can be attributed to it.
+        let workspace_id = input.get("workspaceId").and_then(Value::as_str).unwrap_or("");
+        return Some((json!({ "workspaceId": workspace_id }), Dispatch::Local));
     }
     let kind = if let Some((_, renamed)) = RENAMED.iter().find(|(from, _)| *from == name) {
         *renamed
@@ -486,25 +494,37 @@ fn pump(
                 });
                 match job.dispatch {
                     Dispatch::Local => {
-                        // The manifest is derived from the dispatch tables, so
-                        // it cannot disagree with what this pump resolves.
-                        let manifest = capability_manifest();
+                        // Two shell-local answers, and they are both here for the
+                        // same reason: each is something the shell already knows,
+                        // so asking the adapter for it would be a round trip to
+                        // learn it. The manifest is derived from these very
+                        // dispatch tables; the repository state is a fact about
+                        // the workspace, read from the `git` CLI.
+                        let answer = if job.command_name == "git.repository.get" {
+                            let workspace_id = job
+                                .operation
+                                .get("workspaceId")
+                                .and_then(Value::as_str)
+                                .unwrap_or("");
+                            crate::git::repository_get(workspace_id)
+                        } else {
+                            capability_manifest()
+                        };
                         emit(sink, &mut stream, |stream| {
                             stream.receipt(
                                 &job.request_id,
                                 &job.command_name,
                                 "completed",
-                                json!({ "result": manifest }),
+                                json!({ "result": answer }),
                             )
                         });
-                        // The caller asked for the result, so it gets the
-                        // result. Replying with the ack here hands the renderer
-                        // a receipt where it expects a manifest, and
-                        // `usableCapabilityManifest` reads `.capabilities.length`
-                        // off it — a TypeError on the first render after load.
+                        // The caller asked for the result, so it gets the result.
+                        // Replying with the ack here hands the renderer a receipt
+                        // where it expects a read model, and it reads fields off
+                        // it — a TypeError on the first render after load.
                         let _ = job.reply.send(match job.want {
                             Want::Ack => Ok(ack),
-                            Want::Result => Ok(manifest),
+                            Want::Result => Ok(answer),
                         });
                     }
                     Dispatch::Turn => {
