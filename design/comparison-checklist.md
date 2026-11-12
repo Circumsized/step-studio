@@ -46,7 +46,7 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 
 | # | 比对点 | 态 |
 |---|---|---|
-| 3.1 | 变更列表 / diff 视图 / 暂存与提交 | **空**（变更列表已到桥：`git.repository.get` 由壳读 `git status --porcelain=v2 --branch` 本地作答；diff 视图、暂存与提交仍未接） |
+| 3.1 | 变更列表 / diff 视图 / 暂存与提交 | **空**（变更列表与 diff 视图已到桥：`git.repository.get` 读 porcelain、`git.diff.get` 读 `git diff`（working/staged 两侧）；暂存与提交未接） |
 | 3.2 | 分支列表 | **齐**（`git.branches.list` 由壳读 `git for-each-ref` 本地作答；`origin/HEAD` 这个符号引用被滤掉，否则会把 `origin/main` 用用户没打过的名字重复列一遍） |
 | 3.3 | 提交历史 | **齐**（`git.log.list` 由壳读 `git log` 本地作答：oid/parents/subject/author/date/refs/relation 全覆盖，10 个单测含对真仓库的一条） |
 

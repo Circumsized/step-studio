@@ -619,3 +619,134 @@ mod branch_tests {
         );
     }
 }
+
+/// One file's patch, from the working tree or from the index.
+///
+/// `git diff` with `--cached` for the staged side and without it for the working
+/// side, which is the whole of the distinction `GitDiffTarget` makes. The patch
+/// is passed through as text: the renderer's diff view is a diff renderer, and
+/// re-serialising the patch would only risk changing it.
+///
+/// A path is a repository-relative path from the query. It is passed as a single
+/// argv element, never through a shell, so a path cannot become an option.
+pub fn diff_get(workspace_id: &str, path: &str, target: &str) -> Value {
+    let Some(root) = repo_root() else {
+        return unavailable_diff(workspace_id, path, target, "not a repository");
+    };
+    let mut command = Command::new("git");
+    command.arg("diff").arg("--no-color");
+    if target == "staged" {
+        command.arg("--cached");
+    }
+    command.arg("--").arg(path).current_dir(&root);
+    let Ok(output) = command.output() else {
+        return unavailable_diff(workspace_id, path, target, "git is not installed");
+    };
+    if !output.status.success() {
+        return unavailable_diff(workspace_id, path, target, "git diff failed");
+    }
+    let patch = String::from_utf8_lossy(&output.stdout).to_string();
+    // `git diff` says nothing at all about a file it considers binary, so an
+    // empty patch is ambiguous on its own. Asking directly separates "no
+    // changes" from "changes we cannot show as text".
+    let binary = patch.is_empty() && is_binary(&root, path);
+    json!({
+        "workspaceId": workspace_id,
+        "path": path,
+        "target": target,
+        "patch": patch,
+        "binary": binary,
+        "truncated": false,
+        // The revision the diff was taken against, so the view can say what it
+        // is comparing to.
+        "revision": head_revision(&root),
+    })
+}
+
+fn unavailable_diff(workspace_id: &str, path: &str, target: &str, reason: &str) -> Value {
+    json!({
+        "workspaceId": workspace_id,
+        "path": path,
+        "target": target,
+        "patch": "",
+        "binary": false,
+        "truncated": false,
+        "unavailableReason": reason,
+    })
+}
+
+fn is_binary(root: &Path, path: &str) -> bool {
+    let Ok(output) = Command::new("git")
+        .arg("diff")
+        .arg("--numstat")
+        .arg("--")
+        .arg(path)
+        .current_dir(root)
+        .output()
+    else {
+        return false;
+    };
+    // A binary file reports `-	-	<path>`; a text file reports counts.
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .any(|line| line.starts_with("-	-	"))
+}
+
+fn head_revision(root: &Path) -> String {
+    Command::new("git")
+        .arg("rev-parse")
+        .arg("HEAD")
+        .current_dir(root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod diff_tests {
+    use super::*;
+
+    /// A file with a change `git diff` can see, made with `add -N` so it shows
+    /// up as an addition without touching anything already committed.
+    fn scratch_change() -> Option<(std::path::PathBuf, String)> {
+        let root = repo_root()?;
+        let name = format!("scratch-diff-test-{}.txt", std::process::id());
+        let path = root.join(&name);
+        std::fs::write(&path, "ponytail diff line\n").ok()?;
+        Command::new("git").arg("add").arg("-N").arg(&name).current_dir(&root).output().ok()?;
+        Some((path, name))
+    }
+
+    #[test]
+    fn a_working_change_comes_back_as_a_patch() {
+        let Some((path, name)) = scratch_change() else {
+            // No repository: nothing to assert against.
+            return;
+        };
+        let model = diff_get("ws-1", &name, "working");
+        let patch = model.get("patch").and_then(Value::as_str).unwrap_or("");
+        assert!(patch.contains("ponytail diff line"), "the patch carries the change: {patch}");
+        assert_eq!(model.get("binary").and_then(Value::as_bool), Some(false));
+        assert!(model.get("revision").and_then(Value::as_str).is_some_and(|r| !r.is_empty()));
+
+        // The staged side of the same file is a different question, and it is
+        // asked separately: `add -N` records intent, not content.
+        let staged = diff_get("ws-1", &name, "staged");
+        assert!(staged.get("patch").and_then(Value::as_str).is_some());
+
+        let _ = std::fs::remove_file(&path);
+        let _ = Command::new("git").arg("rm").arg("--cached").arg(&name).current_dir(repo_root().unwrap()).output();
+    }
+
+    #[test]
+    fn a_path_that_is_not_changed_is_empty_rather_than_an_error() {
+        // `design/status.md` is committed and the tree is clean, so there is
+        // nothing to show — which is not a failure.
+        let model = diff_get("ws-1", "design/status.md", "working");
+        assert_eq!(model.get("patch").and_then(Value::as_str), Some(""));
+        assert_eq!(model.get("binary").and_then(Value::as_bool), Some(false));
+        assert!(model.get("unavailableReason").is_none(), "no changes is not an error");
+    }
+}

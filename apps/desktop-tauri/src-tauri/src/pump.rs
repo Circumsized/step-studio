@@ -73,6 +73,7 @@ const SHELL_ANSWERED: &[(&str, &str)] = &[
     // still made elsewhere.
     ("git.log.list", "limited"),
     ("git.branches.list", "limited"),
+    ("git.diff.get", "limited"),
 ];
 
 const RENAMED: &[(&str, &str)] = &[
@@ -125,7 +126,11 @@ pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)>
     if name == "capabilities.get" {
         return Some((json!({}), Dispatch::Local));
     }
-    if name == "git.repository.get" || name == "git.log.list" || name == "git.branches.list" {
+    if name == "git.repository.get"
+        || name == "git.log.list"
+        || name == "git.branches.list"
+        || name == "git.diff.get"
+    {
         // The workspace the query named, and the page the caller asked for, so
         // the answer can be attributed and paged.
         let mut operation = json!({
@@ -527,6 +532,19 @@ fn pump(
                                 .and_then(Value::as_str)
                                 .unwrap_or("");
                             crate::git::branches_list(workspace_id)
+                        } else if job.command_name == "git.diff.get" {
+                            let workspace_id = job
+                                .operation
+                                .get("workspaceId")
+                                .and_then(Value::as_str)
+                                .unwrap_or("");
+                            let path = job.operation.get("path").and_then(Value::as_str).unwrap_or("");
+                            let target = job
+                                .operation
+                                .get("target")
+                                .and_then(Value::as_str)
+                                .unwrap_or("working");
+                            crate::git::diff_get(workspace_id, path, target)
                         } else if job.command_name == "git.log.list" {
                             let workspace_id = job
                                 .operation
