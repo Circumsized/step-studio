@@ -1,0 +1,258 @@
+//! The `ompStudioChrome` bridge: shell-level operations the renderer expects
+//! from the desktop shell (M1.2c).
+//!
+//! Scope is deliberately narrow, and the boundary is a real one rather than a
+//! to-do list. `apps/renderer/src/vite-env.d.ts:51-290` declares 139 entries;
+//! the second half is the auto-updater (packaging, not a product surface), and
+//! most of the first half is Host-backed — artifacts, media upload,
+//! prediction, browser observation, service definitions. Those need the Host,
+//! which this shell does not run, so they stay absent and the renderer draws
+//! its honest unavailable state.
+//!
+//! What is here is what the shell itself owns: the OS it runs on, opening a
+//! link, a system notification, the operator avatar, and the perf reporters.
+//! Every entry below has a live call site in `apps/renderer/src`.
+
+use std::path::PathBuf;
+use std::process::Command;
+
+use serde::Serialize;
+use serde_json::{json, Value};
+use tauri::Manager;
+
+/// Rejection payload, shaped like the rest of the shell's IPC errors.
+#[derive(Serialize)]
+pub struct ChromeError {
+    pub code: String,
+    pub message: String,
+}
+
+impl ChromeError {
+    fn invalid(message: impl Into<String>) -> Self {
+        Self {
+            code: "INVALID_ARGUMENT".to_string(),
+            message: message.into(),
+        }
+    }
+
+    fn failed(message: impl Into<String>) -> Self {
+        Self {
+            code: "CHROME_FAILED".to_string(),
+            message: message.into(),
+        }
+    }
+}
+
+type ChromeResult<T> = Result<T, ChromeError>;
+
+/// `<app_data>/step-studio`, the shell's own state directory.
+///
+/// Mirrors what the Electron host keeps under `%APPDATA%\omp-studio`; the name
+/// is the only thing that changed.
+fn state_dir(app: &tauri::AppHandle) -> ChromeResult<PathBuf> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| ChromeError::failed(format!("cannot locate the app data directory: {error}")))?
+        .join("step-studio");
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| ChromeError::failed(format!("cannot create {}: {error}", dir.display())))?;
+    Ok(dir)
+}
+
+fn profile_dir(app: &tauri::AppHandle) -> ChromeResult<PathBuf> {
+    let dir = state_dir(app)?.join("profile");
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| ChromeError::failed(format!("cannot create {}: {error}", dir.display())))?;
+    Ok(dir)
+}
+
+const AVATAR_MAX_BYTES: usize = 200_000;
+const AVATAR_MIN_BYTES: usize = 24;
+const AVATAR_EXTENSIONS: &[(&str, &str)] = &[
+    ("image/jpeg", "jpg"),
+    ("image/webp", "webp"),
+    ("image/png", "png"),
+];
+
+/// The avatar file for one mime type. Clearing removes all three extensions,
+/// because a saved `.png` must not survive a later `.jpg` save.
+fn avatar_path(dir: &std::path::Path, mime: &str) -> ChromeResult<PathBuf> {
+    let extension = AVATAR_EXTENSIONS
+        .iter()
+        .find(|(known, _)| *known == mime)
+        .map(|(_, extension)| *extension)
+        .ok_or_else(|| ChromeError::invalid(format!("unsupported avatar mime type: {mime}")))?;
+    Ok(dir.join(format!("avatar.{extension}")))
+}
+
+#[tauri::command]
+pub fn save_avatar(
+    app: tauri::AppHandle,
+    mime: String,
+    bytes: Vec<u8>,
+) -> ChromeResult<Value> {
+    if bytes.len() > AVATAR_MAX_BYTES {
+        return Err(ChromeError::invalid(format!(
+            "avatar is {} bytes; the limit is {AVATAR_MAX_BYTES}",
+            bytes.len()
+        )));
+    }
+    if bytes.len() < AVATAR_MIN_BYTES {
+        return Err(ChromeError::invalid("avatar is too small to be an image"));
+    }
+    let dir = profile_dir(&app)?;
+    let path = avatar_path(&dir, &mime)?;
+    std::fs::write(&path, &bytes)
+        .map_err(|error| ChromeError::failed(format!("cannot write the avatar: {error}")))?;
+    Ok(json!({ "ok": true }))
+}
+
+#[tauri::command]
+pub fn load_avatar(app: tauri::AppHandle) -> ChromeResult<Value> {
+    let dir = profile_dir(&app)?;
+    for (mime, _) in AVATAR_EXTENSIONS {
+        let path = avatar_path(&dir, mime)?;
+        if let Ok(bytes) = std::fs::read(&path) {
+            return Ok(json!({ "mime": mime, "bytes": bytes }));
+        }
+    }
+    Ok(Value::Null)
+}
+
+#[tauri::command]
+pub fn clear_avatar(app: tauri::AppHandle) -> ChromeResult<()> {
+    let dir = profile_dir(&app)?;
+    for (mime, _) in AVATAR_EXTENSIONS {
+        let path = avatar_path(&dir, mime)?;
+        // A missing file is the goal, not an error.
+        let _ = std::fs::remove_file(path);
+    }
+    Ok(())
+}
+
+/// Open an https link in the system browser.
+///
+/// The scheme is checked here rather than in the renderer because this is where
+/// the command actually runs: a `file:` or `javascript:` URL would otherwise
+/// reach the shell and be handed to the OS.
+#[tauri::command]
+pub fn open_url(url: String) -> ChromeResult<()> {
+    if !url.starts_with("https://") {
+        return Err(ChromeError::invalid("only https links can be opened"));
+    }
+    let outcome = if cfg!(target_os = "macos") {
+        Command::new("open").arg(&url).spawn()
+    } else if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args(["/C", "start", ""])
+            .arg(&url)
+            .spawn()
+    } else {
+        Command::new("xdg-open").arg(&url).spawn()
+    };
+    outcome.map_err(|error| ChromeError::failed(format!("cannot open the link: {error}")))?;
+    Ok(())
+}
+
+/// A system notification with fixed text.
+#[tauri::command]
+pub fn notify(title: String, body: Option<String>) -> ChromeResult<()> {
+    if title.trim().is_empty() {
+        return Err(ChromeError::invalid("a notification needs a title"));
+    }
+    let outcome = if cfg!(target_os = "macos") {
+        let script = match &body {
+            Some(body) => format!(
+                "display notification {} with title {}",
+                apple_script_string(body),
+                apple_script_string(&title)
+            ),
+            None => format!("display notification {}", apple_script_string(&title)),
+        };
+        Command::new("osascript").args(["-e", &script]).spawn()
+    } else if cfg!(target_os = "windows") {
+        // No notification primitive is reachable without a plugin, and the one
+        // call site is a settings notice the page already shows inline.
+        return Ok(());
+    } else {
+        let mut command = Command::new("notify-send");
+        command.arg(&title);
+        if let Some(body) = &body {
+            command.arg(body);
+        }
+        command.spawn()
+    };
+    // A machine with no notifier is not an error worth surfacing: the notice is
+    // also visible in the page that asked for it.
+    let _ = outcome;
+    Ok(())
+}
+
+fn apple_script_string(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+/// The titlebar tint.
+///
+/// A no-op on purpose. The Electron version tints the native titlebar overlay,
+/// which exists only on Windows; under a pure-Tauri shell the whole titlebar is
+/// web content the renderer already themes itself. Returning early rather than
+/// reaching for a plugin keeps that honest.
+#[tauri::command]
+pub fn set_theme(theme: String) -> ChromeResult<()> {
+    if theme != "light" && theme != "dark" {
+        return Err(ChromeError::invalid("theme must be light or dark"));
+    }
+    Ok(())
+}
+
+/// Which conversation sessions the renderer currently shows.
+///
+/// A no-op on purpose: the Electron host uses it to throttle work for sessions
+/// whose webview is hidden. This shell runs no Host, so there is nothing to
+/// throttle — and there is exactly one webview, so nothing is hidden either.
+#[tauri::command]
+pub fn set_conversation_view_state(state: Value) -> ChromeResult<bool> {
+    // Validate the shape even though nothing consumes it, so a malformed
+    // payload fails here rather than silently doing nothing.
+    state
+        .get("visibleSessionIds")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ChromeError::invalid("visibleSessionIds must be a list"))?;
+    Ok(true)
+}
+
+/// The renderer's payload-health heartbeat.
+#[tauri::command]
+pub fn report_payload_health(status: String) -> ChromeResult<bool> {
+    if status != "ready" && status != "failed" {
+        return Err(ChromeError::invalid("status must be ready or failed"));
+    }
+    if status == "failed" {
+        eprintln!("[chrome] renderer reported a failed payload");
+    }
+    Ok(true)
+}
+
+/// The renderer's memory sample.
+///
+/// Logged, not stored: the perf harness that would consume these lands in M1.5,
+/// and inventing a store before there is a reader is speculation.
+#[tauri::command]
+pub fn report_performance_sample(sample: Value) -> ChromeResult<bool> {
+    let role = sample.get("role").and_then(Value::as_str).unwrap_or("unknown");
+    // Whichever figure the renderer actually sent. It reports heap numbers from
+    // its own runtime and RSS only where the platform exposes it, so logging a
+    // fixed "rss" field would print `unknown` for every renderer sample.
+    let figures: Vec<String> = ["rssBytes", "heapUsedBytes", "heapTotalBytes", "arrayBuffersBytes"]
+        .iter()
+        .filter_map(|key| sample.get(*key).and_then(Value::as_u64))
+        .map(|bytes| format!("{} KiB", bytes / 1024))
+        .collect();
+    match figures.is_empty() {
+        true => eprintln!("[chrome] perf sample role={role} (no figures)"),
+        false => eprintln!("[chrome] perf sample role={role} {}", figures.join(" ")),
+    }
+    Ok(true)
+}

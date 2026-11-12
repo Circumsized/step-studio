@@ -6,6 +6,7 @@
 //! `app.windows` is empty in the conf.
 
 mod bridge;
+mod chrome;
 mod pump;
 
 use std::sync::{Arc, Mutex};
@@ -65,6 +66,15 @@ fn main() {
             bridge::command,
             bridge::subscribe,
             bridge::close,
+            chrome::save_avatar,
+            chrome::load_avatar,
+            chrome::clear_avatar,
+            chrome::open_url,
+            chrome::notify,
+            chrome::set_theme,
+            chrome::set_conversation_view_state,
+            chrome::report_payload_health,
+            chrome::report_performance_sample,
         ])
         // `move`: the closure hands the window handle to the pump, which
         // outlives this function.

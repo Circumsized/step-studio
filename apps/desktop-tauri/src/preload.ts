@@ -17,19 +17,28 @@
  * supplies the Tauri sender and installs the result on the one global name
  * the renderer reads (`apps/renderer/src/main.tsx:74`).
  *
- * M1.1 exposes `ompStudio` only. `ompStudioChrome`, `ompStudioTerminal` and
- * `ompStudioRemote` are M1.2 (plan §16.3 "三桥重建"); the renderer treats all
- * three as optional, so their absence degrades instead of breaking.
+ * M1.1 exposed `ompStudio` only. M1.2c adds `ompStudioChrome` (the shell-level
+ * subset — see `chrome-bridge.ts` for why it is a subset). `ompStudioTerminal`
+ * and `ompStudioRemote` are still absent; the renderer treats all three as
+ * optional, so their absence degrades instead of breaking.
  */
 
 import { createDesktopIpcBridge, DESKTOP_BRIDGE_GLOBAL } from "@omp-studio/transport-desktop";
 
+import { createTauriChromeBridge } from "./chrome-bridge.js";
 import { createTauriDesktopSender } from "./tauri-sender.js";
 
 const api = createDesktopIpcBridge(createTauriDesktopSender());
 
 Object.defineProperty(window, DESKTOP_BRIDGE_GLOBAL, {
   value: api,
+  writable: false,
+  configurable: false,
+  enumerable: true,
+});
+
+Object.defineProperty(window, "ompStudioChrome", {
+  value: createTauriChromeBridge(),
   writable: false,
   configurable: false,
   enumerable: true,

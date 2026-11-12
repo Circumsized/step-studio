@@ -244,6 +244,39 @@ DPI 150%/200%、IME、xterm.js 帧时与 RSS）；`cargo test --workspace` 并�
 单独跑 8/8 过、复跑两次全绿，未定位到具体用例（最可能是打真实 CLI 与模型 API 的那个在并行
 负载下超时），记为已知抖动。
 
+### M1.2c-chrome：`ompStudioChrome` 壳级子集（2026-11-12 完成）
+
+`vite-env.d.ts:51-290` 声明了 139 个 chrome 条目。切开看：后半是自动更新器
+（打包面，不是产品面），前半大多数是 Host 背后——artifacts、媒体上传、prediction、
+browser observation、service definitions。**这次只做壳自己那部分**：平台标识、开链接、
+系统通知、操作者头像、两个 perf 上报。共 10 个条目，每个都有 `apps/renderer/src` 里的
+真实调用点。
+
+边界不是待办清单，是一条真实的线：壳不跑 Host，所以 Host 背后的方法留空，renderer 按
+既有可选调用画诚实不可用态（与 M1.1 三桥缺失时同一条路径）。
+
+实现上三个值得记的点：
+
+1. **`platform` 从 UA 推，不发命令**。它是同步只读字段，而 WebView 引擎恰好固定了答案：
+   WebView2 → Windows、WKWebView → macOS、WebKitGTK → Linux。Electron preload 是从
+   `process.platform` 钉同一个值。
+2. **`setTheme` 与 `setConversationViewState` 是刻意 no-op**。前者在 Electron 里染的是
+   Windows 原生标题栏覆盖层，纯 Tauri 下整个标题栏就是 renderer 自己画的 web 内容，
+   已经自己换主题；后者是 Electron 给「隐藏的 webview」对应的会话做后台节流用的，单
+   WebView 壳既没有 Host 可节流也没有隐藏画面。两个都写了注释说明为什么空转是对的，
+   而不是留一个待实现的坑。
+3. **字节跨界用普通数组**。Tauri IPC 确实能传 `ArrayBuffer`，但依赖它会让桥的契约取决于
+   当前走哪条传输；`Vec<u8>` 的含义永远是 JSON 数字数组，`Uint8Array` 在 JS 侧重建。
+
+新增 `test/chrome-bridge.test.ts`（6 个用例）做**跨语言反漂移**：把 `chrome-bridge.ts` 里
+所有 `tauriInvoke("name")` 与 `chrome.rs` 里所有 `#[tauri::command]` 双向对齐——改名字、
+加死命令、漏接线，三种都会红。这条和已有的 `command-table.test.ts` 守的是同一类问题：
+编译过、类型过，只在运行时以一句含糊的 Tauri 错误暴露。
+
+实机验证：Xvfb 下 renderer 的 perf reporter 打进来了，stderr 出现
+`[chrome] perf sample role=renderer ...`；转写、模型选择器、会话跨重启续接都正常
+（截图里是上一次 self-check 的对话被 `--continue` 捞回来）。
+
 ### M1.2b：query / command 接真实会话 + 事件泵（2026-11-11 完成）
 
 `query` 与 `command` 从 stub 改为走 `src-tauri/src/pump.rs`：一个独占 `BridgeSession` 的
