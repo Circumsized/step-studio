@@ -90,17 +90,19 @@ fn main() {
                     // self-check mode stderr gets the same stream.
                     let window = Arc::clone(&window);
                     let sink: pump::EventSink = Box::new(move |payload| {
-                        if let Some(target) = window
+                        let received = match window
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner())
                             .as_ref()
                         {
                             // A window that went away is not worth failing a turn over.
-                            let _ = target.emit(pump::EVENT_CHANNEL, payload.clone());
-                        }
+                            Some(target) => target.emit(pump::EVENT_CHANNEL, payload.clone()).is_ok(),
+                            None => false,
+                        };
                         if self_check {
                             trace_sink(&payload);
                         }
+                        received
                     });
                     let jobs = pump::spawn_pump(
                         connected.session,

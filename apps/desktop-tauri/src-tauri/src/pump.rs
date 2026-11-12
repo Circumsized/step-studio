@@ -186,7 +186,30 @@ struct Stream {
     pending_turn: Option<(String, String)>,
 }
 
+/// What [`Stream::checkpoint`] captures.
+struct DeliveryState {
+    cursor: u64,
+    pending_turn: Option<(String, String)>,
+}
+
 impl Stream {
+    /// Everything a delivery can change, so an undelivered batch can be undone.
+    ///
+    /// Two fields, not one: `translate` consumes `pending_turn` when it builds a
+    /// turn-end receipt, so rolling back only the cursor would leave a prompt
+    /// whose receipt was built, dropped, and can never be built again.
+    fn checkpoint(&self) -> DeliveryState {
+        DeliveryState {
+            cursor: self.cursor,
+            pending_turn: self.pending_turn.clone(),
+        }
+    }
+
+    fn rollback(&mut self, state: DeliveryState) {
+        self.cursor = state.cursor;
+        self.pending_turn = state.pending_turn;
+    }
+
     /// A fresh `ClientEventBase`. Every event increments `cursor` by one, so
     /// the sequence never shows the gap the contract reads as a resync.
     fn base(&mut self, kind: &str) -> Value {
@@ -257,12 +280,14 @@ impl Stream {
     }
 }
 
-/// Where translated events go.
+/// Where translated events go. Returns whether anyone actually received it.
 ///
 /// A boxed closure rather than a `WebviewWindow` so the pump can be driven
 /// without a window at all — which is how the shell proves a turn end to end
 /// on a headless machine (see `STEP_STUDIO_SELF_CHECK` in `main.rs`).
-pub type EventSink = Box<dyn Fn(Value) + Send + Sync + 'static>;
+///
+/// The return value is load-bearing: see [`deliver`].
+pub type EventSink = Box<dyn Fn(Value) -> bool + Send + Sync + 'static>;
 
 /// Start the pump. Returns the channel commands and queries send through.
 pub fn spawn_pump(
@@ -291,6 +316,47 @@ pub fn spawn_pump(
     sender
 }
 
+/// Hand one adapter event to the sink, and only advances the stream if it landed.
+///
+/// The bootstrap advertises `cursor: 0` as the resume point, so the counter has
+/// to describe what the renderer has actually received. An event that moves the
+/// counter without reaching anyone turns the first real event into a gap, and a
+/// gap forces `resync_required` (`packages/client/src/reducer.ts:737`) — the
+/// whole shell then sits behind "restoring latest Runtime state" until a fresh
+/// snapshot arrives, which this shell never sends.
+///
+/// Events arriving before `subscribe` are exactly that case: the self-check
+/// turn and the adapter's own startup chatter land while no window exists yet.
+///
+/// A partially delivered batch (the window vanishing between two calls) would
+/// still leave the counter ahead of what was received, but that case has no
+/// client left to observe a gap.
+fn deliver(sink: &EventSink, stream: &mut Stream, event: &Value) {
+    let before = stream.checkpoint();
+    let events = stream.translate(event);
+    let mut received = false;
+    for payload in &events {
+        if sink(payload.clone()) {
+            received = true;
+        }
+    }
+    if !received {
+        stream.rollback(before);
+    }
+}
+
+/// The same rule for a payload this shell builds itself — a command receipt.
+///
+/// Kept separate from [`deliver`] because the payload is built here rather than
+/// translated, but the rewind rule is identical: a receipt that never reaches
+/// the renderer must not consume a cursor either.
+fn emit(sink: &EventSink, stream: &mut Stream, build: impl FnOnce(&mut Stream) -> Value) {
+    let before = stream.checkpoint();
+    if !sink(build(stream)) {
+        stream.rollback(before);
+    }
+}
+
 fn pump(
     session: BridgeSession,
     sink: &EventSink,
@@ -313,13 +379,14 @@ fn pump(
                         // for the whole turn, and `core.abort` could never
                         // reach the session.
                         if let Err(error) = session.send_command(job.operation) {
-                            let failed = stream.receipt(
-                                &job.request_id,
-                                &job.command_name,
-                                "failed",
-                                json!({ "error": { "code": "TRANSPORT_ERROR", "message": error.to_string() } }),
-                            );
-                            sink(failed);
+                            emit(sink, &mut stream, |stream| {
+                                stream.receipt(
+                                    &job.request_id,
+                                    &job.command_name,
+                                    "failed",
+                                    json!({ "error": { "code": "TRANSPORT_ERROR", "message": error.to_string() } }),
+                                )
+                            });
                             let _ = job.reply.send(Err(format!("desktop bridge: {error}")));
                             continue;
                         }
@@ -330,9 +397,7 @@ fn pump(
                         // forwarded, not buffered and dropped: the turn keeps
                         // streaming through a model change.
                         let outcome = session.invoke_with(job.operation, |event| {
-                            for client_event in stream.translate(event) {
-                                sink(client_event);
-                            }
+                            deliver(sink, &mut stream, event);
                         });
                         let _ = job.reply.send(match outcome {
                             Ok(receipt) => {
@@ -353,19 +418,23 @@ fn pump(
                                         })),
                                     }),
                                 };
-                                sink(stream.receipt(&job.request_id, &job.command_name, status, extra));
+                                emit(sink, &mut stream, |stream| {
+                                    stream.receipt(&job.request_id, &job.command_name, status, extra)
+                                });
                                 match job.want {
                                     Want::Ack => Ok(ack),
                                     Want::Result => Ok(payload),
                                 }
                             }
                             Err(error) => {
-                                sink(stream.receipt(
-                                    &job.request_id,
-                                    &job.command_name,
-                                    "failed",
-                                    json!({ "error": { "code": "TRANSPORT_ERROR", "message": error.to_string() } }),
-                                ));
+                                emit(sink, &mut stream, |stream| {
+                                    stream.receipt(
+                                        &job.request_id,
+                                        &job.command_name,
+                                        "failed",
+                                        json!({ "error": { "code": "TRANSPORT_ERROR", "message": error.to_string() } }),
+                                    )
+                                });
                                 Err(format!("desktop bridge: {error}"))
                             }
                         });
@@ -376,9 +445,7 @@ fn pump(
             // them. Without this they would sit until the next command.
             Err(RecvTimeoutError::Timeout) => {
                 for event in session.drain_events() {
-                    for client_event in stream.translate(&event) {
-                        sink(client_event);
-                    }
+                    deliver(sink, &mut stream, &event);
                 }
             }
             Err(RecvTimeoutError::Disconnected) => return,
@@ -590,6 +657,56 @@ mod tests {
         let events = stream.translate(&json!({ "kind": "conversation.turn.completed", "sessionId": "s1" }));
         assert_eq!(events.len(), 1);
         assert_eq!(events[0]["kind"], "conversation.changed");
+    }
+
+    /// A sink that reports whether it took the payload, as the real one does.
+    fn sink_that(takes: bool) -> EventSink {
+        Box::new(move |_| takes)
+    }
+
+    const DELTA: &str = "conversation.message.delta";
+
+    #[test]
+    fn an_event_nobody_receives_does_not_advance_the_cursor() {
+        // The bootstrap advertises cursor 0, so a counter that moves without
+        // anyone receiving turns the first real event into a gap — and a gap
+        // forces resync_required for the rest of the session.
+        let mut stream = stream();
+        deliver(&sink_that(false), &mut stream, &json!({ "kind": DELTA, "sessionId": "s" }));
+        assert_eq!(stream.cursor, 0);
+
+        // The next event that IS received must be cursor 1, not 3.
+        deliver(&sink_that(true), &mut stream, &json!({ "kind": DELTA, "sessionId": "s" }));
+        assert_eq!(stream.cursor, 1);
+    }
+
+    #[test]
+    fn a_receipt_nobody_receives_does_not_advance_the_cursor_either() {
+        let mut stream = stream();
+        emit(&sink_that(false), &mut stream, |stream| {
+            stream.receipt("req-1", "core.prompt", "completed", json!({ "result": {} }))
+        });
+        assert_eq!(stream.cursor, 0);
+
+        emit(&sink_that(true), &mut stream, |stream| {
+            stream.receipt("req-1", "core.prompt", "completed", json!({ "result": {} }))
+        });
+        assert_eq!(stream.cursor, 1);
+    }
+
+    #[test]
+    fn a_turn_end_delivers_both_payloads_or_neither() {
+        let mut stream = stream();
+        stream.pending_turn = Some(("req-1".to_string(), "core.prompt".to_string()));
+        deliver(&sink_that(false), &mut stream, &json!({ "kind": "conversation.turn.completed", "sessionId": "s" }));
+        // Nothing was received, so the pairing must survive for a later attempt.
+        assert!(stream.pending_turn.is_some(), "the pending turn must not be consumed by an undelivered event");
+        assert_eq!(stream.cursor, 0);
+
+        deliver(&sink_that(true), &mut stream, &json!({ "kind": "conversation.turn.completed", "sessionId": "s" }));
+        assert!(stream.pending_turn.is_none());
+        // Two payloads: the receipt and the conversation.changed.
+        assert_eq!(stream.cursor, 2);
     }
 
     #[test]
