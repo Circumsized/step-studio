@@ -302,15 +302,61 @@ Step Studio，界面内全是 OMP。本次把**可见文案**里的 OMP 全部�
 | step-studio-runtime（Rust 适配器） | 4.0 MB | 0.4% |
 | **合计** | **907.2 MB** | |
 
-**Node 侧实测**：裸 `node` 42.3 MB；加载完整 Host 组合图
-（`host-composition` + `facade`）后 **79.2 MB**，即 Host 自身约 37 MB。
-作为边车接入，总树从 907.2 → 986.4 MB，**+8.7%**；但相对于「壳自己」的
-183.3 + 4.0 + 50.4 = 237.7 MB，是 **+33%**。
+**边车实测（两轮，第二轮推翻了第一轮）**：
+
+第一轮只量了「加载后空闲」：裸 `node` 42.3 MB，加载完整 Host 组合图后 79.2 MB。
+Bun 编译版（238 模块，89.1 MB 单文件）空闲仅 **35.8 MB**。曾据此后一个结论，是错的。
+
+第二轮按真实热路径重测——Host 自己的 `ConversationEventFanout` 工作负载放大、40 个真实
+`git` 子进程、20 个 fs watcher、三轮 soak，并且**在循环内每 2000 次操作采样一次**加外部
+20 ms 进程树采样（第一阶段的分界点采样抓不到峰值，峰值落在循环中段）：
+
+| 阶段 | Node | Bun 编译版 |
+|---|---|---|
+| 空闲（全图加载后） | 83.5 MB | 22.5 MB |
+| 25 万条 text delta 后 | 148.8 MB | 72.2 MB |
+| 10 万次 tool-output 追加后 | 267.2 MB | 123.5 MB（自峰 145.5） |
+| 20 万次重复解析后 | 287.0 MB | 113.6 MB |
+| 三轮 soak 后 | 324.8 MB | 90.1 MB |
+| **真峰（外部 20 ms 树采样）** | **351.6 MB** | **157.1 MB** |
+
+所以边车的诚实数字是 **Bun 峰值 145-157 MB，Node 峰值 352 MB**——不是 35.8，也不是 79.2。
+方法学教训：分界点采样会漏掉峰值，必须循环内采样 + 外部采样互校。
+
+但有两个对 Bun 有利的定性差异，比绝对值更重要：**Bun 峰值比 Node 低 2.2 倍、空闲低 3.7 倍；
+而且 Bun 在负载后会把内存还回来（145 → 90 MB），Node 不会（287 → 325 MB，单调上涨）**。
+前者是量级差异，后者是泄漏与否的差异。
 
 **一个此前的错误认知，实测纠正**：曾以为「Node 已经在进程树里」（依据是
 `packages/runtime-stepcode`）。不成立——当前壳 spawn 的是 **Rust 适配器**
 `step-studio-runtime`（4.0 MB），Node 适配器只在找不到 Rust 二进制时才是回退。
-所以边车方案是**新增**一个 Node 进程，不是复用已有的。
+所以边车方案是**新增**一个进程，不是复用已有的。
+
+### 编译 Host 成单文件：一个绿灯构建的地雷（实测）
+
+Bun 能把**含 `host-factory.ts` 的完整图**（269 模块）编译成 154 MB 单文件，零警告，
+二进制能启动，两个导出类型正确——看起来完全成功。它不是。
+
+`host-factory.ts:41` 是 `import { app, dialog } from "electron"`，而 electron 包的
+`index.js` 末尾是 `module.exports = getElectronPath()`——**一个字符串**。Bun 的 CJS 互操作
+从这个字符串上解构 `{ app, dialog }`，两者都是 `undefined`，于是：
+
+```
+typeof app = undefined
+LANDMINE -> TypeError: undefined is not an object (evaluating 'import_electron.app.isPackaged')
+```
+
+命中 `host-factory.ts:500` 与 `:196`。**构建绿、二进制能起、导出类型正确，然后一碰平台端口就死**，
+而且没有任何信号——不是来自打包器、不是来自 typecheck、也不是来自只 import 的 smoke run。
+更糟：这个 89 MB 二进制还悄悄带着 Electron 的安装 shim，缺 `path.txt`/`dist` 时会在启动时
+触发一次约 100 MB 的 Electron 下载。
+
+所以「复用 100% 代码」在两处不成立：
+1. 那 3 个 electron 调用点要补一个 Tauri 平台端口实现（`app.isPackaged` ×2、
+   `process.resourcesPath` ×1，加 `dialog.showOpenDialog`）；
+2. 方案 §10.2 列在 Host 里的 PTY 池实际在 `apps/desktop/src/terminal-pty.ts`，
+   **在组合图之外**（其文件头自称「never talks to the Host」）且依赖原生 `node-pty`。
+   复用 Host 图拿不到它。
 
 **step 原生 RPC 覆盖面对比**：`step --mode rpc` 只暴露 10 个方法——
 `prompt` / `new_session` / `fork` / `get_state` / `get_entries` / `set_model` /
