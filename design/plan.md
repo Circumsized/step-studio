@@ -864,7 +864,7 @@ flowchart LR
 | 回滚覆盖 `cursor` 与 `pending_turn` 两个字段 | `translate()` 合成回合结束回执时会消费 `pending_turn`；只回滚 cursor 会留下一个永不到达的回执 | 只回滚 cursor（第一版修法，被测试抓出） | 不改 |
 | 改名只动独立大写词 `\bOMP\b` | 这一条限定同时保护了三类不该动的东西：`OMP_STUDIO_CLIENT`（`_` 是词字符）、全小写的 `omp-studio` / `@omp-studio` / `ompStudio`、真实配置路径 `~/.omp/agent/config.yml` | 全文替换 OMP（会破坏注入点与路径字面量） | 不改 |
 | `tauri.conf.json` 的 identifier 保持 `com.snowpear.omp-studio` | 改它等于迁移安装目录与 app-data 目录，会让已有 profile 失效；它不是界面显示 | 改成 `com.snowpear.step-studio` | 用户明确要求迁移安装身份时 |
-| **Host 边车：不起 Node 边车就不是复刻，是重写** | 查证见 `status.md`「Host 边车方案查证结论」：`createDesktopHostComposition` 可在无 Electron 的 Node 进程驱动（裸 Node 跑既有契约套件 22 过 1 跳 0 失败），五方法面由 composition 自己构造，renderer 零 diff，一次拿到约 160 个操作。逐个把 chrome 的 40 个 Host 方法移植进 Rust 是纯浪费 | 把 Host 服务逐个移植进 Rust | M1.2c-M1.7 复刻阶段开始时实施；边车走 stdio NDJSON 而非 `transport-web` HTTP（后者无 WS 服务端、origins 必填、配对码 60s TTL） |
+| **Host 归属走 §10.3 的逐个案通道，不推翻 §10.1/§4.2/§4.3** | 本节早前一条把「壳 spawn 的 TS 边车」写成了既定路线、并把 Rust 移植列为已驳回——**越界**。§10.1 反对的是「daemon **捆绑 Node**」（理由 tty7 模式 + goal/cron 保活），§10.3 才管边车，且明文条件是「实测移植收益低于认证成本时留 sidecar，逐个案上报」。现在有了那份实测：边车峰值 Bun 157 MB / Node 352 MB（见 `status.md`），而 §14.3 给 Rust daemon 的预算是 10-30 MB，即边车超预算 5-15 倍；同时 §14.1 自己把终端原生化（−20~−43 MB/面板）与惰性激活（−167.1 MB/非活会话）排在此项之前。结论是**本案不足以支撑 §10.3 的例外**，Host 默认仍归 Rust daemon | 把边车当既定架构；把 Rust 移植当场驳回 | M2/M4 真正动工前，用 WebView2 实测数据重开此案 |
 **待用户签字项（AT-1 二审要求）**：像素级复刻的范围是否包含窗口拓扑。当前文档口径：像素级 = WebView 承载面的逐页比对，窗口拓扑不在内（终端/diff 若回 WebView 则拓扑也一致，此项自然消解；若 go/no-go 通过走原生独立窗，则必须重新签字）。
 
 可推翻上述任一条的条件：新的实测数据，或用户明确的方向变更。
