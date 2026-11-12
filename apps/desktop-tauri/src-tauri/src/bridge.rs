@@ -784,6 +784,12 @@ fn shape_query_result(name: &str, payload: Value) -> Value {
     if name == "models.get" {
         return model_config_read_model(&payload);
     }
+    if name == "mcp.get" {
+        return mcp_read_model(&payload);
+    }
+    if name == "skills.get" {
+        return skills_read_model(&payload);
+    }
     if name == "git.repository.get"
         || name == "git.log.list"
         || name == "git.branches.list"
@@ -954,6 +960,88 @@ fn model_config_read_model(payload: &Value) -> Value {
     })
 }
 
+/// Reshape the adapter's extension inventory into the facade's MCP read model.
+///
+/// The adapter reports one entry per *extension*, each carrying the MCP servers
+/// it declares; the facade's model is one row per *server*. So the reshape
+/// flattens — a plugin declaring three servers becomes three rows, which is what
+/// the page lists.
+fn mcp_read_model(payload: &Value) -> Value {
+    let mut servers: Vec<Value> = Vec::new();
+    for extension in payload.get("extensions").and_then(Value::as_array).into_iter().flatten() {
+        let scope = if extension.get("installed").and_then(Value::as_bool) == Some(false) {
+            "project"
+        } else {
+            "user"
+        };
+        let label = if scope == "project" { "项目" } else { "用户" };
+        for server in extension.get("mcpServers").and_then(Value::as_array).into_iter().flatten() {
+            let name = server.get("name").and_then(Value::as_str).unwrap_or("");
+            if name.is_empty() {
+                continue;
+            }
+            servers.push(json!({
+                "name": name,
+                // Every server the adapter reports came from a manifest's
+                // `mcpServers`, which is a stdio launch. `http`/`sse` would need
+                // a transport field the manifest does not carry, and guessing
+                // one from the URL shape would be a guess.
+                "transport": "stdio",
+                // The adapter reports what is configured, not what is running:
+                // there is no connection state here, so `enabled` says the
+                // entry exists rather than that it answered.
+                "enabled": true,
+                "status": "enabled",
+                "sourceLabel": label,
+                "scope": scope,
+            }));
+        }
+    }
+    json!({
+        "servers": servers,
+        "warnings": [],
+        "generatedAt": pump::iso_utc(pump::now_millis()),
+    })
+}
+
+/// Reshape the CLI's command catalog into the facade's skills read model.
+///
+/// The adapter's own comment says it: the command catalog *is* the skills
+/// surface, because Step has no separate skills registry to read. So the
+/// reshape maps one to the other rather than inventing a second source.
+fn skills_read_model(payload: &Value) -> Value {
+    let skills: Vec<Value> = payload
+        .get("commands")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|command| {
+            let name = command.get("name").and_then(Value::as_str)?;
+            if name.is_empty() {
+                return None;
+            }
+            Some(json!({
+                "name": name,
+                "desc": command.get("description").and_then(Value::as_str).unwrap_or(""),
+                // Step ships its commands with the CLI, so they are builtin;
+                // `workspace` and `global` would need a per-directory scan the
+                // CLI does not expose.
+                "scope": "builtin",
+                "sourceKind": "native",
+                "sourceLabel": "Step",
+                "enabled": true,
+                "hide": false,
+            }))
+        })
+        .collect();
+    json!({
+        "skills": skills,
+        "plugins": [],
+        "warnings": [],
+        "generatedAt": pump::iso_utc(pump::now_millis()),
+    })
+}
+
 #[cfg(test)]
 mod usage_tests {
     use super::*;
@@ -1100,4 +1188,71 @@ pub fn close(state: tauri::State<'_, SessionState>) -> Result<(), IpcError> {
         .take();
     drop(sender);
     Ok(())
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+
+    #[test]
+    fn one_extension_with_three_servers_becomes_three_rows() {
+        // The adapter reports per extension; the facade's model is per server.
+        // A plugin declaring three servers must surface as three rows, because
+        // that is what the page lists.
+        let model = mcp_read_model(&json!({
+            "extensions": [{
+                "id": "playwright",
+                "name": "Playwright",
+                "installed": true,
+                "mcpServers": [
+                    { "name": "playwright", "command": "npx", "args": [] },
+                    { "name": "playwright-two", "command": "npx", "args": [] },
+                    { "name": "playwright-three", "command": "npx", "args": [] },
+                ],
+            }],
+        }));
+        let servers = model.get("servers").and_then(Value::as_array).expect("servers");
+        assert_eq!(servers.len(), 3, "one row per server, not per extension");
+        for server in servers {
+            assert_eq!(server.get("transport").and_then(Value::as_str), Some("stdio"));
+            assert_eq!(server.get("scope").and_then(Value::as_str), Some("user"));
+            assert_eq!(server.get("status").and_then(Value::as_str), Some("enabled"));
+        }
+    }
+
+    #[test]
+    fn a_server_without_a_name_is_skipped_rather_than_listed_empty() {
+        let model = mcp_read_model(&json!({
+            "extensions": [{ "id": "x", "installed": true, "mcpServers": [{ "command": "npx" }] }],
+        }));
+        assert_eq!(
+            model.get("servers").and_then(Value::as_array).map(Vec::len),
+            Some(0),
+            "a nameless server is not a row"
+        );
+    }
+
+    #[test]
+    fn the_command_catalog_becomes_the_skills_list() {
+        // Step has no separate skills registry, so the command catalog is the
+        // skills surface — the adapter's own comment says as much.
+        let model = skills_read_model(&json!({
+            "commands": [
+                { "name": "usage", "description": "Show usage" },
+                { "name": "models", "description": "Pick a model" },
+                { "name": "", "description": "ignored" },
+            ],
+        }));
+        let skills = model.get("skills").and_then(Value::as_array).expect("skills");
+        assert_eq!(skills.len(), 2);
+        assert_eq!(skills[0].get("name").and_then(Value::as_str), Some("usage"));
+        assert_eq!(skills[0].get("scope").and_then(Value::as_str), Some("builtin"));
+        assert_eq!(skills[0].get("sourceLabel").and_then(Value::as_str), Some("Step"));
+        // The facade has a plugins list too, and Step's catalog has no plugins
+        // in it — so it is empty rather than filled with the same rows twice.
+        assert_eq!(
+            model.get("plugins").and_then(Value::as_array).map(Vec::len),
+            Some(0)
+        );
+    }
 }

@@ -66,7 +66,7 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 
 | # | 比对点 | 态 |
 |---|---|---|
-| 5.1 | 三个 list 的呈现（扩展 / MCP / 命令） | **空**（适配器有 `session.extensions.list` / `session.commands.list` 且 stable，但壳未把它们暴露成 facade query，渲染层拿不到） |
+| 5.1 | 三个 list 的呈现（扩展 / MCP / 命令） | **部分**：MCP 与命令两个 list 已到桥（`mcp.get` ← 适配器扩展清单的 `mcpServers`，按 server 摊平；`skills.get` ← CLI 命令目录——适配器自己的注释就说命令目录就是 skills 面，Step 没有独立 skills 注册表）。插件 list 仍空：Step 的目录里没有插件来源 |
 | 5.2 | 能力条目与 grade 徽标 | **空**（M1.7 改判：`capabilities.get` 返回的是壳自己的派发表清单，id 形如 `core.prompt`，与参考图里 Skills/Plugins/MCP/Slash 条目不是同一个能力集——正是 5.1 判空的那个集合） |
 
 方案 §9.6 记「基本齐」，但那是 adapter 已声明 `session.extensions.list` /

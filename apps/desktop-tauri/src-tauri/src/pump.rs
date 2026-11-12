@@ -62,6 +62,11 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
     // source, and no round trip for bytes the renderer already has.
     ("home.get", "limited"),
     ("workspace.open", "limited"),
+    // The capabilities page's three tabs. The adapter already serves both
+    // underlying lists and declares them stable; the facade spellings are what
+    // was missing.
+    ("mcp.get", "limited"),
+    ("skills.get", "limited"),
 ];
 
 /// `core.prompt` sits apart because it is the one `Dispatch::Turn` operation.
