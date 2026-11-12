@@ -32,6 +32,13 @@ const TERMINAL_HISTORY: usize = 64;
 /// number for one idea.
 const SHUTDOWN_DRAIN: Duration = Duration::from_secs(5);
 
+/// How long `usage.panel` waits for the CLI's panel before giving up.
+///
+/// The panel arrives on the fire-and-forget channel rather than as the prompt's
+/// response, and the CLI scans activity history first — measured at a few
+/// seconds against the real CLI.
+const USAGE_PANEL_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Outstanding dialog requests, by the id the CLI issued.
 ///
 /// The agent side resolves a timed-out dialog on its own and never says so,
@@ -224,6 +231,73 @@ struct Session {
 }
 
 impl Session {
+    /// Send one CLI event where it belongs: dialogs are tracked, everything
+    /// else is mapped and forwarded.
+    ///
+    /// Shared with the turn pump so a query that has to read the event stream
+    /// (`usage.panel`) routes what it passes exactly as the pump would, instead
+    /// of growing a second copy of this that drifts.
+    fn route_event(&mut self, event: &Value) {
+        let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        if kind == "extension_ui_request" {
+            let method = event.get("method").and_then(|v| v.as_str()).unwrap_or("");
+            if crate::conversation::is_dialog_method(method) {
+                if let Some(id) = event.get("id").and_then(|v| v.as_str()) {
+                    self.interactions.open(id, method);
+                }
+            }
+        }
+        if let Some(mapped) = map_event(event, &self.context) {
+            self.event(mapped.event, mapped.advances_state);
+        }
+    }
+
+    /// Ask the CLI for its `/usage` panel and answer with what came back.
+    ///
+    /// The panel is not the prompt's response: `/usage` is dispatched as a slash
+    /// command and the answer arrives on the fire-and-forget `notify` channel,
+    /// as ANSI text. So this sends the prompt and then waits for a notify.
+    ///
+    /// stdin must stay open while it waits — closing it cancels the CLI's
+    /// activity scan and all that comes back is `extension_error`. `StepRpc`
+    /// owns the process for the session's lifetime, so it does.
+    ///
+    /// Every other event keeps flowing through the normal mapping: a query must
+    /// not swallow a turn's events on its way past.
+    fn usage_panel(&mut self, request_id: &str) {
+        if let Err(error) = self.step.send("prompt", json!({ "message": "/usage" })) {
+            self.failed(request_id, error.to_string());
+            return;
+        }
+        let deadline = Instant::now() + USAGE_PANEL_TIMEOUT;
+        let mut panel = None;
+        while Instant::now() < deadline {
+            let Some(event) = self.step.wait_event(Duration::from_millis(100)) else {
+                if self.step.closed() {
+                    break;
+                }
+                continue;
+            };
+            let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            if kind == "extension_ui_request"
+                && event.get("method").and_then(|v| v.as_str()) == Some("notify")
+            {
+                panel = event.get("message").and_then(|v| v.as_str()).map(str::to_string);
+                break;
+            }
+            self.route_event(&event);
+        }
+        match panel {
+            Some(panel) => {
+                self.receipt(request_id, "completed", Some(json!({ "panel": panel })))
+            }
+            None => self.failed(
+                request_id,
+                "the CLI did not return a usage panel".to_string(),
+            ),
+        }
+    }
+
     /// Whether a turn is still running inside the shutdown deadline.
     fn draining_a_turn(&self) -> bool {
         self.pending_prompt.is_some()
@@ -422,6 +496,7 @@ impl Session {
                     "terminalReceipts": self.terminal.lock().map(|g| g.clone()).unwrap_or_default(),
                 }));
             }
+            "usage.panel" => self.usage_panel(&request_id),
             "runtime.shutdown" => {
                 // Draining means letting the turn in flight finish. The old
                 // code aborted it and called that a drain, so any caller that
@@ -690,17 +765,7 @@ impl Session {
                         .collect::<String>()
                 );
             }
-            if kind == "extension_ui_request" {
-                let method = event.get("method").and_then(|v| v.as_str()).unwrap_or("");
-                if crate::conversation::is_dialog_method(method) {
-                    if let Some(id) = event.get("id").and_then(|v| v.as_str()) {
-                        self.interactions.open(id, method);
-                    }
-                }
-            }
-            if let Some(mapped) = map_event(&event, &self.context) {
-                self.event(mapped.event, mapped.advances_state);
-            }
+            self.route_event(&event);
             if kind == "agent_settled" {
                 let error = self.turn_error.take();
                 self.settle_prompt(error);

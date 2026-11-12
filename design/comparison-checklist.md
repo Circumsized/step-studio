@@ -22,7 +22,7 @@
 |---|---|---|
 | 1.1 | 顶部自定义标题栏：汉堡 / 品牌 / 搜索 / 未选项目 / New Chat / 右侧图标组 | 齐 |
 | 1.2 | 中央欢迎语与副标题（"Good evening, Studio" 一带） | 齐 |
-| 1.3 | Activity Heatmap：Jan-Dec 月份轴 + Mon/Wed/Fri 行轴 + 色阶图例 | **空**（"Failed to load usage."） |
+| 1.3 | Activity Heatmap：Jan-Dec 月份轴 + Mon/Wed/Fri 行轴 + 色阶图例 | **空**（原因诚实：面板已到桥，但无结构化数字可画） |
 | 1.4 | Recent Chats 区（空态文案 + All History 入口） | 齐 |
 | 1.5 | Composer：占位文案 / Dictate / 附件行 / 模型选择器 / thinking 档位 / 发送键 | 齐（模型选择器实测解析出 `step-3.7-flash`） |
 | 1.6 | 底部面板页签：Terminal / Problems / Tests / Output / Step Logs / Preview Logs | 齐 |
@@ -79,11 +79,24 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 | # | 比对点 | 态 |
 |---|---|---|
 | 6.1 | 顶栏 token / 用量展示 | **空** |
-| 6.2 | Activity insights（总 chats、活跃天、总 token、常用 reasoning） | **空** |
+| 6.2 | Activity insights（总 chats、活跃天、总 token、常用 reasoning） | **空**（同 1.3：面板已到桥，数字在 ANSI 文本里） |
 
 方案 §9.6 记「齐，桥上直接可用」并给了实测路径（把 `/usage` 当 prompt 发过去，
-经 `notify` 回传 ANSI 面板）。**该路径已验证可行，但尚未接入本壳**。
-接入属 M4 用量，所以当前是「空」。
+经 `notify` 回传 ANSI 面板）。
+
+**M2.2 已接入该路径**：`usage.get` → 适配器 `usage.panel`（发 `/usage` prompt，
+等 fire-and-forget 的 `notify`，stdin 全程不关），壳重塑成 `TokenUsageReadModel`。
+用真 step CLI 实测：1.5 秒回传 6194 字符面板，`usage.panel` 回 `completed`。
+
+**1.3 / 6.2 仍是「空」，原因是数据不在**。面板的热力图格子只有强度分档
+（`· ░ ▒ ▓ █` + ANSI 256 色），总量只在 "Activity insights" 里给聚合值；
+没有按小时、按模型、精确按日的 token 数。把强度分档填进
+`TokenUsageDayPoint.totalTokens` 就是编数字，AGENTS.md 明令禁止，所以结构化
+数组保持为空并带 `unavailableReason` 说明缺什么，面板原文经契约新增的
+`panel?: string` 字段原样送达。
+
+要翻「齐」需要二者之一：上游在 RPC 里暴露结构化用量，或明确接受「按强度分档
+近似」并改契约语义。
 
 ## 7. `hub.png` — Agent Hub
 

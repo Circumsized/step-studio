@@ -82,6 +82,34 @@ rl.on("line", line => {
   }
   if (message.type === "prompt") {
     const text = String(message.message ?? "");
+    // `/usage` is a slash command, not a message: the CLI dispatches it and the
+    // panel comes back on the fire-and-forget notify channel as ANSI text. No
+    // agent turn starts, so there is no agent_settled for this one.
+    if (text === "/usage") {
+      write({
+        type: "extension_ui_request",
+        id: "fake-usage",
+        method: "notify",
+        notifyType: "info",
+        message: [
+          "Usage",
+          "[1 Overview]   2 Account",
+          "",
+          "365 days · All projects",
+          "    DeJan     Feb     Mar   ",
+          "Su  · · · · · · · · · · ",
+          "Mo  · · ▒ · · · · · · · ",
+          "    Less · ░ ▒ ▓ █ More",
+          "",
+          "Activity insights",
+          "Total chats            7",
+          "Active days            2",
+          "Total tokens           1,234",
+        ].join("\n"),
+      });
+      write({ type: "agent_settled" });
+      return;
+    }
     // Mid-turn death: no agent_settled will ever follow.
     if (text === "die") {
       setTimeout(() => process.exit(3), 5);

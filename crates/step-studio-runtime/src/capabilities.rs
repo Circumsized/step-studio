@@ -31,6 +31,11 @@ const CAPABILITIES: &[(&str, &str, &str)] = &[
     ("session.model.set", "stable", ""),
     ("session.models.list", "stable", ""),
     (
+        "usage.panel",
+        "limited",
+        "the CLI's /usage panel as ANSI text; it carries totals and heatmap intensity buckets, not per-hour or per-model token counts",
+    ),
+    (
         "session.thinking.set",
         "limited",
         "`auto` has no Step equivalent; it maps to the model's first supported level",

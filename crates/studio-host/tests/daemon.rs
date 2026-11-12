@@ -377,3 +377,31 @@ fn a_surface_is_released_when_its_adapter_dies() {
         "the daemon kept serving after the adapter was replaced"
     );
 }
+
+#[test]
+fn a_usage_prompt_comes_back_on_the_notify_channel() {
+    // `/usage` is a slash command, not a message: the CLI dispatches it and the
+    // panel arrives on the fire-and-forget notify channel rather than as the
+    // prompt's response. stdin has to stay open while it waits, or the CLI
+    // cancels its activity scan and all that comes back is `extension_error`.
+    let daemon = Daemon::start("usage");
+    let session = connect(&daemon);
+
+    let (receipt, _events) = session
+        .invoke(serde_json::json!({ "kind": "usage.panel" }))
+        .expect("usage.panel");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed")
+    );
+
+    let panel = receipt
+        .pointer("/result/panel")
+        .and_then(|v| v.as_str())
+        .expect("the panel text");
+    assert!(panel.contains("Usage"), "the panel is the CLI's own: {panel}");
+    assert!(
+        panel.contains("Total tokens"),
+        "the panel carries the totals the structured arrays cannot: {panel}"
+    );
+}

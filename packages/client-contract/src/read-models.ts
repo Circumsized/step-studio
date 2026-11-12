@@ -350,6 +350,17 @@ export interface TokenUsageReadModel {
   readonly byModel: ReadonlyArray<TokenUsageModelDayPoint>;
   readonly hours: ReadonlyArray<TokenUsageHourPoint>;
   readonly unavailableReason?: string;
+  /**
+   * The CLI's own `/usage` panel, verbatim, when the Host could not produce the
+   * structured arrays above it.
+   *
+   * Present because the panel is real data the user asked for and the arrays are
+   * not: the CLI renders a heatmap whose cells are intensity buckets, and it
+   * reports totals only in aggregate. There are no per-hour, per-model, or
+   * exact per-day numbers to fill `hours`, `byModel`, or `days` with, and
+   * buckets dressed up as token counts would be a fabrication.
+   */
+  readonly panel?: string;
 }
 
 /**

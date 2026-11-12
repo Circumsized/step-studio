@@ -452,6 +452,16 @@ Node 进程里驱动：
 
 这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
 
+### M2.2-C1：`/usage` 面板经桥抵达（2026-11-12 完成并实证）
+
+`usage.get` → 适配器 `usage.panel`：把 `/usage` 当 prompt 发过去，等 fire-and-forget 的 `notify`，壳重塑成 `TokenUsageReadModel`。
+
+**真 step CLI 实测**：1.5 秒回传 6194 字符面板，`usage.panel` 回 `completed`。面板含热力图（7 行 × 46 周列）+ "Activity insights"（总 chats / 活跃天 / 总 token）。
+
+**关键实测约束**：stdin 必须全程不关。关掉它 CLI 就取消活动扫描，只回 `extension_error`（`Activity scan cancelled`）——方案 §9.6 早提醒过，本次两次撞到后才按它保持 `StepRpc` 的进程存活。另外 `--mode rpc` 的 prompt 信封是 `{"id","type":"prompt","message"}`，裸写 `/usage` 会被当 JSON 解析而报 `Unrecognized token '/'`。
+
+**1.3 / 6.2 仍是「空」，原因是数据不在**：热力图格子只有强度分档，没有按小时/按模型/精确按日的 token 数。把分档填进 `totalTokens` 就是编数字，所以结构化数组留空 + `unavailableReason` 说明缺什么，面板原文经契约新增的 `panel?: string` 原样送达。详见 `comparison-checklist.md` 的用量条。
+
 ### M2.2：壳侧重连 + 全量刷新（2026-11-12 完成并实证）
 
 适配器崩溃重启后，M2.1 会把壳留在一条断掉的 relay 上且没有任何恢复路径。本条补上。

@@ -761,14 +761,17 @@ pub fn query(
 
 /// Give a query the result shape the facade would have returned.
 ///
-/// Two queries need it. `session.state` answers `{snapshot}` while the facade
-/// hands back the snapshot itself. `conversation.open` is the only query whose
-/// result is assembled rather than passed through: the adapter reads a
-/// transcript page, and the renderer also needs the resolved target and the
-/// live-replay watermark.
+/// Three queries need it. `session.state` answers `{snapshot}` while the facade
+/// hands back the snapshot itself. `conversation.open` is assembled rather than
+/// passed through: the adapter reads a transcript page, and the renderer also
+/// needs the resolved target and the live-replay watermark. `usage.get` is
+/// reshaped because the CLI's panel is ANSI text — see [`usage_read_model`].
 fn shape_query_result(name: &str, payload: Value) -> Value {
     if name == "session.state" {
         return payload.get("snapshot").cloned().unwrap_or(payload);
+    }
+    if name == "usage.get" {
+        return usage_read_model(&payload);
     }
     if name != "conversation.open" {
         return payload;
@@ -792,6 +795,73 @@ fn shape_query_result(name: &str, payload: Value) -> Value {
         // the watermark at 0 lets every subsequent event apply.
         "live": { "status": "complete", "watermark": 0, "events": [] },
     })
+}
+
+/// Reshape the adapter's `/usage` panel into the facade's read model.
+///
+/// What the CLI sends is ANSI text. It carries the totals (total tokens, total
+/// chats, active days) and a heatmap whose cells are intensity buckets — and no
+/// per-hour, per-model, or exact per-day numbers. So the structured arrays stay
+/// empty with a reason that says what is missing, and the panel travels
+/// verbatim: filling `days` with buckets would be inventing token counts, and
+/// an empty heatmap with an honest reason is better than a full-looking one that
+/// is not true.
+fn usage_read_model(payload: &Value) -> Value {
+    let panel = payload.get("panel").and_then(Value::as_str).unwrap_or("");
+    let generated_at = pump::iso_utc(pump::now_millis());
+    if panel.is_empty() {
+        return json!({
+            "generatedAt": generated_at,
+            "days": [], "models": [], "byModel": [], "hours": [],
+            "unavailableReason": "the CLI did not return a usage panel",
+        });
+    }
+    json!({
+        "generatedAt": generated_at,
+        "days": [], "models": [], "byModel": [], "hours": [],
+        "unavailableReason":
+            "Step 的 /usage 面板以 ANSI 文本回传：含总量与热度分档，不含按小时、按模型与精确按日的 token 数。",
+        "panel": panel,
+    })
+}
+
+#[cfg(test)]
+mod usage_tests {
+    use super::*;
+
+    #[test]
+    fn a_panel_travels_verbatim_and_the_arrays_stay_honestly_empty() {
+        let model = usage_read_model(&json!({ "panel": "Usage\nTotal tokens 1,234" }));
+        assert_eq!(
+            model.get("panel").and_then(Value::as_str),
+            Some("Usage\nTotal tokens 1,234")
+        );
+        // Not fabricated from the panel's intensity buckets.
+        assert_eq!(model.get("days").and_then(Value::as_array).map(Vec::len), Some(0));
+        assert_eq!(model.get("hours").and_then(Value::as_array).map(Vec::len), Some(0));
+        assert_eq!(model.get("byModel").and_then(Value::as_array).map(Vec::len), Some(0));
+        let reason = model.get("unavailableReason").and_then(Value::as_str).unwrap_or("");
+        assert!(reason.contains("ANSI"), "the reason says what is missing: {reason}");
+    }
+
+    #[test]
+    fn a_missing_panel_is_reported_rather_than_shaped_into_nothing() {
+        let model = usage_read_model(&json!({}));
+        assert!(model.get("panel").is_none());
+        assert_eq!(
+            model.get("unavailableReason").and_then(Value::as_str),
+            Some("the CLI did not return a usage panel")
+        );
+    }
+
+    #[test]
+    fn the_reshape_is_reachable_from_the_dispatch_table() {
+        // The manifest is derived from the dispatch tables, so a query that
+        // reshapes must also resolve — otherwise the renderer would offer it and
+        // every call would be refused.
+        let (operation, _) = pump::resolve_operation("usage.get", &json!({})).expect("resolves");
+        assert_eq!(operation.get("kind").and_then(Value::as_str), Some("usage.panel"));
+    }
 }
 
 #[tauri::command]

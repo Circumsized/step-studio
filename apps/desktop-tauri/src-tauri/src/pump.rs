@@ -61,6 +61,8 @@ const RENAMED: &[(&str, &str)] = &[
     ("session.create", "session.new"),
     // The renderer opens a conversation; the adapter reads a transcript page.
     ("conversation.open", "session.transcript.read"),
+    // The facade's usage query; the adapter asks the CLI for its `/usage` panel.
+    ("usage.get", "usage.panel"),
 ];
 
 /// How the adapter answers an operation.
@@ -591,7 +593,7 @@ mod tests {
     #[test]
     fn resolve_refuses_what_the_adapter_cannot_do() {
         assert!(resolve_operation("github.pr.list", &json!({})).is_none());
-        assert!(resolve_operation("usage.get", &json!({})).is_none());
+        assert!(resolve_operation("stats.dashboard", &json!({})).is_none());
         assert!(resolve_operation("", &json!({})).is_none());
     }
 

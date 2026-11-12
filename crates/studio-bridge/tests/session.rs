@@ -171,3 +171,4 @@ fn the_handshake_token_comes_from_the_file_the_session_writes() {
     // And connecting still works, because both sides use the file's secret.
     assert!(BridgeSession::connect(&launch).is_ok());
 }
+
