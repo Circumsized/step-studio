@@ -11,6 +11,7 @@
 
 pub mod adapter;
 pub mod lifecycle;
+pub mod process;
 pub mod relay;
 pub mod state;
 pub mod supervisor;

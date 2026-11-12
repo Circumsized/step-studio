@@ -490,6 +490,18 @@ force push 只以 `--force-with-lease` 发出，**从不发裸 `--force`**——
 
 测试：18 个 git 单测，含对真仓库的 stage→unstage 往返；scratch 文件测完即清（工作树干净时没有现成 diff 可测，而改已提交文件再还原会在测试失败时留下脏树）。
 
+### M2.3 多面第一块：daemon 自己的进程树（2026-11-12 完成）
+
+进程树只能由持有它的进程报告——daemon 被 `process_group(0)` 拉成自己的 session，壳重启后它同 PID 存活，即壳侧遍历 `/proc` 永远看不到它。这是 M3.2 查清的结论，这块是它的数据源。
+
+`crates/studio-host/src/process.rs`：以 daemon 为根广度优先遍历，**角色由树里的深度决定而非可执行文件名**（daemon → 直接子进程是 adapter → 再往下是 CLI）；猜一个二进制是什么，改个名就错。RSS 从 `/proc/<pid>/status` 取；平台描述不了的进程其 rss 缺席、总数就短，模型带 `complete` 标志说明这点，不让一个偏少的总数看起来像精确值。
+
+Windows 无 `std` 可达的 toolhelp 快照（要 `unsafe`），所以那边只描述 daemon 自己，`complete: false`。
+
+过程中两个测试自身的问题：`sh -c 'sleep 30'` 会 **exec 替换自己**、根本没有孙子进程，测试会是空转（改成两条命令）；以及 `tree()` 在 spawn 后立刻调用，竞态抢在 shell fork 之前。
+
+**尚未接线**：契约里还没有 `process.tree.get` query，daemon 也还没把这个 read model 接到非转发路径上——那需要 daemon 为它终结协议，是 M2.3 的下一步。
+
 ### D-1 定案：Step 的 session 存储键就是 project 绝对路径（2026-11-12 实测）
 
 D-1 的判据本就是个实证问题，直接查 `~/.stepcode`：
