@@ -67,6 +67,10 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
     // was missing.
     ("mcp.get", "limited"),
     ("skills.get", "limited"),
+    // Both are facts about this machine and this shell, so the shell answers
+    // them: no adapter round trip for information it already has.
+    ("environment.get", "limited"),
+    ("diagnostics.get", "limited"),
 ];
 
 /// `core.prompt` sits apart because it is the one `Dispatch::Turn` operation.
@@ -570,6 +574,10 @@ fn pump(
                                 .cloned()
                                 .unwrap_or(Value::Null);
                             crate::git::execute(&operation)
+                        } else if job.command_name == "environment.get" {
+                            crate::diagnostics::environment(stream.runtime_id.clone(), stream.authority_epoch, stream.runtime_epoch)
+                        } else if job.command_name == "diagnostics.get" {
+                            crate::diagnostics::report(stream.runtime_id.clone(), stream.authority_epoch)
                         } else if job.command_name == "workspace.open" {
                             let workspace_id = job
                                 .operation

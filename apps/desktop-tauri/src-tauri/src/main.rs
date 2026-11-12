@@ -7,6 +7,7 @@
 
 mod bridge;
 mod chrome;
+mod diagnostics;
 mod git;
 mod history;
 mod pump;

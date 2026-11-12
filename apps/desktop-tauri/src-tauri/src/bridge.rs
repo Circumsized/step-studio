@@ -499,7 +499,12 @@ mod tests {
 
 /// The bridge token. The daemon writes the same value into the token file it
 /// owns, so a surface that already knows it does not have to read the file.
-const BRIDGE_TOKEN: &str = "step-studio";
+/// The bridge token. The daemon writes the same value into the token file it
+/// owns, so a surface that already knows it does not have to read the file.
+///
+/// `pub` so the diagnostics test can assert it never appears as a value: a
+/// diagnostic is what a user pastes into a bug report.
+pub const BRIDGE_TOKEN: &str = "step-studio";
 
 /// Make sure a daemon is answering on `endpoint`, starting one when it is not.
 ///
