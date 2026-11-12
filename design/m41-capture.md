@@ -12,13 +12,30 @@
 XWD 而非 PNG：本机只有 `xwd`/`xwud`，没有 ImageMagick。XWD 是无压缩位图，
 `xwud -display` 可直接看；转 PNG 需要有 `convert` 的机器，未做。
 
-## 首轮结果（workbench 页）
+## 第二轮结果（workbench 页）
 
 | 项 | 结果 |
 |---|---|
-| 捕获 | 成功，6.4 MB XWD |
-| 壳 stderr | **空** |
-| 与 `docs/images/workbench.png` 的逐模块比对 | **未做** |
+| 捕获 | 成功，**应用自己的窗口** 0x200003，1280×800（= 壳的 `inner_size`），4.1 MB XWD |
+| 壳 stderr | 完整自检轨迹：`session 1 established` → `prompt accepted` → 逐字 `he`/`llo`/`!` → `receipt core.prompt -> completed` → `conversation.turn.completed` |
+| 与 `docs/images/workbench.png` 的逐模块比对 | **仍未做** |
+
+第一轮失败在两个地方，都已修：① 等待 25 秒太短，debug 壳在 Xvfb 下 GTK/WebKit
+初始化就要 20 秒以上，壳根本没走到 setup；② 捕获脚本没传 `STEP_STUDIO_STEP_CMD`，
+适配器起不来，daemon 20 秒后把表面关掉，壳报 `Connection reset by peer`。
+等待提到 55 秒、补上 fake-step 之后，自检轨迹完整。
+
+第三个问题更隐蔽：`xwd -root` 三次产出**字节完全相同**的文件。无合成器下子窗口
+不属于根窗口的 framebuffer，`-root` 只抓到背景。改为按 `xwininfo -root -tree`
+找应用窗口 id 再 `-id` 抓，尺寸从 1600×1000（整个 Xvfb 屏幕）变成 1280×800
+（壳自己的 `inner_size`）——这才是画面。
+
+## 仍不能完成比对的原因
+
+参考图是 2160×1350，捕获是 1280×800。**尺寸差 1.7 倍**，逐模块比对前必须先统一
+口径（要么按参考图的分辨率起 Xvfb，要么把捕获缩放），而本机没有 ImageMagick
+（`convert` 缺失），XWD 也无法直接转 PNG。所以「逐模块像素比对」这一项在本机
+**当前工具链下做不了**，不是没做。
 
 壳 stderr 为空这一条本身是结论：`STEP_STUDIO_SELF_CHECK=1` 下壳应当打印
 `[bridge] session N established` 与逐字流式的 `[self-check]` 行（`main.rs:91`、
