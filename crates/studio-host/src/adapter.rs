@@ -14,6 +14,7 @@ use std::fs;
 use std::io::{BufReader, Write};
 use std::path::Path;
 use std::process::Child;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -65,6 +66,13 @@ pub struct AdapterHandle {
     /// When this adapter started, which is what the supervisor's grace period
     /// measures uptime from.
     pub started: Instant,
+    /// Cleared when this adapter's read half ends.
+    ///
+    /// Part of the handle rather than a separate slot, so a surface reads the
+    /// adapter and its liveness in one atomic step. Two fields would let a
+    /// surface see a new adapter paired with the previous one's death, and
+    /// release a connection that is fine.
+    pub alive: Arc<AtomicBool>,
 }
 
 /// Spawn the adapter, wait for its socket, and complete the handshake.
@@ -110,6 +118,7 @@ pub fn launch(
                 instance_id: parts.instance_id,
                 identity: parts.identity,
                 token,
+                alive: Arc::new(AtomicBool::new(true)),
             },
             parts.reader,
         )),
@@ -133,6 +142,7 @@ pub struct AdapterView {
     pub instance_id: String,
     pub identity: Value,
     pub token: String,
+    pub alive: Arc<AtomicBool>,
 }
 
 /// What the handshake established, before the child is attached to it.
@@ -229,8 +239,19 @@ impl AdapterHandle {
             instance_id: self.instance_id.clone(),
             identity: self.identity.clone(),
             token: self.token.clone(),
+            alive: Arc::clone(&self.alive),
         }
     }
+}
+
+/// Whether an adapter is still the one a surface is talking to.
+pub fn is_alive(flag: &AtomicBool) -> bool {
+    flag.load(Ordering::Relaxed)
+}
+
+/// Mark an adapter's read half as ended.
+pub fn mark_dead(flag: &AtomicBool) {
+    flag.store(false, Ordering::Relaxed);
 }
 
 /// The challenge the daemon sends. Carries the daemon epoch so a proof minted

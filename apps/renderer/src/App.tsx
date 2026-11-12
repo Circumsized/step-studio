@@ -9140,8 +9140,33 @@ function TargetApp({ client: inputClient }: { readonly client: StudioClient }) {
 
   useEffect(() => {
     let cancelled = false;
+    // The authority this load was for. A reconnect that moves the epoch leaves
+    // the reducer holding a reset state with nothing to refill it: it has
+    // already nulled the snapshot and marked in-flight commands
+    // `outcome_unknown`, and there is no timeout that recovers from that. So
+    // the load runs again — which is also what makes the shell survive the
+    // adapter restarting underneath it.
+    // Which authority the current state was loaded for. Both halves matter:
+    // the epoch moves when the daemon restarts, and the runtime id moves when
+    // the adapter does — an adapter restart under a surviving daemon is the
+    // common case, and the epoch alone would not see it.
+    let loadedFor: { readonly epoch: number | null; readonly runtimeId: string | undefined } | null = null;
+    const reloadForNewEpoch = (event: ClientEvent) => {
+      if (event.kind !== "runtime.changed") return;
+      // The first load covers whatever is current when it lands; only a later
+      // change of authority means the state we hold is somebody else's.
+      if (loadedFor === null) return;
+      const next = {
+        epoch: event.connection.runtimeEpoch ?? null,
+        runtimeId: event.connection.runtimeId,
+      };
+      if (next.epoch === loadedFor.epoch && next.runtimeId === loadedFor.runtimeId) return;
+      loadedFor = next;
+      void load();
+    };
     const offEvent = client.subscribe({ scope: "all" }, (event) => {
       notifyFromEvent(event, t);
+      reloadForNewEpoch(event);
       if (!cancelled && shouldRecordShellEvent(event)) dispatch({ type: "event", event });
     });
     let lastShell: ClientState | undefined;
@@ -9160,6 +9185,10 @@ function TargetApp({ client: inputClient }: { readonly client: StudioClient }) {
         if (cancelled) return;
         const clientState = client.getState?.();
         dispatch({ type: "ready", bootstrap, ...(clientState ? { clientState } : {}) });
+        loadedFor = {
+          epoch: bootstrap.authority?.authorityEpoch ?? clientState?.connection.runtimeEpoch ?? null,
+          runtimeId: bootstrap.authority?.authorityId,
+        };
         // The sidebar only needs the project list; commit it as soon as it
         // lands instead of waiting for the slowest query (the history scan).
         void client.query("projects.list", {}).then(

@@ -19,6 +19,7 @@
 //! `design/plan.md` §19.
 
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -156,7 +157,16 @@ fn unavailable_bootstrap() -> UnavailableBootstrap {
 // --- the session ----------------------------------------------------------
 
 /// State shared with the Tauri commands.
+///
+/// A handle over [`SessionInner`] rather than the fields themselves, because a
+/// reconnect has to replace the session underneath commands that hold a
+/// `State<'_, SessionState>` for the window's lifetime.
 pub struct SessionState {
+    pub inner: Arc<SessionInner>,
+}
+
+/// What a reconnect replaces.
+pub struct SessionInner {
     /// The real snapshot once a session is established. Cached because the
     /// webview's `bootstrap` must not block on a socket round-trip.
     pub bootstrap: Mutex<Option<serde_json::Value>>,
@@ -165,6 +175,30 @@ pub struct SessionState {
     pub window: Arc<Mutex<Option<tauri::WebviewWindow>>>,
     /// The pump's inbox. `close` takes the sender, which ends the pump.
     pub jobs: Mutex<Option<mpsc::Sender<Job>>>,
+    /// Bumped on every successful connect, reconnect included.
+    ///
+    /// The renderer cannot tell a reconnected shell from the one it was talking
+    /// to without this: the epoch alone does not move when the daemon is the
+    /// same one and only the adapter restarted.
+    pub generation: AtomicU64,
+}
+
+impl SessionInner {
+    /// Take over the relay: the old pump's sender goes, the new one arrives.
+    fn install(&self, bootstrap: serde_json::Value, jobs: mpsc::Sender<Job>) {
+        {
+            let mut slot = self.jobs.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            *slot = Some(jobs);
+        }
+        {
+            let mut slot = self
+                .bootstrap
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *slot = Some(bootstrap);
+        }
+        self.generation.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 /// A live session: the bootstrap the renderer asked for, plus the pump's
@@ -172,6 +206,10 @@ pub struct SessionState {
 pub struct Connected {
     pub bootstrap: serde_json::Value,
     pub session: BridgeSession,
+    /// Which adapter this session reached. It changes when the adapter
+    /// restarts, which is what tells a reconnecting shell that the authority
+    /// moved even though the daemon's epoch did not.
+    pub instance_id: String,
     pub runtime_epoch: u64,
     pub authority_epoch: u64,
     pub state_version: u64,
@@ -200,13 +238,21 @@ fn env_or(name: &str, fallback: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| fallback.to_string())
 }
 
-/// Connect to the host daemon, starting it if nothing is answering.
+/// Everything a reconnect needs, captured once.
 ///
-/// The shell is a client. It launches the daemon and nothing else, and the
-/// daemon owns the adapter — which is what makes a shell restart survivable:
-/// dropping this session closes a socket and half-closes it, and the adapter
-/// keeps running under the daemon.
-pub fn connect_session() -> Option<Connected> {
+/// The supervisor rebuilds a session from this, so it has to survive the first
+/// one ending.
+#[derive(Clone)]
+pub struct ConnectionConfig {
+    pub endpoint: String,
+    pub cwd: PathBuf,
+    pub repo_root: PathBuf,
+    pub step_command: String,
+    pub session_dir: PathBuf,
+}
+
+/// Read the configuration out of the environment.
+pub fn connection_config() -> Option<ConnectionConfig> {
     let cwd = PathBuf::from(env_or("STEP_STUDIO_CWD", "."));
     let repo_root = find_repo_root(
         &std::env::var_os("STEP_STUDIO_REPO_ROOT")
@@ -224,8 +270,29 @@ pub fn connect_session() -> Option<Connected> {
 
     let session_dir = cwd.join(".step-studio");
     let _ = std::fs::create_dir_all(&session_dir);
-    let endpoint = host::lifecycle::default_endpoint();
-    if !ensure_daemon(&endpoint, &cwd, &repo_root, &step_command, &session_dir) {
+    Some(ConnectionConfig {
+        endpoint: host::lifecycle::default_endpoint(),
+        cwd,
+        repo_root,
+        step_command,
+        session_dir,
+    })
+}
+
+/// Connect to the host daemon, starting it if nothing is answering.
+///
+/// The shell is a client. It launches the daemon and nothing else, and the
+/// daemon owns the adapter — which is what makes a shell restart survivable:
+/// dropping this session closes a socket and half-closes it, and the adapter
+/// keeps running under the daemon.
+fn connect_with(config: &ConnectionConfig) -> Option<Connected> {
+    if !ensure_daemon(
+        &config.endpoint,
+        &config.cwd,
+        &config.repo_root,
+        &config.step_command,
+        &config.session_dir,
+    ) {
         return None;
     }
 
@@ -235,9 +302,13 @@ pub fn connect_session() -> Option<Connected> {
     let launch = AdapterLaunch {
         node: String::new(),
         adapter_script: String::new(),
-        socket_path: endpoint,
-        token_file: session_dir.join("token").to_string_lossy().to_string(),
-        cwd: cwd.to_string_lossy().to_string(),
+        socket_path: config.endpoint.clone(),
+        token_file: config
+            .session_dir
+            .join("token")
+            .to_string_lossy()
+            .to_string(),
+        cwd: config.cwd.to_string_lossy().to_string(),
         runtime_epoch: 1,
         env: Vec::new(),
         token: Some(BRIDGE_TOKEN.to_string()),
@@ -276,8 +347,146 @@ pub fn connect_session() -> Option<Connected> {
             .get("stateVersion")
             .and_then(Value::as_u64)
             .unwrap_or(0),
+        instance_id: session.instance_id().to_string(),
         session,
     })
+}
+
+/// Keep a session alive for as long as the shell runs.
+///
+/// The daemon owns the adapter, so a session ending is usually the adapter
+/// restarting underneath it — which is recoverable. Without this loop a
+/// crash-looping runtime looks like a dead app: every command fails, the
+/// renderer draws its error state, and nothing ever tries again.
+///
+/// Backoff is bounded and the loop never gives up: the shell is open, so the
+/// user is still waiting. The cap is what stops a daemon that is down from
+/// turning into a connect storm.
+pub fn supervise(
+    config: ConnectionConfig,
+    inner: Arc<SessionInner>,
+    sink: impl Fn() -> pump::EventSink + Send + Sync + 'static,
+) {
+    std::thread::spawn(move || {
+        let mut backoff = Backoff::new();
+        loop {
+            let Some(connected) = connect_with(&config) else {
+                std::thread::sleep(backoff.after_failure());
+                continue;
+            };
+            backoff.reset();
+            let (jobs, pump_thread) = pump::spawn_pump(
+                connected.session,
+                sink(),
+                connected.runtime_epoch,
+                connected.authority_epoch,
+                connected.state_version,
+                connected.instance_id,
+            );
+            inner.install(connected.bootstrap, jobs);
+            eprintln!("[bridge] session {} established", inner.generation.load(Ordering::Relaxed));
+
+            // The pump ends when the session does. Joining it is what makes the
+            // next iteration's connect a reconnect rather than a second
+            // concurrent session.
+            let reason = pump_thread.join().ok().flatten();
+            match reason {
+                Some(reason) => eprintln!("[bridge] session ended: {reason}; reconnecting"),
+                // The job channel was closed, which is `close`: the shell is
+                // going away, so there is nothing to reconnect to.
+                None => return,
+            }
+        }
+    });
+}
+
+/// How long to wait before the next connect attempt.
+///
+/// Doubling from 250 ms to a 5 s ceiling. No jitter: there is exactly one
+/// shell, so there is nobody to spread out against, and `std` has no RNG.
+pub struct Backoff {
+    delay: Duration,
+}
+
+const BACKOFF_CEILING: Duration = Duration::from_secs(5);
+
+impl Backoff {
+    pub fn new() -> Self {
+        Self {
+            delay: Duration::from_millis(250),
+        }
+    }
+
+    /// Wait this long after a failed attempt.
+    pub fn after_failure(&mut self) -> Duration {
+        let waited = self.delay;
+        self.delay = (self.delay * 2).min(BACKOFF_CEILING);
+        waited
+    }
+
+    /// A connection worked, so the next failure starts from the beginning.
+    pub fn reset(&mut self) {
+        self.delay = Duration::from_millis(250);
+    }
+}
+
+impl Default for Backoff {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_backoff_doubles_and_caps() {
+        let mut backoff = Backoff::new();
+        assert_eq!(backoff.after_failure(), Duration::from_millis(250));
+        assert_eq!(backoff.after_failure(), Duration::from_millis(500));
+        assert_eq!(backoff.after_failure(), Duration::from_secs(1));
+        assert_eq!(backoff.after_failure(), Duration::from_secs(2));
+        assert_eq!(backoff.after_failure(), Duration::from_secs(4));
+        // The ceiling holds from here on, however many failures follow.
+        for _ in 0..10 {
+            assert_eq!(backoff.after_failure(), Duration::from_secs(5));
+        }
+    }
+
+    #[test]
+    fn a_connection_that_worked_resets_the_backoff() {
+        let mut backoff = Backoff::new();
+        for _ in 0..5 {
+            backoff.after_failure();
+        }
+        assert_eq!(backoff.after_failure(), Duration::from_secs(5));
+        backoff.reset();
+        assert_eq!(backoff.after_failure(), Duration::from_millis(250));
+    }
+
+    #[test]
+    fn installing_a_session_bumps_the_generation() {
+        let inner = Arc::new(SessionInner {
+            bootstrap: Mutex::new(None),
+            window: Arc::new(Mutex::new(None)),
+            jobs: Mutex::new(None),
+            generation: AtomicU64::new(0),
+        });
+        let (sender, _receiver) = mpsc::channel::<Job>();
+        inner.install(serde_json::json!({ "generation": 1 }), sender);
+        assert_eq!(inner.generation.load(Ordering::Relaxed), 1);
+        assert!(inner.bootstrap.lock().unwrap().is_some());
+
+        // A reconnect replaces both, and the renderer can see that it happened.
+        let (sender, _receiver) = mpsc::channel::<Job>();
+        inner.install(serde_json::json!({ "generation": 2 }), sender);
+        assert_eq!(inner.generation.load(Ordering::Relaxed), 2);
+        assert_eq!(
+            inner.bootstrap.lock().unwrap().as_ref().and_then(|b| b.get("generation")),
+            Some(&serde_json::json!(2))
+        );
+    }
 }
 
 /// The bridge token. The daemon writes the same value into the token file it
@@ -489,6 +698,7 @@ pub fn bootstrap(state: tauri::State<'_, SessionState>) -> serde_json::Value {
     // A real snapshot when the session is up, the honest unavailable shape
     // when it is not.
     let cached = state
+        .inner
         .bootstrap
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -514,6 +724,7 @@ fn round_trip(
     let (operation, dispatch) =
         pump::resolve_operation(name, &input).ok_or_else(|| IpcError::unavailable(name))?;
     let sender = state
+        .inner
         .jobs
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -606,6 +817,7 @@ pub fn subscribe(
     window: tauri::WebviewWindow,
 ) -> Result<(), IpcError> {
     let mut slot = state
+        .inner
         .window
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -620,6 +832,7 @@ pub fn close(state: tauri::State<'_, SessionState>) -> Result<(), IpcError> {
     // owns no child — the daemon owns the adapter — so this closes a socket and
     // nothing else. The daemon keeps the conversation for its grace period.
     let sender = state
+        .inner
         .jobs
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())

@@ -452,6 +452,28 @@ Node 进程里驱动：
 
 这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
 
+### M2.2：壳侧重连 + 全量刷新（2026-11-12 完成并实证）
+
+适配器崩溃重启后，M2.1 会把壳留在一条断掉的 relay 上且没有任何恢复路径。本条补上。
+
+| 层 | 改动 |
+|---|---|
+| `studio-bridge` | 新增 `BridgeSession::close_reason()`：区分「这条命令失败」与「已经没有可问的人」 |
+| 泵 | 每 50 ms tick 检查会话是否已断，断了就退出并把原因交出去；`spawn_pump` 因此多返回一个 `JoinHandle`。接管 session 的**第一帧**是 `runtime.changed` 宣告——重连不产生命令也不产生适配器事件，渲染层没有别的途径知道权威变了 |
+| 壳 | `SessionState` 改为 `Arc<SessionInner>` 句柄，监督者能在 Tauri 命令持有 `State` 期间换掉 session；`supervise()` 带界退避（250 ms → 5 s 上限）永不放弃地重连；`Backoff` 是纯状态机，有单测 |
+| 渲染层 | `load()` 在权威变更时重跑，键同时用 epoch 与 runtimeId |
+
+**四个非显然的点**：
+
+1. **daemon 必须主动关掉 surface 的 socket**。适配器死后它的泵线程退出，但 slot 里的 sender 克隆还活着 → surface 的写线程永远等不到 channel 关闭 → socket 两边都开着 → 壳的会话不死、泵永远不知道要重连。这是 B1 真正的断点，而且不在重连算法里。
+2. **等「活着的适配器」而不是「有适配器」**。槽里会留着刚死那个直到替换者起来，新表面拿到死 handle 会被立刻释放成 broken pipe。
+3. **存活标记收进 `AdapterHandle`**，不做独立槽。两个字段会让表面看到「新适配器 + 旧死亡标记」的竞态，误杀一条好连接（实测抓到）。
+4. **宣告事件从泵内部发**，用 stream 自己的 cursor。从泵外发会和第一个真事件撞号，reducer 的 `cursorRelation` 判 duplicate 后把它吃掉。
+
+**真实验收**：跑壳 → 自检回合完成 → `kill -9` 适配器 → daemon 记 `the adapter ended; releasing the surface` → 壳记 `session ended: adapter closed the connection; reconnecting` → `session 2 established` → 新适配器起来（pid 变更）。
+
+**测试**：daemon 端到端从 5 个增至 6 个，新增「适配器死后表面被释放且 daemon 继续服务」；壳侧 Rust 测试 26 → 28（`Backoff` 两条 + `install` 换代 + 宣告两条）。workspace clippy `-D warnings` 零警告，`npm run check` 全绿。
+
 ### M2.1：host daemon 化——生命周期 + 监督者（2026-11-12 完成并实证）
 
 新增 `crates/studio-host`（workspace 成员），壳从「spawn 适配器 + 当客户端 + 退出时杀适配器」三合一改为**纯客户端**。

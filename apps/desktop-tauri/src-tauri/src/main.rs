@@ -10,6 +10,7 @@ mod chrome;
 mod pump;
 mod terminal;
 
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
@@ -84,61 +85,75 @@ fn main() {
         // `move`: the closure hands the window handle to the pump, which
         // outlives this function.
         .setup(move |app| {
-            // Establish the session before the first `bootstrap` can arrive, so
-            // the renderer never sees a snapshot flip from unavailable to real.
-            // The pump starts here too: it owns the session from now on, and
-            // commands only ever talk to it over `jobs`.
             let self_check = std::env::var_os("STEP_STUDIO_SELF_CHECK").is_some();
-            let (bootstrap, jobs) = match bridge::connect_session() {
-                Some(connected) => {
-                    // One sink, two jobs: the window gets every event, and in
-                    // self-check mode stderr gets the same stream.
-                    let window = Arc::clone(&window);
-                    let sink: pump::EventSink = Box::new(move |payload| {
+            // The window is where events go. It lives in the shared inner state
+            // rather than in the sink closure, so a reconnect gets the same
+            // window without anybody having to rebuild the closure.
+            let inner = Arc::new(bridge::SessionInner {
+                bootstrap: Mutex::new(None),
+                window: Arc::clone(&window),
+                jobs: Mutex::new(None),
+                generation: AtomicU64::new(0),
+            });
+            app.manage(bridge::SessionState {
+                inner: Arc::clone(&inner),
+            });
+            app.manage(terminal::TerminalState::default());
+
+            // The supervisor owns the connection from here on: it connects, and
+            // connects again whenever the session ends. Establishing it before
+            // the window exists means the first `bootstrap` can arrive at any
+            // moment, which is why the renderer treats a missing snapshot as
+            // "not yet" rather than "never".
+            if let Some(config) = bridge::connection_config() {
+                let sink_state = Arc::clone(&inner);
+                let trace = self_check;
+                bridge::supervise(config, Arc::clone(&inner), move || {
+                    let window = Arc::clone(&sink_state.window);
+                    Box::new(move |payload: Value| {
                         let received = match window
                             .lock()
                             .unwrap_or_else(|poisoned| poisoned.into_inner())
                             .as_ref()
                         {
                             // A window that went away is not worth failing a turn over.
-                            Some(target) => target.emit(pump::EVENT_CHANNEL, payload.clone()).is_ok(),
+                            Some(target) => {
+                                target.emit(pump::EVENT_CHANNEL, payload.clone()).is_ok()
+                            }
                             None => false,
                         };
-                        if self_check {
+                        if trace {
                             trace_sink(&payload);
                         }
                         received
-                    });
-                    let jobs = pump::spawn_pump(
-                        connected.session,
-                        sink,
-                        connected.runtime_epoch,
-                        connected.authority_epoch,
-                        connected.state_version,
-                    );
-                    (Some(connected.bootstrap), Some(jobs))
-                }
-                None => (None, None),
-            };
-            let state = bridge::SessionState {
-                bootstrap: Mutex::new(bootstrap),
-                window: Arc::clone(&window),
-                // Cloned, not moved: the self-check turn below needs a sender
-                // too, and a second sender to the same pump is free.
-                jobs: Mutex::new(jobs.clone()),
-            };
-            // Managed by type: the commands take `State<'_, SessionState>`, so
-            // wrapping it here would store a different type and every lookup
-            // would miss. The clone is for the self-check turn below.
-            app.manage(state);
-            app.manage(terminal::TerminalState::default());
+                    })
+                });
+            }
 
-            // The self-check turn. Sent after the state is managed so the reply
-            // has somewhere to land, and on its own thread so `setup` returns.
-            if let Some(sender) = jobs {
+            // The self-check turn. It waits for the first session rather than
+            // assuming one, because the supervisor may still be backing off
+            // from a daemon that is not up yet.
+            if self_check {
                 let prompt = std::env::var("STEP_STUDIO_SELF_CHECK_PROMPT")
                     .unwrap_or_else(|_| "reply with exactly: PONG".to_string());
+                let inner = Arc::clone(&inner);
                 std::thread::spawn(move || {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+                    let sender = loop {
+                        if let Some(sender) = inner
+                            .jobs
+                            .lock()
+                            .unwrap_or_else(|poisoned| poisoned.into_inner())
+                            .clone()
+                        {
+                            break sender;
+                        }
+                        if std::time::Instant::now() >= deadline {
+                            eprintln!("[self-check] no session after 60s");
+                            return;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    };
                     let (reply, inbox) = std::sync::mpsc::channel();
                     if sender
                         .send(pump::Job {

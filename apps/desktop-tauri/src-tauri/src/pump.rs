@@ -177,6 +177,10 @@ pub struct Job {
 /// renderer's max-tracking `advanceConnection` honest.
 struct Stream {
     cursor: u64,
+    /// Which adapter this session is talking to. It changes when the adapter
+    /// restarts, which is the signal a reconnecting shell needs: the daemon's
+    /// epoch does not move when only the adapter did.
+    runtime_id: String,
     stream_seq: u64,
     state_version: u64,
     runtime_epoch: u64,
@@ -290,15 +294,21 @@ impl Stream {
 pub type EventSink = Box<dyn Fn(Value) -> bool + Send + Sync + 'static>;
 
 /// Start the pump. Returns the channel commands and queries send through.
+/// Start the pump, and hand back both the job sender and the thread's handle.
+///
+/// The handle is the point: the pump ends when the session does, and whoever
+/// owns the shell's lifetime needs to know that happened. Returning only the
+/// sender left a dead session looking like a session whose commands all fail.
 pub fn spawn_pump(
     session: BridgeSession,
     sink: EventSink,
     runtime_epoch: u64,
     authority_epoch: u64,
     state_version: u64,
-) -> Sender<Job> {
+    runtime_id: String,
+) -> (Sender<Job>, std::thread::JoinHandle<Option<String>>) {
     let (sender, receiver) = mpsc::channel();
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         pump(
             session,
             &sink,
@@ -310,10 +320,31 @@ pub fn spawn_pump(
                 runtime_epoch,
                 authority_epoch,
                 pending_turn: None,
+                runtime_id,
             },
         )
     });
-    sender
+    (sender, handle)
+}
+
+/// The event that tells the renderer which authority this session belongs to.
+///
+/// A reconnect produces no command and no adapter event until the user does
+/// something, so without this the renderer has no way to learn the authority
+/// changed — it would keep the state the dead session left behind. Both halves
+/// of the identity are carried: the epoch moves when the daemon restarts, the
+/// runtime id when the adapter does, and the second is the common case.
+fn connection_announcement(stream: &mut Stream) -> Value {
+    let mut event = stream.base("runtime.changed");
+    event["connection"] = json!({
+        "status": "connected",
+        // The daemon manages the adapter's lifetime, which is what "managed"
+        // means here.
+        "classification": "managed",
+        "runtimeId": stream.runtime_id,
+        "runtimeEpoch": stream.runtime_epoch,
+    });
+    event
 }
 
 /// Hand one adapter event to the sink, and only advances the stream if it landed.
@@ -357,13 +388,29 @@ fn emit(sink: &EventSink, stream: &mut Stream, build: impl FnOnce(&mut Stream) -
     }
 }
 
+/// Drive one session until it ends. Returns why it ended, when it ended on its
+/// own rather than because the shell closed the job channel.
 fn pump(
     session: BridgeSession,
     sink: &EventSink,
     jobs: Receiver<Job>,
     mut stream: Stream,
-) {
+) -> Option<String> {
+    // Announce this session before anything else.
+    //
+    // A reconnect produces no command and no adapter event until the user does
+    // something, so without this the renderer has no way to learn the authority
+    // changed — it would keep the state the dead session left behind. The
+    // cursor comes from the stream, so this cannot collide with the first real
+    // event the way an event emitted from outside the pump would.
+    emit(sink, &mut stream, connection_announcement);
     loop {
+        // The connection can die while the shell is idle, with no command to
+        // fail and so nothing to notice. Checking here is what turns "every
+        // command errors" into "the session is gone, reconnect".
+        if let Some(reason) = session.close_reason() {
+            return Some(reason);
+        }
         match jobs.recv_timeout(Duration::from_millis(50)) {
             Ok(job) => {
                 let ack = json!({
@@ -448,7 +495,7 @@ fn pump(
                     deliver(sink, &mut stream, &event);
                 }
             }
-            Err(RecvTimeoutError::Disconnected) => return,
+            Err(RecvTimeoutError::Disconnected) => return None,
         }
     }
 }
@@ -601,7 +648,36 @@ mod tests {
             runtime_epoch: 3,
             authority_epoch: 3,
             pending_turn: None,
+            runtime_id: "step-runtime-test".to_string(),
         }
+    }
+
+    #[test]
+    fn the_first_event_announces_the_authority_it_belongs_to() {
+        let mut stream = stream();
+        let event = connection_announcement(&mut stream);
+        assert_eq!(event.get("kind").and_then(Value::as_str), Some("runtime.changed"));
+        // The renderer keys its reload on both halves: the epoch moves when the
+        // daemon restarts, the runtime id when the adapter does.
+        let connection = event.get("connection").expect("a connection payload");
+        assert_eq!(
+            connection.get("runtimeId").and_then(Value::as_str),
+            Some("step-runtime-test")
+        );
+        assert_eq!(connection.get("runtimeEpoch").and_then(Value::as_u64), Some(3));
+        assert_eq!(connection.get("status").and_then(Value::as_str), Some("connected"));
+        // The cursor comes from the stream, so this cannot collide with the
+        // first real event the way an event emitted from outside would.
+        assert_eq!(event.get("cursor").and_then(Value::as_u64), Some(1));
+    }
+
+    #[test]
+    fn a_second_announcement_moves_the_cursor_rather_than_reusing_it() {
+        let mut stream = stream();
+        let first = connection_announcement(&mut stream);
+        let second = connection_announcement(&mut stream);
+        assert_eq!(first.get("cursor").and_then(Value::as_u64), Some(1));
+        assert_eq!(second.get("cursor").and_then(Value::as_u64), Some(2));
     }
 
     #[test]

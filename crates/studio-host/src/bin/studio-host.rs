@@ -220,13 +220,14 @@ fn supervise(daemon: Arc<Daemon>) {
         };
         let (handle, reader) = handle;
         let uptime_at_death = {
+            let alive = Arc::clone(&handle.alive);
             let mut slot = daemon.adapter.lock().unwrap_or_else(|p| p.into_inner());
             *slot = Some(handle);
             drop(slot);
             // One pump thread per adapter, not per surface: it owns the read
             // half for the adapter's whole life, and hands frames to whichever
             // surface is currently active.
-            spawn_pump(Arc::clone(&daemon), reader);
+            spawn_pump(Arc::clone(&daemon), reader, alive);
             wait_for_adapter(&daemon)
         };
         let uptime = uptime_at_death.unwrap_or(Duration::ZERO);
@@ -300,7 +301,14 @@ fn native_runtime_command(repo_root: &str) -> Vec<String> {
 }
 
 /// Own the adapter's read half for as long as it lives.
-fn spawn_pump(daemon: Arc<Daemon>, mut reader: transport::Stream) {
+///
+/// Returns a liveness flag this adapter's thread clears on the way out. Without
+/// it a surface has no way to learn the adapter ended: the pump thread would
+/// simply return, the slot's sender would stay alive, the surface's writer would
+/// keep waiting on a channel nobody closes, and the socket would stay open on
+/// both sides — so the shell's session would never die and its pump would never
+/// reconnect.
+fn spawn_pump(daemon: Arc<Daemon>, mut reader: transport::Stream, alive: Arc<AtomicBool>) {
     std::thread::spawn(move || {
         let outcome = relay::pump_frames_to(&mut reader, |frame| {
             // Nobody attached is a normal state, not an error: the frames are
@@ -314,6 +322,13 @@ fn spawn_pump(daemon: Arc<Daemon>, mut reader: transport::Stream) {
         if let Err(error) = outcome {
             eprintln!("step-studio-host: adapter read ended: {error}");
         }
+        // The adapter is gone, so whatever it was feeding is over: release the
+        // surface, and say so.
+        {
+            let mut slot = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
+            *slot = None;
+        }
+        adapter::mark_dead(&alive);
     });
 }
 
@@ -445,19 +460,21 @@ fn serve(daemon: Arc<Daemon>) {
 fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     let stream = connection.into_connection();
 
-    // Wait for an adapter. Refusing outright would turn a restart's backoff
-    // into a hard failure for whoever was connecting.
+    // Wait for a *live* adapter. The slot keeps the dead one until its
+    // replacement is up, and a surface handed the dead handle would be released
+    // again immediately — which is a broken pipe for whoever just connected.
     let waited = Instant::now();
     loop {
         if daemon.stopping.load(Ordering::Relaxed) {
             return;
         }
-        if daemon
+        let live = daemon
             .adapter
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .is_some()
-        {
+            .as_ref()
+            .is_some_and(|handle| adapter::is_alive(&handle.alive));
+        if live {
             break;
         }
         if waited.elapsed() >= ADAPTER_WAIT {
@@ -563,20 +580,41 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         }
     }
 
-    let outcome = {
-        let mut adapter_writer = AdapterWriter(handle.writer);
+    {
+        let mut adapter_writer = AdapterWriter(Arc::clone(&handle.writer));
         if let Some(frame) = head {
             use std::io::Write;
             let _ = adapter_writer.write_all(&frame);
         }
-        pump_frames(&mut surface_reader, &mut adapter_writer)
-    };
-    if let Err(error) = outcome {
-        // A surface that goes away mid-frame is normal; anything else is worth
-        // a line, because it is the only place the relay's health is visible.
-        if error.kind() != std::io::ErrorKind::UnexpectedEof {
-            eprintln!("step-studio-host: surface relay ended: {error}");
+        // The relay runs on its own thread so this one can watch the adapter:
+        // a surface that keeps sending while its adapter has died is a socket
+        // nobody is reading, and the shell behind it would wait forever.
+        let (relay_done, relay_done_rx) = mpsc::channel::<()>();
+        let mut surface_reader = surface_reader;
+        std::thread::spawn(move || {
+            let _ = pump_frames(&mut surface_reader, &mut adapter_writer);
+            let _ = relay_done.send(());
+        });
+        loop {
+            if daemon.stopping.load(Ordering::Relaxed) {
+                break;
+            }
+            // The adapter this surface was talking to ended. The next one is
+            // already coming up, and this surface must not be handed to it: the
+            // shell reconnects and gets a fresh session instead.
+            if !adapter::is_alive(&handle.alive) {
+                eprintln!("step-studio-host: the adapter ended; releasing the surface");
+                break;
+            }
+            if relay_done_rx.try_recv().is_ok() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
         }
+        // Closing the socket is what makes the surface notice. Its reader
+        // thread then sees EOF, the session reports closed, and the shell's
+        // supervisor reconnects — which is the whole point of B1.
+        close_socket(&stream);
     }
 
     // Order matters, and so does dropping the local sender: the writer thread
@@ -593,6 +631,22 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         .unwrap_or_else(|p| p.into_inner())
         .detach(daemon.started.elapsed());
 }
+
+/// Close a surface's socket in both directions.
+///
+/// Half-closing from the daemon's side is what turns "the adapter died" into
+/// something the shell can act on: its reader thread sees EOF, the session
+/// reports closed, and the pump reconnects. Leaving the socket open leaves the
+/// shell waiting on a peer that will never speak again.
+#[cfg(unix)]
+fn close_socket(stream: &transport::Stream) {
+    let _ = stream.shutdown(std::net::Shutdown::Both);
+}
+
+/// A named pipe handle has no equivalent, so a Windows surface learns the
+/// adapter ended when the daemon's own process goes away.
+#[cfg(not(unix))]
+fn close_socket(_stream: &transport::Stream) {}
 
 impl Daemon {
     /// Give up the relay and wake whoever is waiting for it.

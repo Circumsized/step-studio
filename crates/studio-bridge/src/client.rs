@@ -252,6 +252,16 @@ impl BridgeSession {
         self.await_reply(&request_id, |_| {})
     }
 
+    /// Why the connection ended, once it has.
+    ///
+    /// A pump that keeps issuing commands against a dead session produces a
+    /// stream of transport errors that all look like operation failures. Asking
+    /// the session directly is what tells "this command failed" from "there is
+    /// nobody left to ask".
+    pub fn close_reason(&self) -> Option<String> {
+        self.shared.lock_inbox().closed.clone()
+    }
+
     /// Take every event that arrived while no command was waiting for them.
     ///
     /// Events are broadcast, not addressed: they queue in the inbox and are

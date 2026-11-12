@@ -334,3 +334,46 @@ fn a_shutdown_drains_the_turn_in_flight() {
     }
     panic!("the turn was truncated by the shutdown instead of being drained");
 }
+
+#[test]
+fn a_surface_is_released_when_its_adapter_dies() {
+    // The daemon's pump ends when the adapter does, and the surface has to be
+    // told: a socket left open on both sides leaves the shell waiting on a peer
+    // that will never speak again, which is what stopped the shell from ever
+    // reconnecting.
+    let daemon = Daemon::start("adapter-death");
+    let session = connect(&daemon);
+    let _ = session.snapshot().expect("snapshot");
+    wait_until("the adapter to come up", || !daemon.adapter_pids().is_empty());
+
+    // Kill the adapter out from under the daemon. The supervisor will bring up
+    // another one, but this surface belongs to the dead one.
+    for pid in daemon.adapter_pids() {
+        let _ = std::process::Command::new("kill").arg("-9").arg(pid.to_string()).status();
+    }
+
+    // The surface must be released rather than left holding a dead relay. What
+    // it observes is the connection ending: the next command fails instead of
+    // hanging, which is the difference between "reconnect" and "wait forever".
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let mut released = false;
+    while Instant::now() < deadline {
+        if session.close_reason().is_some() {
+            released = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(
+        released,
+        "the surface was never told its adapter died, so the shell would never reconnect"
+    );
+
+    // And the daemon is still serving: a new surface gets a new session.
+    let replacement = connect(&daemon);
+    let snapshot = replacement.snapshot().expect("a snapshot from the new adapter");
+    assert!(
+        snapshot.pointer("/snapshot/sessionId").is_some(),
+        "the daemon kept serving after the adapter was replaced"
+    );
+}
