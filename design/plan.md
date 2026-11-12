@@ -877,7 +877,7 @@ flowchart LR
 
 ---
 
-## 21. 执行进展（2026-11-11）
+## 21. 执行进展（2026-11-12）
 
 | 项 | 状态 |
 |---|---|
@@ -885,9 +885,9 @@ flowchart LR
 | Rust 桥与适配器 | 已跑通真实 Step CLI 与真实模型（41 个 cargo 测试） |
 | egui 壳 | 核心对话链路端到端 + Catalog 抽屉（扩展/MCP/命令），egui 0.31；双模式定位 |
 | React renderer | 产品本体，已挂载进 Tauri 壳（M1.1）：renderer 零改动，`globalThis.ompStudio` 注入即建 client |
-| Tauri 壳 | **M1.1 完成并实证**，M1.2a（bootstrap 接真实会话）已完成：状态栏由「Unavailable」变「OMP Ready」；`apps/desktop-tauri` 脚手架 + init script 注入 + 六个命令 stub；clippy 干净、18 个无头单测进核心门禁；Xvfb 下 release 二进制跑通整链路（窗口约 30 秒映射，首屏是完整工作台 + stub 的诚实降级态）。窗口铬/DPI/IME 在 M1.3，WebView2 兼容矩阵在 M1.4 |
+| Tauri 壳 | **M1.1 / M1.2a / M1.2b / M1.2c / M1.3 完成并实证**。M1.2a：状态栏由「Unavailable」变「Step Ready」。M1.2b：`query`/`command` 接真实会话 + 事件泵（泵独占 `BridgeSession`，`core.prompt` 是唯一 `Dispatch::Turn`，`conversation.changed` 原样透传，能力清单由派发表派生）；Xvfb 下真机跑完整个回合——prompt 接受、逐字流式、回执合成、转写渲染。M1.2c：chrome 壳级子集 10 个方法 + terminal 真 PTY（`portable-pty`，含「开真 PTY / 起真 shell / 写命令 / 读回输出」的集成测试）；remote 桥按 §1.3 非目标不建。M1.3：Vite base 与 CSP 查证后无需改动，窗口铬无事可做（File/Edit/View/Help 是 renderer 自绘），150%/200% DPI 在 Xvfb 下两档渲染正常。全过程中修掉三个只有真机能抓的问题：bootstrap 缺 `snapshot` 导致 composer 永久禁用、未送达事件推进 `cursor` 导致 resync 横幅常驻、Tauri 编译期嵌入 `frontendDist` 导致改 dist 不生效。clippy 干净，shell 侧 23 个 Rust 测试 + 29 个 TS 测试进核心门禁 |
 | 审批环 | **M0.1-M0.4 完成**：Rust 适配器 9 method；M0.4 对抗评审后改为对准契约真实形状（`interaction.required` 嵌套 request + `interaction.respond` 的 `{interactionId, commandId, decision, value}` + `interaction.resolved` 三路径 + `send_command`）；真实 CLI dialog 往返实证（3.3 末） |
-| host daemon 化 / gpui 面板 / HQTUI | 未开始 |
+| host daemon 化 / gpui 面板 / HQTUI | 未开始。Host 归属已经专家团 + 联网检索 + 对抗审议：结论是维持方案既定方向（Rust daemon），TS 边车不足以支撑 §10.3 的例外（实测 Bun 编译版峰值 157 MB / Node 352 MB，而 §14.3 给 Rust daemon 的预算是 10-30 MB）。审议过程纠正了自己三个错误认知，详见 `status.md`「Host 归属决策的实测数据」 |
 | 性能 harness / Windows 真机 / 双口径实测 | 零实测；M0.3 Windows 冒烟因无真机阻塞（egui 真实 GPU RSS / WebView2 单页 RSS / ConPTY 往返待硬件） |
 
 ---
