@@ -598,7 +598,9 @@ checklist 1.4 从「空」翻「齐」——M1.7 正是把它从「齐」改判�
 
 同批落地 `projects.list`：同一个 store，`workspaceId` 取自 session 头里的真实 `cwd` 而**不是**目录名解码——目录名是路径把 `/` 换成 `-`，而那不是单射：`step-studio` 会解成 `step/studio`。第一版我就是那么写的，还被自己一个断言正确的测试抓住（我同时在注释里写下了这个 caveat，却写了个断言相反的测试，两处都错了）。测试现改为 `assert_ne!`，专门用来阻止后人把 `project_path` 「简化」回解码。
 
-**仍未移植**：`home.get` / `workspace.open` / `pick`，以及 `session-archive-reader` 的 cursor 分页与冷归档。
+同批落地 `home.get`：**纯聚合，没有新数据源**。authority/runtime 来自本会话的 epoch，snapshot 来自泵的 `Stream`（`spawn_pump` 多带一个参数——renderer 已经有这份字节，再走一次往返是花往返学已知的事），两个列表来自 session store。`Stream` 现在还会在 `session.state` 回来时更新快照，所以后面的 `home.get` 答的是当前状态而不是壳启动时那份。
+
+**仍未移植**：`workspace.open` / `pick`，以及 `session-archive-reader` 的 cursor 分页与冷归档。
 
 ### M2.4 删除连锁：隐藏消费者实证，本轮不执行（2026-11-12）
 

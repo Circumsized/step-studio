@@ -58,6 +58,9 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
     ("history.list", "limited"),
     // The projects Step has sessions for, from the same store.
     ("projects.list", "limited"),
+    // Assembled from what the shell already holds, so it is local: no new data
+    // source, and no round trip for bytes the renderer already has.
+    ("home.get", "limited"),
 ];
 
 /// `core.prompt` sits apart because it is the one `Dispatch::Turn` operation.
@@ -279,6 +282,10 @@ pub struct Job {
 /// read model per token is a cost, not a feature. Mirroring that keeps the
 /// renderer's max-tracking `advanceConnection` honest.
 struct Stream {
+    /// The snapshot this session started with. Replaced whenever a fresher one
+    /// arrives, so a later `home.get` answers with the current state rather than
+    /// the one the shell booted with.
+    snapshot: Value,
     cursor: u64,
     /// Which adapter this session is talking to. It changes when the adapter
     /// restarts, which is the signal a reconnecting shell needs: the daemon's
@@ -409,6 +416,11 @@ pub fn spawn_pump(
     authority_epoch: u64,
     state_version: u64,
     runtime_id: String,
+    // The snapshot the session started with, so `home.get` can assemble a read
+    // model around it. Seeded from the bootstrap rather than fetched: the
+    // renderer already has it, and a second round trip for the same bytes is a
+    // round trip spent learning nothing.
+    snapshot: Value,
 ) -> (Sender<Job>, std::thread::JoinHandle<Option<String>>) {
     let (sender, receiver) = mpsc::channel();
     let handle = std::thread::spawn(move || {
@@ -417,6 +429,7 @@ pub fn spawn_pump(
             &sink,
             receiver,
             Stream {
+                snapshot,
                 cursor: 0,
                 stream_seq: 0,
                 state_version,
@@ -551,6 +564,46 @@ fn pump(
                                 .cloned()
                                 .unwrap_or(Value::Null);
                             crate::git::execute(&operation)
+                        } else if job.command_name == "home.get" {
+                            // An assembly, not a fetch: authority and runtime
+                            // come from this session's epochs, the snapshot from
+                            // the stream, and the two lists from the session
+                            // store. Nothing here asks the adapter.
+                            let history = crate::history::list(Some(10), None);
+                            let recent_threads: Vec<Value> = history
+                                .get("entries")
+                                .and_then(Value::as_array)
+                                .map(|entries| {
+                                    entries
+                                        .iter()
+                                        .map(|entry| {
+                                            json!({
+                                                "threadId": entry.get("threadId").cloned().unwrap_or(Value::Null),
+                                                "title": entry.get("title").cloned().unwrap_or(Value::Null),
+                                                "lastActiveAt": entry.get("lastActiveAt").cloned().unwrap_or(Value::Null),
+                                            })
+                                        })
+                                        .collect()
+                                })
+                                .unwrap_or_default();
+                            json!({
+                                "authority": {
+                                    "authorityId": stream.runtime_id,
+                                    "authorityEpoch": stream.authority_epoch,
+                                },
+                                "runtime": {
+                                    "status": "connected",
+                                    "classification": "managed",
+                                    "runtimeId": stream.runtime_id,
+                                    "runtimeEpoch": stream.runtime_epoch,
+                                },
+                                "snapshot": stream.snapshot.clone(),
+                                "recentThreads": recent_threads,
+                                "recentWorkspaces": crate::history::projects()
+                                    .get("workspaces")
+                                    .cloned()
+                                    .unwrap_or(Value::Array(Vec::new())),
+                            })
                         } else if job.command_name == "projects.list" {
                             crate::history::projects()
                         } else if job.command_name == "history.list" {
@@ -628,6 +681,25 @@ fn pump(
                             continue;
                         }
                         let _ = job.reply.send(Ok(ack));
+                    }
+                    Dispatch::Control if job.command_name == "session.state" => {
+                        // The reply carries `{snapshot}`; keep it so a later
+                        // `home.get` answers with the current state.
+                        let answer = session.invoke_with(job.operation.clone(), |_| {});
+                        if let Ok(ref payload) = answer {
+                            if let Some(fresh) = payload.get("snapshot") {
+                                stream.snapshot = fresh.clone();
+                            }
+                        }
+                        let _ = job.reply.send(match answer {
+                            Ok(payload) => {
+                                emit(sink, &mut stream, |stream| {
+                                    stream.receipt(&job.request_id, &job.command_name, "completed", json!({ "result": payload }))
+                                });
+                                Ok(ack)
+                            }
+                            Err(error) => Err(format!("desktop bridge: {error}")),
+                        });
                     }
                     Dispatch::Control => {
                         // Events that arrive while this command runs are
@@ -936,6 +1008,7 @@ mod tests {
 
     fn stream() -> Stream {
         Stream {
+            snapshot: serde_json::json!({ "sessionId": "s1" }),
             cursor: 0,
             stream_seq: 0,
             state_version: 7,

@@ -375,6 +375,13 @@ pub fn supervise(
                 continue;
             };
             backoff.reset();
+            // The snapshot travels with the pump so `home.get` can assemble a
+            // read model around it without reaching into session state.
+            let snapshot = connected
+                .bootstrap
+                .get("snapshot")
+                .cloned()
+                .unwrap_or(Value::Null);
             let (jobs, pump_thread) = pump::spawn_pump(
                 connected.session,
                 sink(),
@@ -382,6 +389,7 @@ pub fn supervise(
                 connected.authority_epoch,
                 connected.state_version,
                 connected.instance_id,
+                snapshot,
             );
             inner.install(connected.bootstrap, jobs);
             eprintln!("[bridge] session {} established", inner.generation.load(Ordering::Relaxed));
