@@ -1,0 +1,15 @@
+[package]
+name = "step-studio-pty-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+portable-pty = "0.9"
+
+[[bin]]
+name = "pty-bench"
+path = "src/main.rs"

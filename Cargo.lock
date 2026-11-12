@@ -5140,6 +5140,13 @@ name = "step-studio-peer-uid"
 version = "0.1.0"
 
 [[package]]
+name = "step-studio-pty-bench"
+version = "0.1.0"
+dependencies = [
+ "portable-pty",
+]
+
+[[package]]
 name = "step-studio-runtime"
 version = "0.1.0"
 dependencies = [
