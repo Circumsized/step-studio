@@ -5132,7 +5132,12 @@ dependencies = [
  "serde",
  "serde_json",
  "step-studio-bridge",
+ "step-studio-peer-uid",
 ]
+
+[[package]]
+name = "step-studio-peer-uid"
+version = "0.1.0"
 
 [[package]]
 name = "step-studio-runtime"

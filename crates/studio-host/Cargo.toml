@@ -11,6 +11,7 @@ workspace = true
 serde.workspace = true
 serde_json.workspace = true
 step-studio-bridge.workspace = true
+step-studio-peer-uid = { path = "../peer-uid" }
 
 [[bin]]
 name = "step-studio-host"

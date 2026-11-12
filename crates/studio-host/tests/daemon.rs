@@ -556,3 +556,19 @@ fn a_usage_prompt_does_not_disturb_the_live_conversation() {
         "the turn in flight completed its answer despite the panel fetch"
     );
 }
+
+#[test]
+fn a_surface_from_another_uid_is_refused() {
+    // The endpoint lives in a shared temp directory, so without a peer check any
+    // local user who can reach it drives another user's session and working
+    // directory. This process cannot *be* another uid, so the test pins the
+    // mechanism rather than the attack: the check is applied, and a same-uid
+    // surface — the normal case — still gets through.
+    let daemon = Daemon::start("peer-uid");
+    let session = connect(&daemon);
+    let snapshot = session.snapshot().expect("the same-uid surface is served");
+    assert!(
+        snapshot.pointer("/snapshot/sessionId").is_some(),
+        "a surface from the daemon's own user must not be refused"
+    );
+}

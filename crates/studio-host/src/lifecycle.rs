@@ -17,8 +17,7 @@ use std::time::Duration;
 /// created `0700` and checked for ownership, because a directory an attacker
 /// can write lets them either squat the path (impersonating the daemon) or make
 /// it read-only (denying the user a daemon at all).
-#[cfg(unix)]
-fn own_uid() -> u32 {
+pub fn own_uid() -> u32 {
     use std::os::unix::fs::MetadataExt;
     std::env::current_exe()
         .and_then(std::fs::metadata)

@@ -19,6 +19,7 @@ use step_studio_bridge::client::AdapterLaunch;
 use step_studio_bridge::frame::write_frame;
 use step_studio_bridge::transport::{self, Accepted};
 use step_studio_host::adapter::{self, AdapterHandle};
+use step_studio_peer_uid::peer_uid;
 use step_studio_host::lifecycle::{self, Acquire, GraceClock, Liveness};
 use step_studio_host::relay::{self, pump_frames};
 use step_studio_host::state;
@@ -539,6 +540,21 @@ fn serve(daemon: Arc<Daemon>) {
 /// never comes. Everything after the hello goes through as the original bytes.
 fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     let stream = connection.into_connection();
+
+    // Only this user's surfaces. The endpoint sits in a shared temp directory,
+    // so without this any local user who can reach it drives another user's
+    // session and working directory. Where the platform cannot say who is on
+    // the other end, the connection is refused rather than trusted: an unknown
+    // peer is not a permitted one.
+    if let Some(uid) = peer_uid(&stream) {
+        if uid != lifecycle::own_uid() {
+            eprintln!("step-studio-host: refusing a surface from uid {uid}");
+            return;
+        }
+    } else if cfg!(unix) {
+        eprintln!("step-studio-host: cannot tell who this surface is; refusing it");
+        return;
+    }
 
     // Wait for a *live* adapter. The slot keeps the dead one until its
     // replacement is up, and a surface handed the dead handle would be released
