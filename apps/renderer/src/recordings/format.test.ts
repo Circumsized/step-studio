@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { applyRecordedFrame, parsePlaybackRecording, type RecordedScreen } from "./format";
-const header = JSON.stringify({ ompcast: 1, cols: 80, rows: 2, title: "OMP", createdAt: "2026-09-25T00:00:00Z" });
+const header = JSON.stringify({ ompcast: 1, cols: 80, rows: 2, title: "Step", createdAt: "2026-09-25T00:00:00Z" });
 it("reconstructs native viewport, patch, history and resize frames and recovers a truncated final line", () => {
   const recording = parsePlaybackRecording(header + '\n[0,{"t":"viewport","rows":["one","two"]}]\n[50,{"t":"patch","ops":[[1,"changed"]],"rows":2}]\n[60,{"t":"history","rows":["past"]}]\n[70,{"t":"resize","cols":100,"rows":3}]\n[80,{');
   expect(recording.truncated).toBe(true); expect(recording.durationMs).toBe(70);

@@ -17,13 +17,13 @@ function approval(detail: Record<string, unknown>, title = "Allow bash?"): Extra
 }
 
 describe("approvalFromInteraction", () => {
-  it("parses OMP labeled summary into the ver1 bash card", () => {
+  it("parses Step labeled summary into the ver1 bash card", () => {
     const view = approvalFromInteraction(approval({
       toolName: "bash",
       summary: "Allow tool: bash\nReason: inspect workspace\nCommand: git status",
       risk: "high",
     }));
-    expect(view.title).toBe("OMP 想要执行 Bash 命令");
+    expect(view.title).toBe("Step 想要执行 Bash 命令");
     expect(view.command).toBe("git status");
     expect(view.reason).toBe("inspect workspace");
     expect(view.risk).toBe("high");
@@ -41,7 +41,7 @@ describe("approvalFromInteraction", () => {
       summary: "Path: src/app.ts\nContent:\nexport const x = 1;",
       risk: "medium",
     }));
-    expect(write.title).toBe("OMP 想要写入文件");
+    expect(write.title).toBe("Step 想要写入文件");
     expect(write.path).toBe("src/app.ts");
     expect(write.extra).toContain("export const x = 1;");
     const edit = approvalFromInteraction(approval({
@@ -49,6 +49,6 @@ describe("approvalFromInteraction", () => {
       summary: "File: src/app.ts",
     }));
     expect(edit.path).toBe("src/app.ts");
-    expect(edit.title).toBe("OMP 想要编辑文件");
+    expect(edit.title).toBe("Step 想要编辑文件");
   });
 });

@@ -182,7 +182,7 @@ export function AppUpdateDialog({
               {t("appUpdate.dialogTitle")} {preview ? t("appUpdate.demoUpdate") : ""}
             </span>
             <h2 id="appUpdateTitle">
-              {update.name || (update.version ? `OMP Studio v${update.version}` : "OMP Studio")}
+              {update.name || (update.version ? `Step Studio v${update.version}` : "Step Studio")}
             </h2>
             <p className="create-branch-sub" style={{ marginTop: 4, display: "flex", gap: 12, alignItems: "center" }}>
               <span>

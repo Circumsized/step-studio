@@ -73,7 +73,7 @@ export function previewGalleryItems(): readonly ConversationItem[] {
       parentId: "preview-reset-1",
       createdAt: at(2),
       role: "user",
-      content: [{ type: "text", text: "打开 OMP 原生工具卡图鉴" }],
+      content: [{ type: "text", text: "打开 Step 原生工具卡图鉴" }],
     },
     {
       kind: "message",

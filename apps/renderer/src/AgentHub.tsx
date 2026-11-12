@@ -1956,7 +1956,7 @@ export function AgentHubPage({
 
   const runtimeLabel =
     mapped.runtimeLabel ??
-    (limited ? "Limited Runtime" : (runtime?.classification ?? "OMP Runtime"));
+    (limited ? "Limited Runtime" : (runtime?.classification ?? "Step Runtime"));
   const mainName =
     mapped.mainName === "主对话" && !zh ? "Main conversation" : mapped.mainName;
   const mainTask = mapped.mainTask;

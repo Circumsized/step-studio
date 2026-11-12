@@ -224,7 +224,7 @@ export function NativeArchivePane({
           </h2>
           <p>
             {zh
-              ? "查询 OMP 保存的会话、空闲回顾和提示词历史。结果保留原始会话身份。"
+              ? "查询 Step 保存的会话、空闲回顾和提示词历史。结果保留原始会话身份。"
               : "Browse native sessions, idle recaps and prompt history with their original session identities."}
           </p>
         </div>

@@ -78,7 +78,7 @@ describe("ToolBody: WebSearchBody", () => {
       toolCallId: "web-search-2",
       toolName: "web_search",
       status: "succeeded" as const,
-      arguments: { query: "OMP Studio" },
+      arguments: { query: "Step Studio" },
       result: {
         type: "toolResult" as const,
         toolCallId: "web-search-2",

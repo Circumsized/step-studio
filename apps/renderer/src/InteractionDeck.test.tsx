@@ -132,7 +132,7 @@ describe("InteractionDeck real cards", () => {
     const onRespond = vi.fn();
     render(<InteractionPrompt interaction={approval("允许执行 bash?")} onRespond={onRespond} />);
     expect(screen.getByText("审批请求")).toBeTruthy();
-    expect(screen.getByText("OMP 想要执行 Bash 命令")).toBeTruthy();
+    expect(screen.getByText("Step 想要执行 Bash 命令")).toBeTruthy();
     expect(screen.getByText("高风险")).toBeTruthy();
     expect(screen.getByText(/git status/)).toBeTruthy();
     expect(screen.getByText("inspect workspace")).toBeTruthy();

@@ -1254,7 +1254,7 @@ export function todoStepProgress(todos: readonly TodoTask[]): { current: number;
   return { current: Math.min(total, completed + 1), total, completed };
 }
 
-/** OMP HUD keeps a list that still has open work; completed-only snapshots auto-clear. */
+/** Step HUD keeps a list that still has open work; completed-only snapshots auto-clear. */
 export function todoHudVisible(todos: readonly TodoTask[]): boolean {
   return todos.some((task) => task.status === "pending" || task.status === "in_progress" || task.status === "blocked");
 }
@@ -1267,9 +1267,9 @@ function lastUserRowIndex(rows: readonly TimelineRow[]): number {
 }
 
 /**
- * Session HUD: latest session todo snapshot (OMP live HUD) plus files from the
+ * Session HUD: latest session todo snapshot (Step live HUD) plus files from the
  * current turn. A new user message starts a turn — previous-turn files drop;
- * completed-only todos stay hidden, matching OMP after auto-clear / `/new`.
+ * completed-only todos stay hidden, matching Step after auto-clear / `/new`.
  */
 export function sessionTaskProgress(rows: readonly TimelineRow[]): TaskProgress {
   const latest = collectLatestTodos(assistantSegmentsOf(rows));

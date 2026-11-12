@@ -1,6 +1,6 @@
 /**
  * Composer `/` is a session-command menu, not a skill picker.
- * Catalog covers OMP builtins; execution prefers typed Studio commands,
+ * Catalog covers Step builtins; execution prefers typed Studio commands,
  * then operator.invoke, then existing UI. Skills stay out of this list.
  */
 
@@ -220,7 +220,7 @@ function onOffStatus(extra: string): readonly SlashSubcommand[] {
   ];
 }
 
-/** Full OMP builtin catalog for the composer `/` menu. Hidden entries stay resolvable by alias. */
+/** Full Step builtin catalog for the composer `/` menu. Hidden entries stay resolvable by alias. */
 export const BUILTIN_SLASH_CATALOG: readonly StudioSlashCommand[] = [
   cmd("help", "列出可用指令", "help", { select: "native-ui", ui: "command-palette" }),
   cmd("model", "切换本会话模型", "model", {

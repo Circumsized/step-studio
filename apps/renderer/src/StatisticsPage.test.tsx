@@ -34,11 +34,11 @@ it("embeds the loopback dashboard the Host reports", async () => {
   await waitFor(() => expect(container.querySelector("iframe")).toBeTruthy());
   const frame = container.querySelector("iframe");
   expect(frame?.getAttribute("src")).toBe("http://127.0.0.1:3847/#/overview?range=all");
-  expect(frame?.getAttribute("title")).toBe("OMP 统计面板");
+  expect(frame?.getAttribute("title")).toBe("Step 统计面板");
 });
 
 it("states the reason and renders no frame when no panel answered", async () => {
-  const client = clientReturning({ available: false, reason: "未找到 OMP Runtime，无法启动本机统计面板。" });
+  const client = clientReturning({ available: false, reason: "未找到 Step Runtime，无法启动本机统计面板。" });
   const { container } = render(
     <I18nProvider forcedLanguage="zh">
       <PreviewModeProvider switchEnabled>
@@ -46,7 +46,7 @@ it("states the reason and renders no frame when no panel answered", async () => 
       </PreviewModeProvider>
     </I18nProvider>,
   );
-  expect(await screen.findByText("未找到 OMP Runtime，无法启动本机统计面板。")).toBeTruthy();
+  expect(await screen.findByText("未找到 Step Runtime，无法启动本机统计面板。")).toBeTruthy();
   expect(container.querySelector("iframe")).toBeNull();
   expect(screen.getByRole("button", { name: "重试" })).toBeTruthy();
 });

@@ -1156,7 +1156,7 @@ function VirtualEventTranscript({ events }: { events: readonly ShellEventLogEntr
   );
 }
 
-const CURRENT_PROJECT = { id: "omp-studio", name: "OMP Studio" } as const;
+const CURRENT_PROJECT = { id: "omp-studio", name: "Step Studio" } as const;
 
 type SelectedProject = { readonly id: string; readonly name: string };
 
@@ -1238,7 +1238,7 @@ type ShellChrome = {
   onStartChatInProject: (project: SelectedProject) => void;
   /** 会话行悬停「归档」：打开确认弹窗；确认后仅预览模式本地隐藏。 */
   onArchivePreviewThread: (threadId: string) => void;
-  /** 真实模式「归档」：打开确认弹窗；确认后 session.archive，会话物理移入 OMP 冷归档（gzip）。 */
+  /** 真实模式「归档」：打开确认弹窗；确认后 session.archive，会话物理移入 Step 冷归档（gzip）。 */
   onArchiveThread: (entry: SessionHistoryEntry, workspaceId?: WorkspaceId) => void;
   /** Resolve and archive a submitted session whose sidebar row is still provisional. */
   onArchiveProvisionalThread: (thread: ProvisionalProjectThread) => void;
@@ -2070,7 +2070,7 @@ export function AppSidebar({ state, chrome, client, onRoute, onOpenAppUpdateDial
   }, [fileRefreshToken, gitWorkspaceId, refreshGitRepository]);
   useEffect(() => {
     if (gitWorkspaceId === undefined) return;
-    // 外部（终端/OMP Runtime）改文件不会推事件；窗口重新聚焦时兜底刷新，至少间隔 5s。
+    // 外部（终端/Step Runtime）改文件不会推事件；窗口重新聚焦时兜底刷新，至少间隔 5s。
     let last = Date.now();
     const onFocus = () => {
       if (Date.now() - last < 5000) return;
@@ -2264,7 +2264,7 @@ export function AppSidebar({ state, chrome, client, onRoute, onOpenAppUpdateDial
         />
         <button className="sb-brand" data-tip={t("nav.home")} onClick={() => onRoute("home")}>
           <AppIcon className="logo" size={22} />
-          <span className="name">OMP Studio</span>
+          <span className="name">Step Studio</span>
         </button>
         <button
           className="icon-btn"
@@ -2726,7 +2726,7 @@ export function AppSidebar({ state, chrome, client, onRoute, onOpenAppUpdateDial
           ref={ompBtnRef}
           type="button"
           className={`sb-user${hasUpdate ? " has-update" : ""}`}
-          aria-label={`${profile.displayName} · ${hasUpdate ? `${t("appUpdate.foundNewVersion")} v${effectiveUpdate?.version} · ` : ""}OMP 状态与环境菜单`}
+          aria-label={`${profile.displayName} · ${hasUpdate ? `${t("appUpdate.foundNewVersion")} v${effectiveUpdate?.version} · ` : ""}Step 状态与环境菜单`}
           aria-haspopup="menu"
           aria-expanded={chrome.ompMenuOpen}
           onClick={chrome.onToggleOmpMenu}
@@ -2784,7 +2784,7 @@ export function AppSidebar({ state, chrome, client, onRoute, onOpenAppUpdateDial
               ref={ompMenuRef}
               className="menu title-menu-popover omp-menu"
               role="menu"
-              aria-label="OMP 状态与环境"
+              aria-label="Step 状态与环境"
               style={{
                 position: "fixed",
                 left: ompMenuPos.left,
@@ -3417,7 +3417,7 @@ type OptimisticPrompt = { readonly pending: PendingUser; readonly phase: PromptS
 let nextOptimisticPromptId = 1;
 
 const PROMPT_SEND_PHASE_LABEL: Record<PromptSendPhase, string> = {
-  starting: "Starting OMP",
+  starting: "Starting Step",
   sending: "Sending",
   initiating: "Initiating",
 };
@@ -4363,7 +4363,7 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
   // Idempotent: a no-op as soon as the store has nothing open.
   useEffect(() => {
     if (!executionMatches || snapshot?.isStreaming !== false) return;
-    // OMP 18.12: the run ended only to wait for background jobs; their result resumes it.
+    // Step 18.12: the run ended only to wait for background jobs; their result resumes it.
     if (snapshot?.awaitingAsyncWork === true) return;
     if (!runStreaming.settled && abortGeneration === 0) return;
     if (hasLiveActivityProgress(convoRef.current.state)) return;
@@ -5060,7 +5060,7 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
     // editor until the first dispatch completes, including same-frame Enter.
     if (promptDispatchGate.busy && !composerRunning) return;
     const payload = composerInputRef.current?.getSnapshot() ?? draft;
-    // OMP 18.11: typing while a tool approval waits denies that call and steers the turn.
+    // Step 18.11: typing while a tool approval waits denies that call and steers the turn.
     if (
       composerRunning &&
       pendingInteraction?.kind === "approval" &&
@@ -5254,7 +5254,7 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
         outboundPayload = planned.snapshot;
       }
       const outbound = promptInputOf(outboundPayload);
-      // A waiting approval would hold the steer; deny it first, as OMP does when the user types.
+      // A waiting approval would hold the steer; deny it first, as Step does when the user types.
       if (pendingInteraction?.kind === "approval" && !(await respond("cancel"))) return;
       const handle = await client.command("core.steer", outbound);
       const pendingConvo = convoRef.current;
@@ -6368,7 +6368,7 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
               <Icon name="console" extra="sm" />Output
             </button>
             <button className={bottomTab === "logs" ? "active" : ""} role="tab" aria-selected={bottomTab === "logs"} onClick={() => { onBottomTabChange("logs"); onBottomOpenChange(true); }}>
-              <Icon name="book" extra="sm" />OMP Logs
+              <Icon name="book" extra="sm" />Step Logs
               {state.events.length > 0 && <span className="chip gray xs">{state.events.length}<span className="sr-only"> {t("shell.eventsCount", { count: state.events.length })}</span></span>}
             </button>
             <button className={bottomTab === "pvlogs" ? "active" : ""} role="tab" aria-selected={bottomTab === "pvlogs"} onClick={() => { onBottomTabChange("pvlogs"); onBottomOpenChange(true); }}>
@@ -6450,7 +6450,7 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
             ) : null}
           </div>
           <div className={`bp-page${bottomTab === "logs" ? " active" : ""}`} id="bpLogs" role="tabpanel">
-            <div className="panel-head"><div><h2>OMP Logs</h2><p className="muted">{t("shell.ompLogsVirtualDesc")}</p></div><span className="mono">{t("shell.eventsCount", { count: state.events.length })}</span></div>
+            <div className="panel-head"><div><h2>Step Logs</h2><p className="muted">{t("shell.ompLogsVirtualDesc")}</p></div><span className="mono">{t("shell.eventsCount", { count: state.events.length })}</span></div>
             <VirtualEventTranscript events={state.events} />
           </div>
           <div className={`bp-page${bottomTab === "pvlogs" ? " active" : ""}`} id="bpPvlogs" role="tabpanel">
@@ -7456,7 +7456,7 @@ function AppShell({ state, client, onRoute, selectedHistoryId, onSelectThread, o
     for (const id of sessionTitleRefreshTimers.current) window.clearTimeout(id);
   }, []);
 
-  /** 真实模式「归档」：session.archive 把会话移入 OMP 冷归档（gzip）。
+  /** 真实模式「归档」：session.archive 把会话移入 Step 冷归档（gzip）。
       进行中的会话由 Host 先 abort / 切走 Runtime，再移文件。
       归档的是当前选中会话时回到新对话视图。仅由确认弹窗调用。 */
   const archiveThread = async (entry: SessionHistoryEntry, workspaceId?: WorkspaceId): Promise<boolean> => {
@@ -9056,7 +9056,7 @@ function AppShell({ state, client, onRoute, selectedHistoryId, onSelectThread, o
                 </div>
                 <div className="modal-body">
                   <dl className="about-list">
-                    <div className="about-row"><dt>{t("common.product")}</dt><dd>OMP Studio</dd></div>
+                    <div className="about-row"><dt>{t("common.product")}</dt><dd>Step Studio</dd></div>
                     <div className="about-row"><dt>{t("appUpdate.currentVersion")}</dt><dd>{(previewMode.preview ? PREVIEW_APP_UPDATE.currentVersion : localAppVersion ?? appUpdate.state.updateInfo?.currentVersion) || "—"}</dd></div>
                     <div className="about-row"><dt>Client contract</dt><dd>v{CLIENT_CONTRACT_VERSION}</dd></div>
                     <div className="about-row"><dt>Runtime</dt><dd>{runtime?.status ?? t("common.unavailable")}{runtime?.classification ? ` · ${runtime.classification}` : ""}</dd></div>

@@ -159,7 +159,7 @@ export function provisionalThreadForHistoryEntry(
   return threads.find((thread) => thread.sessionId === entry.sessionId);
 }
 
-/** Host uses its current value until OMP reports a stable title. */
+/** Host uses its current value until Step reports a stable title. */
 export function resolveProvisionalHistoryTitle(
   thread: ProvisionalProjectThread,
   title: string,

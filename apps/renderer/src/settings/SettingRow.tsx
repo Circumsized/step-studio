@@ -141,7 +141,7 @@ export function Slider({
 }
 
 /**
- * 枚举占位：显示未来接入后的真实取值（OMP settings-schema 的枚举），
+ * 枚举占位：显示未来接入后的真实取值（Step settings-schema 的枚举），
  * 接入前始终禁用。不做可交互的假控件。
  */
 export function StaticSelect({

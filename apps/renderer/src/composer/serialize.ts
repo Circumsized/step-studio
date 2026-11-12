@@ -30,7 +30,7 @@ export function serializeChip(chip: ComposerChip, imageIndex?: number): string {
     case "mode":
       return "";
     case "image":
-      // Disk-backed images travel as @path so OMP `extractFileMentions` auto-reads
+      // Disk-backed images travel as @path so Step `extractFileMentions` auto-reads
       // them. Clipboard captures have no path and become [图N] plus wire bytes.
       if (chip.path) return `@${quoteMentionPath(chip.path)}`;
       if (chip.image) return `[图${imageIndex ?? 1}]`;

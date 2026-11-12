@@ -5,7 +5,7 @@ export const PREVIEW_COMPUTER: StudioComputerStatus = {
   capturePermission: "granted", inputPermission: "granted", axPermission: "granted", running: 1,
   targets: [
     { id: "demo-display", kind: "display", name: "Display 1", width: 1920, height: 1080 },
-    { id: "demo-window", kind: "window", name: "OMP Studio · Workspace", width: 960, height: 600 },
+    { id: "demo-window", kind: "window", name: "Step Studio · Workspace", width: 960, height: 600 },
   ],
 };
 
@@ -15,7 +15,7 @@ export const PREVIEW_COMPUTER_IMAGE = "data:image/svg+xml," + encodeURIComponent
   <path d="M0 560 720 120l560 330v350H0Z" fill="#d2d9e9"/>
   <path d="m300 800 980-590v590Z" fill="#c7d0e3"/>
   <rect width="1280" height="32" fill="#f5f6fa"/>
-  <g fill="#53596b" font-family="Segoe UI, sans-serif" font-size="12"><text x="24" y="21" font-weight="600">OMP Studio</text><text x="130" y="21">File</text><text x="171" y="21">Edit</text><text x="211" y="21">View</text><text x="1130" y="21">Workspace</text><text x="1224" y="21">11:24</text></g>
+  <g fill="#53596b" font-family="Segoe UI, sans-serif" font-size="12"><text x="24" y="21" font-weight="600">Step Studio</text><text x="130" y="21">File</text><text x="171" y="21">Edit</text><text x="211" y="21">View</text><text x="1130" y="21">Workspace</text><text x="1224" y="21">11:24</text></g>
   <rect x="82" y="91" width="1116" height="625" rx="12" fill="#a1aac2" opacity=".2"/>
   <rect x="82" y="82" width="1116" height="625" rx="12" fill="#222530"/>
   <path d="M94 82h1092a12 12 0 0 1 12 12v31H82V94a12 12 0 0 1 12-12" fill="#2a2d39"/>

@@ -46,7 +46,7 @@ it("distinguishes blocking a provider from an unrestricted agent pool", async ()
 it("requires archive inspection before import and shows preservation of the local copy", async () => {
   preview(<SessionPortabilityPane client={client} visible entries={[]} />);
   expect(screen.queryByRole("button", { name: "确认导入" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: /选择 OMP 会话包/ }));
+  fireEvent.click(screen.getByRole("button", { name: /选择 Step 会话包/ }));
   await screen.findByText(/本地已有同 ID 会话/);
   fireEvent.click(screen.getByRole("button", { name: "确认导入" }));
   await screen.findByText("已创建分支，原会话保留。");

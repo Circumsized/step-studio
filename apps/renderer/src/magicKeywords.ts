@@ -1,5 +1,5 @@
 /**
- * Magic-keyword detection for Studio (OMP-aligned).
+ * Magic-keyword detection for Studio (Step-aligned).
  *
  * Matching mirrors oh-my-pi `modes/magic-keyword-boundary.ts` + `markdown-prose.ts`:
  * lowercase standalone prose only; skip fenced/inline code and HTML/XML.
@@ -37,7 +37,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
 
-/** Case-sensitive prose-boundary matcher (OMP `magicKeywordRegex`). */
+/** Case-sensitive prose-boundary matcher (Step `magicKeywordRegex`). */
 export function magicKeywordRegex(keyword: string, flags = ""): RegExp {
   const normalizedFlags = flags.includes("u") ? flags : `${flags}u`;
   return new RegExp(`${LEFT_BOUNDARY}${escapeRegExp(keyword)}${RIGHT_BOUNDARY}`, normalizedFlags);

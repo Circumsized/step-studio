@@ -111,7 +111,7 @@ it("clears the old screenshot when the selected target or conversation changes",
 
   fireEvent.click(screen.getByRole("button", { name: "刷新截图" }));
   await screen.findByAltText("所选电脑目标截图");
-  selectOption(screen.getByRole("combobox", { name: "屏幕或窗口" }), "OMP Studio · Workspace");
+  selectOption(screen.getByRole("combobox", { name: "屏幕或窗口" }), "Step Studio · Workspace");
   expect(screen.queryByAltText("所选电脑目标截图")).toBeNull();
 
   fireEvent.click(screen.getByRole("button", { name: "刷新截图" }));

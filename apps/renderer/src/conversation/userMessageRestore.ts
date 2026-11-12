@@ -1,4 +1,4 @@
-/** Align Studio user-bubble Restore with OMP `/tree` on a user node. */
+/** Align Studio user-bubble Restore with Step `/tree` on a user node. */
 
 export type UserMessageTreeConfirmKind = "restore" | "branch";
 

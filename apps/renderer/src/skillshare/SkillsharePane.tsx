@@ -493,8 +493,8 @@ export function SkillsharePane({
       </div>
       <p className="small muted">
         {t(
-          "安装与发布复用 OMP 原生注册表。远程写入必须先检查确认单；脚本不会在安装时执行。",
-          "Uses the native OMP registry. Review every remote write before confirming; installation does not execute package scripts.",
+          "安装与发布复用 Step 原生注册表。远程写入必须先检查确认单；脚本不会在安装时执行。",
+          "Uses the native Step registry. Review every remote write before confirming; installation does not execute package scripts.",
         )}
       </p>
       {!enabled ? (

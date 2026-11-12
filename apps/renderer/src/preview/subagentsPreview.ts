@@ -1,6 +1,6 @@
 /**
  * Preview fixtures for the model-config 子代理 tab.
- * Display-only; stories follow OMP bundled agents plus one user custom.
+ * Display-only; stories follow Step bundled agents plus one user custom.
  */
 
 import type { AgentDefinitionRecord, AgentDefinitionsReadModel } from "@omp-studio/client-contract";

@@ -458,7 +458,7 @@ export const PREVIEW_PROBLEMS: PreviewProblem[] = [
   { sev: "error", src: "Preview", msg: "Failed to resolve import \"@earendil-works/pi-mermaid\"", file: "components/MermaidBlock.tsx", line: 12 },
   { sev: "warn", src: "ESLint", msg: "'onDrag' is defined but never used", file: "components/MermaidBlock.tsx", line: 204 },
   { sev: "warn", src: "ESLint", msg: "React Hook useCallback has a missing dependency", file: "hooks/useCodeTheme.ts", line: 31 },
-  { sev: "info", src: "OMP 诊断", msg: "RPC capability \"preview.dom\" 协商成功 (v2)", file: null, line: null },
+  { sev: "info", src: "Step 诊断", msg: "RPC capability \"preview.dom\" 协商成功 (v2)", file: null, line: null },
   { sev: "warn", src: "Git", msg: "config.yml 未被跟踪，可能被意外提交", file: "config.yml", line: null },
 ];
 
@@ -490,7 +490,7 @@ export const PREVIEW_HISTORY: PreviewHistoryRow[] = [
 
 export const PREVIEW_TIME_TRAVEL: PreviewTtNode[] = [
   { kind: "user", title: "用户请求", detail: "整理上游同步过程为文档，并验证类型检查", time: "14:02" },
-  { kind: "plan", title: "OMP 计划", detail: "4 步：阅读 docs → 整理三阶段 → 新建文档 → 运行验证", time: "14:03" },
+  { kind: "plan", title: "Step 计划", detail: "4 步：阅读 docs → 整理三阶段 → 新建文档 → 运行验证", time: "14:03" },
   { kind: "tool", title: "工具执行", detail: "Read ×3 · Grep ×1 · Write UPSTREAM-SYNC.md · Edit README.md", time: "14:04" },
   { kind: "file", title: "文件变化", detail: "+2 文件（docs/UPSTREAM-SYNC.md +214 · README.md +3/-1）", time: "14:04" },
   { kind: "test", title: "测试 / 检查", detail: "npm run typecheck → 1 个错误（TS2322）", time: "14:05" },
@@ -592,7 +592,7 @@ export const PREVIEW_APP_UPDATE: PreviewAppUpdate = {
   available: true,
   currentVersion: "0.1.0",
   version: "0.2.0",
-  name: "OMP Studio 0.2.0",
+  name: "Step Studio 0.2.0",
   releaseNotes: `### 新增功能与改进
 
 - **稳定更新**：后台准备桌面与 Runtime 更新；镜像失败自动切源并继续下载。
@@ -602,8 +602,8 @@ export const PREVIEW_APP_UPDATE: PreviewAppUpdate = {
 - **性能与稳定性优化**：优化 Runtime Bridge 握手与 IPC 通信效率。`,
   publishedAt: "2026-08-20T00:00:00Z",
   htmlUrl: "https://github.com/the-snowpear/omp-studio/releases/tag/v0.2.0",
-  downloadUrl: `https://github.com/the-snowpear/omp-studio/releases/download/v0.2.0/${PLATFORM === "darwin" ? "OMP-Studio-0.2.0-macos-arm64.dmg" : "OMP-Studio-Setup-0.2.0-windows-x64.exe"}`,
-  assetName: PLATFORM === "darwin" ? "OMP-Studio-0.2.0-macos-arm64.dmg" : "OMP-Studio-Setup-0.2.0-windows-x64.exe",
+  downloadUrl: `https://github.com/the-snowpear/omp-studio/releases/download/v0.2.0/${PLATFORM === "darwin" ? "Step-Studio-0.2.0-macos-arm64.dmg" : "Step-Studio-Setup-0.2.0-windows-x64.exe"}`,
+  assetName: PLATFORM === "darwin" ? "Step-Studio-0.2.0-macos-arm64.dmg" : "Step-Studio-Setup-0.2.0-windows-x64.exe",
   assetSize: 89452000,
 };
 

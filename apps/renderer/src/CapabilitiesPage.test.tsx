@@ -42,7 +42,7 @@ function skill(name: string, scope: SkillRecord["scope"] = "workspace"): SkillRe
     desc: `${name} desc`,
     scope,
     sourceKind: "native",
-    sourceLabel: "OMP",
+    sourceLabel: "Step",
     enabled: true,
     hide: false,
   };

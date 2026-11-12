@@ -213,7 +213,7 @@ function formatMcpSourceLabel(label: string | undefined, t: (k: string) => strin
   if (!label) return "";
   if (label === "用户" || label === "User") return t("subagents.scopeUser");
   if (label === "项目" || label === "Project") return t("subagents.scopeProject");
-  if (label === "OMP" || label === "内置") return t("skills.scopeBuiltin");
+  if (label === "Step" || label === "内置") return t("skills.scopeBuiltin");
   return label;
 }
 
@@ -516,7 +516,7 @@ export function CapabilitiesPage({
 
   /**
    * Whole-package plugin toggle (`plugins.setEnabled`): preview mode only
-   * mutates local state; real mode writes the OMP-native files through the
+   * mutates local state; real mode writes the Step-native files through the
    * Host and re-reads `skills.get` after the receipt so the list reflects
    * the disk immediately.
    */

@@ -1,5 +1,5 @@
 /**
- * OMP Studio renderer entry.
+ * Step Studio renderer entry.
  *
  * `mountRenderer` is the public mounting API: it takes a semantic
  * `StudioClient` supplied by the caller (desktop shell, local WebUI bridge,

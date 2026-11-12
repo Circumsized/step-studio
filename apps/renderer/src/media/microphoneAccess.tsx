@@ -7,8 +7,8 @@
 export class MicrophoneDeniedError extends Error {
   constructor(zh: boolean) {
     super(zh
-      ? "麦克风权限已被拒绝：请在“系统设置 › 隐私与安全性 › 麦克风”中允许 OMP Studio，然后重试。"
-      : "Microphone access is denied. Allow OMP Studio in System Settings › Privacy & Security › Microphone, then try again.");
+      ? "麦克风权限已被拒绝：请在“系统设置 › 隐私与安全性 › 麦克风”中允许 Step Studio，然后重试。"
+      : "Microphone access is denied. Allow Step Studio in System Settings › Privacy & Security › Microphone, then try again.");
     this.name = "MicrophoneDeniedError";
   }
 }

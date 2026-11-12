@@ -39,15 +39,15 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 const TOOL_TITLES: Record<string, string> = {
-  bash: "OMP 想要执行 Bash 命令",
-  write: "OMP 想要写入文件",
-  edit: "OMP 想要编辑文件",
-  ast_edit: "OMP 想要做 AST 编辑",
-  eval: "OMP 想要执行代码",
-  computer: "OMP 想要操作桌面",
-  browser: "OMP 想要操作浏览器",
-  debug: "OMP 想要使用调试器",
-  github: "OMP 想要调用 GitHub",
+  bash: "Step 想要执行 Bash 命令",
+  write: "Step 想要写入文件",
+  edit: "Step 想要编辑文件",
+  ast_edit: "Step 想要做 AST 编辑",
+  eval: "Step 想要执行代码",
+  computer: "Step 想要操作桌面",
+  browser: "Step 想要操作浏览器",
+  debug: "Step 想要使用调试器",
+  github: "Step 想要调用 GitHub",
 };
 
 function toolKey(value: string | undefined): string {
@@ -102,7 +102,7 @@ function defaultScope(tool: string, explicit?: string): string | undefined {
   return undefined;
 }
 
-/** Shape Host `approval` details (OMP formatApprovalPrompt + wrapper fields) into the ver1 card. */
+/** Shape Host `approval` details (Step formatApprovalPrompt + wrapper fields) into the ver1 card. */
 export function approvalFromInteraction(
   interaction: Extract<ClientInteraction, { kind: "approval" }>,
 ): ApprovalView {

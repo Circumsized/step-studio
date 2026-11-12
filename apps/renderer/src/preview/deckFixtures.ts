@@ -1,5 +1,5 @@
 /**
- * Preview Deck cards. Ask payload follows the OMP ask-tool questions schema.
+ * Preview Deck cards. Ask payload follows the Step ask-tool questions schema.
  * Plan payload follows plan-mode review actions. Display only — never sent
  * through Host / Studio Bridge / the command reducer.
  * 每张 ask 卡一个问题（与 ver1「一卡一问 + 队列翻页」一致）：多个提问

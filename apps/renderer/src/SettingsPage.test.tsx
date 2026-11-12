@@ -148,7 +148,7 @@ describe("SettingsPage · 结构", () => {
     expect(screen.queryByText("Models and Providers")).toBeNull();
     expect(screen.queryByText("Sessions")).toBeNull();
     expect(screen.queryByText("Preview")).toBeNull();
-    // 权限模式下拉里的选项文案用 OMP 真实术语，不再用 Review/Workspace/Full Access。
+    // 权限模式下拉里的选项文案用 Step 真实术语，不再用 Review/Workspace/Full Access。
     expect(screen.queryByText("Review")).toBeNull();
     expect(screen.queryByText("Full Access")).toBeNull();
   });

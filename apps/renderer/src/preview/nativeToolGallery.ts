@@ -10,7 +10,7 @@ export const NATIVE_TOOL_GALLERY: readonly { readonly [key: string]: JsonValue }
   {
     kind: "think", name: "Think", status: "done", dur: "8s",
     preview: "先按 TUI 分型画每张展开卡，Plan 不再单独占一行。",
-    full: "对话只保留文本块和工具批次。\nThinking 进链，限高往上滚。\n每张工具卡对齐 OMP 原生 renderer，没有 renderer 的走 Args + Output 默认卡。",
+    full: "对话只保留文本块和工具批次。\nThinking 进链，限高往上滚。\n每张工具卡对齐 Step 原生 renderer，没有 renderer 的走 Args + Output 默认卡。",
   },
   {
     kind: "read", name: "Read", target: "src/tools/builtin-names.ts", status: "done", dur: "0.2s",

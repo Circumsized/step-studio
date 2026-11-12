@@ -590,7 +590,7 @@ export function PreviewSidePreview() {
       <div className="pv-view">
         <div className={`pv-frame${vp === "desktop" ? "" : ` ${vp}`}`}>
           <div className="mock-page">
-            <div className="mp-nav"><span style={{ color: "var(--accent)" }}>OMP Web</span><span className="muted">Docs</span><span className="muted">Sessions</span><span className="muted">Settings</span></div>
+            <div className="mp-nav"><span style={{ color: "var(--accent)" }}>Step Web</span><span className="muted">Docs</span><span className="muted">Sessions</span><span className="muted">Settings</span></div>
             <div className="mp-hero">
               <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 6 }}>Upstream Sync v0.8.1</div>
               <div className="muted small" style={{ marginBottom: 12 }}>Mermaid 全屏缩放拖拽 · IDE 风格 Directory Picker · Loopback 安全增强</div>

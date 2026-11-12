@@ -32,7 +32,7 @@ function Surface() {
   const [result, setResult] = useState("");
   const view = approvalFromInteraction({ kind: "approval", interactionId: "qa", sessionId: "qa", leaseGeneration: 1, title: "受限目录操作", approvalType: "read", detail: { source: "restriction", path: "private/credentials", reason: "每次都需批准" } } as never);
   return <main style={{ padding: 24, maxWidth: 960, margin: "auto", display: "grid", gap: 24 }}>
-    <h1>OMP 18.13.2 · 隔离迁移验收</h1><p>以下控件使用正式组件与预览 fixture；不连接 Host、不写真实配置、不调用模型。</p>
+    <h1>Step 18.13.2 · 隔离迁移验收</h1><p>以下控件使用正式组件与预览 fixture；不连接 Host、不写真实配置、不调用模型。</p>
     <button className="btn outline" onClick={() => setContextOpen(true)}>打开上下文查看器</button><ContextInspector client={client} sessionId="demo-context" visible={contextOpen} onClose={() => setContextOpen(false)} />
     <ResumeScopePane client={client} />
     <AdvisorConfigPane client={client} visible />

@@ -1,4 +1,4 @@
-/** OMP screen recordings and Studio's raw PTY output recordings. Never executable commands. */
+/** Step screen recordings and Studio's raw PTY output recordings. Never executable commands. */
 export type RecordingFrame =
   | { t: "resize"; cols: number; rows: number }
   | { t: "viewport" | "history"; rows: string[] }

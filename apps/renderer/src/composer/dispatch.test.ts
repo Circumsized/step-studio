@@ -15,9 +15,9 @@ import {
 
 /**
  * Simulated composer → Runtime command choice. These are the contracts the
- * App.tsx send/queue/flush path must keep vs OMP TUI.
+ * App.tsx send/queue/flush path must keep vs Step TUI.
  */
-describe("composer send path (simulated vs OMP)", () => {
+describe("composer send path (simulated vs Step)", () => {
   it("idle Enter with no ask/approval card enables a fresh core.prompt", () => {
     expect(
       composerPromptEnabled({
@@ -36,7 +36,7 @@ describe("composer send path (simulated vs OMP)", () => {
     ).toBe(false);
   });
 
-  it("streaming Enter does not prompt; it enables the local follow-up bar instead of OMP steer", () => {
+  it("streaming Enter does not prompt; it enables the local follow-up bar instead of Step steer", () => {
     expect(
       composerPromptEnabled({
         textReady: true,
