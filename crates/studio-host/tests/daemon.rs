@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
+use serde_json::Value;
 use step_studio_bridge::{AdapterLaunch, BridgeSession};
 
 /// A running daemon, killed when the test ends.
@@ -404,4 +405,34 @@ fn a_usage_prompt_comes_back_on_the_notify_channel() {
         panel.contains("Total tokens"),
         "the panel carries the totals the structured arrays cannot: {panel}"
     );
+}
+
+#[test]
+fn a_model_catalog_reaches_the_shell_through_the_bridge() {
+    // The facade asks for `models.get`; the adapter answers from the CLI's
+    // catalog. The reshape that turns one into the other is the shell's job, so
+    // what this pins is that the catalog itself survives the trip.
+    let daemon = Daemon::start("models");
+    let session = connect(&daemon);
+
+    let (receipt, _events) = session
+        .invoke(serde_json::json!({ "kind": "session.models.list" }))
+        .expect("session.models.list");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed")
+    );
+    let models = receipt
+        .pointer("/result/models")
+        .and_then(Value::as_array)
+        .expect("the catalog");
+    assert!(!models.is_empty(), "the CLI reported a catalog");
+    // A selector is what the composer keys its picker on, so every entry needs
+    // one — an entry without it is a model the UI cannot select.
+    for model in models {
+        assert!(
+            model.get("selector").and_then(Value::as_str).is_some_and(|s| !s.is_empty()),
+            "every catalog entry carries a selector: {model}"
+        );
+    }
 }

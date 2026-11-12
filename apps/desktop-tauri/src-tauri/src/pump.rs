@@ -63,6 +63,8 @@ const RENAMED: &[(&str, &str)] = &[
     ("conversation.open", "session.transcript.read"),
     // The facade's usage query; the adapter asks the CLI for its `/usage` panel.
     ("usage.get", "usage.panel"),
+    // The facade's model config; the adapter has a catalog and nothing else.
+    ("models.get", "session.models.list"),
 ];
 
 /// How the adapter answers an operation.

@@ -773,6 +773,9 @@ fn shape_query_result(name: &str, payload: Value) -> Value {
     if name == "usage.get" {
         return usage_read_model(&payload);
     }
+    if name == "models.get" {
+        return model_config_read_model(&payload);
+    }
     if name != "conversation.open" {
         return payload;
     }
@@ -825,6 +828,83 @@ fn usage_read_model(payload: &Value) -> Value {
     })
 }
 
+/// Reshape the adapter's model catalog into the facade's config read model.
+///
+/// What the adapter has is a catalog: provider, id, selector, name, and the
+/// execution metadata. What the facade's model also carries is OMP's
+/// multi-provider machinery — roles, presets, cycle order, fallback chains,
+/// login providers, the web-search routing table — and Step's RPC exposes none
+/// of it. So those stay empty with a reason that names them, rather than being
+/// invented: a role the CLI has no concept of cannot be listed, and a fallback
+/// chain nobody configured cannot be shown.
+fn model_config_read_model(payload: &Value) -> Value {
+    let entries = payload
+        .get("models")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+
+    let available_models: Vec<Value> = entries
+        .iter()
+        .map(|entry| {
+            json!({
+                "provider": entry.get("provider").and_then(Value::as_str).unwrap_or(""),
+                "id": entry.get("id").and_then(Value::as_str).unwrap_or(""),
+                "selector": entry.get("selector").and_then(Value::as_str).unwrap_or(""),
+                "name": entry.get("name").and_then(Value::as_str).unwrap_or(""),
+                "reasoning": entry.get("reasoning").and_then(Value::as_bool).unwrap_or(false),
+                "contextWindow": entry.get("contextWindow").and_then(Value::as_i64),
+                "maxTokens": entry.get("maxTokens").and_then(Value::as_i64),
+            })
+        })
+        .collect();
+
+    // One record per distinct provider. Step is single-provider in practice, so
+    // this is usually one entry — derived, not assumed.
+    let mut providers: Vec<Value> = Vec::new();
+    for entry in entries {
+        let id = entry.get("provider").and_then(Value::as_str).unwrap_or("");
+        if id.is_empty() || providers.iter().any(|p| p.get("id") == Some(&json!(id))) {
+            continue;
+        }
+        providers.push(json!({
+            "id": id,
+            "name": id,
+            "source": "runtime",
+            "status": "available",
+            "statusDetail": "Step CLI catalog",
+            "api": entry.get("api").and_then(Value::as_str).unwrap_or(""),
+            "local": false,
+            "enabled": true,
+            // The CLI holds the credentials; this shell never sees them.
+            "auth": { "type": "none", "hasSecret": false },
+        }));
+    }
+
+    json!({
+        "providers": providers,
+        // No OMP role/preset/cycle machinery in Step's RPC.
+        "presets": [],
+        "roles": [],
+        "cycleOrder": [],
+        "availableModels": available_models,
+        "loginProviders": [],
+        "generatedModelsYml": "",
+        "generatedConfigYml": "",
+        "runtimeEffectHint": "本壳不写 Step 配置；模型选择直接经 CLI catalog。",
+        "loginAvailable": false,
+        "ompAvailable": false,
+        "modelRoleStorage": "global",
+        "projectScopeAvailable": false,
+        "modelProviderOrder": providers.iter().filter_map(|p| p.get("id").and_then(Value::as_str)).map(str::to_string).collect::<Vec<_>>(),
+        "fallbackChains": {},
+        "fallbackRevertPolicy": "never",
+        "webSearch": { "enabled": false, "order": [], "exclude": [] },
+        "unavailableReason":
+            "Step RPC 只暴露模型 catalog；角色、预设、循环顺序、回退链、登录供应商与 webSearch 路由均无对应数据，故留空。",
+    })
+}
+
 #[cfg(test)]
 mod usage_tests {
     use super::*;
@@ -855,12 +935,68 @@ mod usage_tests {
     }
 
     #[test]
+    fn a_model_catalog_becomes_available_models_and_providers() {
+        let model = model_config_read_model(&json!({
+            "models": [
+                { "provider": "local-gateway", "id": "stepfun-cn/step-3.7-flash",
+                  "selector": "local-gateway/stepfun-cn/step-3.7-flash",
+                  "name": "Step 3.7 Flash", "reasoning": true,
+                  "contextWindow": 128000, "maxTokens": 8192, "api": "openai-completions" },
+                { "provider": "local-gateway", "id": "zed/claude-haiku-5-5",
+                  "selector": "local-gateway/zed/claude-haiku-5-5",
+                  "name": "Claude Haiku 5.5", "reasoning": false },
+            ],
+        }));
+        let available = model.get("availableModels").and_then(Value::as_array).expect("availableModels");
+        assert_eq!(available.len(), 2, "every catalog entry is an available model");
+        assert_eq!(
+            available[0].get("selector").and_then(Value::as_str),
+            Some("local-gateway/stepfun-cn/step-3.7-flash")
+        );
+        assert_eq!(available[0].get("contextWindow").and_then(Value::as_i64), Some(128000));
+        assert_eq!(available[0].get("reasoning").and_then(Value::as_bool), Some(true));
+
+        // One provider record per distinct provider, not one per model.
+        let providers = model.get("providers").and_then(Value::as_array).expect("providers");
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].get("id").and_then(Value::as_str), Some("local-gateway"));
+        assert_eq!(
+            model.get("modelProviderOrder").and_then(Value::as_array).map(Vec::len),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn what_step_has_no_data_for_stays_empty_with_a_reason() {
+        let model = model_config_read_model(&json!({ "models": [] }));
+        for field in ["presets", "roles", "cycleOrder", "loginProviders"] {
+            assert_eq!(
+                model.get(field).and_then(Value::as_array).map(Vec::len),
+                Some(0),
+                "{field} has no Step data source, so it must not be invented"
+            );
+        }
+        assert_eq!(model.get("loginAvailable").and_then(Value::as_bool), Some(false));
+        assert_eq!(model.get("ompAvailable").and_then(Value::as_bool), Some(false));
+        let reason = model.get("unavailableReason").and_then(Value::as_str).unwrap_or("");
+        assert!(reason.contains("角色"), "the reason names what is missing: {reason}");
+    }
+
+    #[test]
     fn the_reshape_is_reachable_from_the_dispatch_table() {
         // The manifest is derived from the dispatch tables, so a query that
         // reshapes must also resolve — otherwise the renderer would offer it and
         // every call would be refused.
         let (operation, _) = pump::resolve_operation("usage.get", &json!({})).expect("resolves");
         assert_eq!(operation.get("kind").and_then(Value::as_str), Some("usage.panel"));
+        let (operation, _) = pump::resolve_operation("models.get", &json!({})).expect("resolves");
+        assert_eq!(
+            operation.get("kind").and_then(Value::as_str),
+            Some("session.models.list")
+        );
+        // The page's own query must stay refused rather than resolve to
+        // something that cannot answer it.
+        assert!(pump::resolve_operation("models.provider.list", &json!({})).is_none());
     }
 }
 

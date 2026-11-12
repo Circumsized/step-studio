@@ -452,6 +452,14 @@ Node 进程里驱动：
 
 这条已写入 `design/plan.md` §19 决策日志，作为 M1.2c-M1.7 复刻阶段的路线选择。
 
+### M2.2-C2：模型 catalog 进 read model（2026-11-12 完成并实证）
+
+`models.get` → 适配器 `session.models.list`（早已 stable），壳重塑成 `ModelConfigReadModel`。
+
+**真 step CLI 实测**：1.0 秒回传 2 个模型 × 1 供应商（`local-gateway`），带 selector / reasoning / contextWindow / maxTokens。composer 的模型选择器因此可用。
+
+`ModelConfigReadModel` 有 17 个必填字段，其中角色、预设、循环顺序、回退链、登录供应商、webSearch 路由承载的都是 OMP 多供应商机制，Step RPC 一个都不暴露。所以 `availableModels` / `providers` / `modelProviderOrder` 填真数据（providers 按 distinct provider 去重，不按模型条数），其余留空并带 `unavailableReason` 点名缺什么。`omp-models-adapter.ts` 那 3018 行**不移植**——约 95% 是多供应商 OAuth/probe/webSearch，Step 单供应商下是死码。
+
 ### M2.2-C1：`/usage` 面板经桥抵达（2026-11-12 完成并实证）
 
 `usage.get` → 适配器 `usage.panel`：把 `/usage` 当 prompt 发过去，等 fire-and-forget 的 `notify`，壳重塑成 `TokenUsageReadModel`。
