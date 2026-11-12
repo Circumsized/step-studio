@@ -503,7 +503,12 @@ force push 只以 `--force-with-lease` 发出，**从不发裸 `--force`**——
 
 第二批已修：`commit` 忽略 `paths`（加 `--only --`，否则 UI 说「提交这些文件」却把整个索引都提交了）；`discard` 对未跟踪文件直接失败（拆成 tracked→restore、untracked→移除）。
 
-仍未修：rename/copy 的类型 2 行按普通变更解析、`originalPath` 从不发出（`plan.md` 早已把这条列为 M3.5 的审问题）；若干模型带了契约没有的 `unavailableReason` 键、`state('T')` 映射到契约外的 `"typechange"`；若干测试失败路径不清场。
+第三批已修，M3.5 收口：
+- rename/copy 的类型 2 行按普通变更解析、`originalPath` 从不发出。类型 2 行多一个 `<X><score>` 字段，偏移整体后移一位，且路径对是 tab 分隔——当普通行读会得到 `path: "R100 new\told"`。已按类型 2 解析并发 `originalPath`。过程中数错一次字段偏移（`nth(4)` 应为 `nth(6)`），被自己的测试抓住。
+- `state('T')`（typechange）与 `'!'`（ignored）不在 `GitFileState` 里，改落到 `modified`（参考实现同）；同时恢复 `.` 的显式 `unmodified`——我第一版把这条臂删了，只有未知码才该落到 `modified`。
+- 测试失败路径不清场：两个 scratch 测试的清理写在函数末尾，`assert!` 先炸就把文件和索引都留下。改成 `Drop` guard 并提出为共享模块。**这个失败模式真的发生过**——`scratch-diff-test-1755253.txt` 曾被 `git add -A` 暂存进索引（未进提交），本次已清出。
+
+M3.5 对抗评审闭环。
 
 ### M3.3 文件树：`workspace.fileTree` 落地（2026-11-12 完成）
 

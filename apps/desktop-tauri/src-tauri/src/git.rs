@@ -100,7 +100,11 @@ pub fn repository_get(workspace_id: &str) -> Value {
             }
         } else if line.starts_with("# branch.ab ") {
             // No upstream: the counts stay at zero, which is the truth.
-        } else if line.starts_with('1') || line.starts_with('2') {
+        } else if line.starts_with('2') {
+            if let Some(change) = parse_renamed(line) {
+                changes.push(change);
+            }
+        } else if line.starts_with('1') {
             if let Some(change) = parse_ordinary(line) {
                 changes.push(change);
             }
@@ -155,6 +159,33 @@ fn parse_ordinary(line: &str) -> Option<Value> {
     }))
 }
 
+/// `2 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <X><score> <path>TAB<origPath>` — a
+/// rename or a copy.
+///
+/// The extra score field is why a type-2 line read as an ordinary one produced
+/// `path: "R100 new\told"`: the field offsets shift by one, and the path pair is
+/// tab-separated rather than a single field. The contract has `originalPath` for
+/// exactly this, and it was never emitted.
+fn parse_renamed(line: &str) -> Option<Value> {
+    let mut fields = line.splitn(10, ' ');
+    fields.next();
+    let xy = fields.next()?;
+    // sub, mH, mI, mW, hH, hI — six of them before the score.
+    fields.nth(6)?;
+    let pair = fields.next()?;
+    let (path, original) = pair.split_once('\t')?;
+    let mut chars = xy.chars();
+    let index = state(chars.next()?);
+    let worktree = state(chars.next()?);
+    Some(json!({
+        "path": path.replace('\\', "/"),
+        "originalPath": original.replace('\\', "/"),
+        "index": index,
+        "worktree": worktree,
+        "conflicted": false,
+    }))
+}
+
 /// `u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>` — a conflicted file.
 fn parse_unmerged(line: &str) -> Option<Value> {
     let mut fields = line.splitn(11, ' ');
@@ -181,18 +212,23 @@ fn parse_untracked(line: &str) -> Option<Value> {
 }
 
 /// The porcelain XY code as the contract's `GitFileState`.
+///
+/// `T` (typechange) and `!` (ignored) have no member in `GitFileState`, so they
+/// cannot be reported as themselves — a value the contract does not declare is a
+/// lie the renderer cannot interpret. They fall to `modified`, which is what the
+/// reference implementation does and is at least a declared value.
 fn state(code: char) -> &'static str {
     match code {
+        // `.` is explicitly unmodified, not an unknown code.
+        '.' => "unmodified",
         'M' => "modified",
         'A' => "added",
         'D' => "deleted",
         'R' => "renamed",
         'C' => "copied",
-        'T' => "typechange",
         'U' => "conflicted",
         '?' => "untracked",
-        '!' => "ignored",
-        _ => "unmodified",
+        _ => "modified",
     }
 }
 
@@ -229,6 +265,37 @@ fn repo_root() -> Option<std::path::PathBuf> {
     Some(std::path::PathBuf::from(path))
 }
 
+/// A scratch file inside the repository, removed on every path out of the test
+/// that made it.
+///
+/// A guard rather than a cleanup line at the end: an `assert!` that fires before
+/// the cleanup leaves the file in the working tree *and* in the index, which is a
+/// dirty tree the next test run inherits — and the two tests that need it both
+/// failed that way before this existed.
+#[cfg(test)]
+mod scratch {
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    pub struct Scratch {
+        pub root: PathBuf,
+        pub name: String,
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(self.root.join(&self.name));
+            let _ = Command::new("git")
+                .arg("rm")
+                .arg("--cached")
+                .arg("--ignore-unmatch")
+                .arg(&self.name)
+                .current_dir(&self.root)
+                .output();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,6 +321,21 @@ mod tests {
         let change = parse_unmerged("u UU N... 100644 100644 100644 100644 abc def def ghi a.ts").expect("parse");
         assert_eq!(change.get("conflicted").and_then(Value::as_bool), Some(true));
         assert_eq!(change.get("index").and_then(Value::as_str), Some("conflicted"));
+    }
+
+    #[test]
+    fn a_rename_carries_its_original_path() {
+        // The extra <X><score> field shifts the offsets by one, so reading a
+        // type-2 line as an ordinary one produced `path: "R100 new\told"` and
+        // `originalPath` was never emitted at all.
+        let change = parse_renamed("2 R. N... 100644 100644 100644 100644 100644 R100 new\told").expect("parse");
+        assert_eq!(change.get("path").and_then(Value::as_str), Some("new"));
+        assert_eq!(
+            change.get("originalPath").and_then(Value::as_str),
+            Some("old"),
+            "the contract has originalPath for exactly this"
+        );
+        assert_eq!(change.get("index").and_then(Value::as_str), Some("renamed"));
     }
 
     #[test]
@@ -848,6 +930,8 @@ mod diff_tests {
             // No repository: nothing to assert against.
             return;
         };
+        let root = path.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let _scratch = scratch::Scratch { root, name: name.clone() };
         let model = diff_get("ws-1", &name, "working");
         let patch = model.get("patch").and_then(Value::as_str).unwrap_or("");
         assert!(patch.contains("ponytail diff line"), "the patch carries the change: {patch}");
@@ -858,9 +942,7 @@ mod diff_tests {
         // asked separately: `add -N` records intent, not content.
         let staged = diff_get("ws-1", &name, "staged");
         assert!(staged.get("patch").and_then(Value::as_str).is_some());
-
-        let _ = std::fs::remove_file(&path);
-        let _ = Command::new("git").arg("rm").arg("--cached").arg(&name).current_dir(repo_root().unwrap()).output();
+        // `_scratch` cleans up here, including on the assert paths above.
     }
 
     #[test]
@@ -1721,6 +1803,7 @@ mod write_tests {
         let Some(root) = repo_root() else { return };
         let name = format!("scratch-stage-{}.txt", std::process::id());
         let path = root.join(&name);
+        let _scratch = scratch::Scratch { root: root.clone(), name: name.clone() };
         if std::fs::write(&path, "ponytail stage\n").is_err() {
             return;
         }
@@ -1734,9 +1817,7 @@ mod write_tests {
         );
         let unstaged = execute(&json!({ "kind": "unstage", "paths": [name] }));
         assert_eq!(unstaged.get("operation").and_then(Value::as_str), Some("unstage"));
-
-        let _ = std::fs::remove_file(&path);
-        let _ = Command::new("git").arg("rm").arg("--cached").arg(&name).current_dir(&root).output();
+        // `_scratch` cleans up here, including on the assert paths above.
     }
 }
 
