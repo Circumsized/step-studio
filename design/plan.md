@@ -501,7 +501,7 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 
 **三条待决策岔路**（都不阻塞 M1.1-M1.4 的脚手架与挂载，但分别在 M1 首页、M4 用量、M4 Agent Hub 动工前必须定）：
 
-- **D-1 worktree**：每个 worktree 作为独立 project 传给适配器（`--continue` 按 project 各自恢复），还是承认 Step 无 worktree 概念、首页退化为单项目 + 分支切换。判据：Step 的 session 存储键是否为 project 绝对路径。
+- **D-1 worktree（2026-11-12 实测定案）**：判据是「Step 的 session 存储键是否为 project 绝对路径」——**是**。`~/.stepcode/agent/sessions/` 下每个项目一个目录，目录名是 project 绝对路径把 `/` 换成 `-`（如 `--home-ubuntu-workspace-step-studio--`），session 文件内还带 `cwd` 字段。即**每个 worktree（不同绝对路径）天然落到各自的 session 存储**，`--continue` 按 project 各自恢复。定案：**每个 worktree 作为独立 project 传给适配器**，不需要 Step 有 worktree 概念；首页的项目列表因此可以是多 project，不与适配器冲突。
 - **D-2 用量面板路由（已实测解决）**：把 `/usage` 当 prompt 从桥上发过去即得整块面板（`notify` 回来，ANSI 文本）。不等上游、不自扫文件。遗留一个呈现层选择：直接显示 ANSI 文本面板，还是解析出结构化数字后按 `home.png`/`telemetry.png` 的图表重绘——前者零成本但不像素级，后者要写 ANSI 解析。建议前者先落地、后者按需。**注意保持 stdin 不关**，否则活动扫描被取消，只收到 `extension_error`。
 - **通则（2026-11-11 实测）**：**slash 命令可经 `prompt` 抵达**。`rpc.md` 只承诺「extension command 立即执行」，实测内置命令同样被分发（`/usage` → `command:usage`），渲染结果经 `notify` 回传。这意味着 CLI 的 TUI 面板类命令（`/usage`、`/status`、`/models`、`/skills` 等）大多可从桥上直接取到，不必等 RPC 暴露，也不必自己复刻其数据来源。代价是回传为 ANSI 文本而非结构化数据。适配器需保证：发这类 prompt 时不占用会话轮次、且进程 stdin 常开。
 - **D-3 Agent Hub 数据源**：已查实——子代理会话在 `<agentDir>/sessions` 下以 `origin: "subagent"` 或 id 前缀标识，Step 有意将其排除出列表与搜索，故无 RPC 枚举。取自建扫描（读 session 目录 + 识别子代理标记 + `get_session_stats` 取每会话数字），不等上游。扫描时注意：这些文件同时是 `/usage` 的数据源，两边要共用同一套读取与缓存，不要各写一份。

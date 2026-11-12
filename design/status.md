@@ -490,6 +490,23 @@ force push 只以 `--force-with-lease` 发出，**从不发裸 `--force`**——
 
 测试：18 个 git 单测，含对真仓库的 stage→unstage 往返；scratch 文件测完即清（工作树干净时没有现成 diff 可测，而改已提交文件再还原会在测试失败时留下脏树）。
 
+### D-1 定案：Step 的 session 存储键就是 project 绝对路径（2026-11-12 实测）
+
+D-1 的判据本就是个实证问题，直接查 `~/.stepcode`：
+
+```
+~/.stepcode/agent/sessions/
+├── --home-ubuntu-workspace--/
+├── --home-ubuntu-workspace-step-studio--/
+│   └── 2026-11-11T19-58-57-822Z_01a1cc31-....jsonl   （内含 cwd = /home/ubuntu/workspace/step-studio）
+├── --tmp-m0-probe--/
+└── ...
+```
+
+每个项目一个目录，目录名是绝对路径把 `/` 换成 `-`，session 文件内另带 `cwd` 字段。**即每个 worktree（不同绝对路径）天然落到各自的 session 存储**，`--continue` 按 project 各自恢复。
+
+定案：**每个 worktree 作为独立 project 传给适配器**，不需要 Step 有 worktree 概念；首页项目列表可以是多 project，与适配器不冲突。这解开了 M2.3 的三重阻塞之一（另两重是会话目录移植与多面）。
+
 ### M3.2 进程树：阻塞点查清，并入 M2.3（2026-11-12）
 
 上一轮记「需从零设计契约面」。本轮查清真正卡住它的：**事实在 daemon 手里，壳拿不到**。
