@@ -712,6 +712,37 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.1 第四块：dhat 堆画像试做后撤回，附诊断证据（2026-11-13）
+
+用户第 5 步点名要 dhat 堆画像。**做了一套，然后删掉了**，理由是它测量的是空气。
+
+形态本来是对的：`crates/studio-bridge/tests/heap-profile.rs` 四条断言，覆盖 §14.6 点名的三条
+热路径（帧编解码、握手、JSONL/read model），Ceiling 64 KB，注释写清了为什么宽松。写完、
+跑通、四条全绿。
+
+然后做变异验证，**三条变异全部照绿**，包括把断言删掉。加了一条诊断测试打 dhat 实际报的数：
+
+```
+DIAG total_bytes 0 -> 0 (delta 0), max_bytes 0 -> 0, live blocks 0 -> 0
+```
+
+200 次 `vec![0u8; 288]` 之后，`total_bytes` 是 0。**分配器没有接上**，所以每个天花板都被
+白送、decoder 增长恒为 0、四个断言没有一个能失败。已删掉测试、`dhat` dev-dependency 和
+跑出来的 `dhat-heap.json`。
+
+**为什么记下来而不是悄悄删**：这是本会话第 N 个「绿色但不测量任何东西」的门禁，前几个都是
+被测对象写错了，这个不一样——**是测量工具没接上**。症状相同（变异全绿），成因不同，而如果只
+记「删了一个没用的测试」，下次有人会再写一个一模一样的。
+
+dhat 0.3.3 在这个 test binary 里不生效的可能原因（未逐一排查，上下文耗尽）：
+`Profiler::new_heap()` 装在 `OnceLock` 里延迟初始化，而 test binary 可能已有
+`#[global_allocator]`；或需要 `#[global_allocator] static ALLOC: dhat::Alloc` 的形式而不是
+运行期安装。**要续做的话，从 `#[global_allocator]` 那条路走，并且先跑上面那条诊断测试确认
+非零，再写断言。**
+
+G-1 门禁（§14.7：壳底座 N=0/S=1 ≤ 200 MB，前置条件 WebView2+renderer ≤ 165 MB）因此
+**仍未回填**，且它要的是 RSS 不是堆——那是另一件事，见 14.6 的测量配方。
+
 ### M5.1 第三块：`contracts/generated/` 从空操作变成真门禁（2026-11-13）
 
 用户第 5 步要的「`cargo test` 后 `git diff --exit-code contracts/generated/`」之前是空操作——
