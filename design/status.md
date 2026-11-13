@@ -712,6 +712,40 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.6 第 2 步完成状态与 CI 门禁缺口（2026-11-13）
+
+**32 个缺失 chrome 成员全部落地**，按用户给定顺序：
+
+| 顺序 | 组 | 成员 | 新模块 / 承接 |
+| --- | --- | --- | --- |
+| 2 | HostApi | 项目集成 2、Skillshare 1、产物 3、服务定义 3 = 9 | `chrome.rs` + `artifacts.rs` + `service_definitions.rs` |
+| 3 | BrowserApi | 浏览器观测 4、计算机截图 1 = 5 | `browser_observation.rs`（零新依赖） |
+| 4 | MediaApi | 媒体上传 4、实时音频 3、麦克风权限 2 = 9 | `media.rs` + `artifacts::commit` |
+| — | PlatformApi | 菜单 1、日志 2、平台 1 = 4 | `menu.rs` + `chrome.rs`（更早落地） |
+| — | 预测通道 | 5 | `prediction.rs`（零新依赖） |
+
+**方案里点名要的三个重依赖，壳侧一个都不需要**，理由已写进各批记录：`agent-browser` /
+`rmcp` / `chromiumoxide` 属于运行时那一侧（帧在运行时的私有 socket 上，壳只转发），
+`flexaudio` 同理（采集在 WebView 的 `getUserMedia` 和运行时里）。实际新增的直接依赖只有
+`keyring` + `aes-gcm`（服务定义的 OS keystore，+14 个包，不需要系统 libdbus），以及把本就
+在依赖闭包里的 `uuid` / `regex` / `getrandom` / `url` 提为直接依赖（零新增包）。
+
+**实测门禁状态**：六 crate clippy `-D warnings` 全净；Rust 150 个测试 0 失败；desktop-tauri
+30 个 node:test 0 失败；`npm run check` 全绿；Xvfb 下实机启动 30 秒无 panic（退出码 124 是
+timeout 杀的，不是崩的）。
+
+**负责人第 5 步要的 CI 门禁，两条未落地，原因明确**：
+
+1. `cargo deny` 查许可证（重点卡 AGPL）——本机没装 `cargo-deny`，且它需要网络拉取
+   advisory 数据库。这一条**在能联网的 CI 上才能跑**，本机无法代跑。
+2. `cargo test` 后 `git diff --exit-code contracts/generated/`——仓里**没有
+   `contracts/generated/` 目录**，所以这条门禁今天是空操作。需要先决定由谁生成、生成什么。
+
+另两条（dhat 堆画像、「按需进程数 = 0」断言）**对本壳不适用**：产物库、服务定义、浏览器
+观测、实时音频、预测通道五个模块全部在壳进程内，没有一个按需拉起子进程；麦克风采集在
+WebView 里，浏览器在运行时里。也就是说「按需进程数 = 0」在本壳是恒真的，写成断言没有
+信息量；真正该断言的是「idle 时没有浏览器/音频子进程」，而那取决于运行时侧，不是壳。
+
 ### M5.6 收口：渲染层直读 chrome 真正清零，结构规则有了测试（2026-11-13）
 
 第六批之后补的两件事，都是第 1 步验收条件的遗留。
