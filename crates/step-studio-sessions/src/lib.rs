@@ -312,13 +312,21 @@ fn read_agent(path: &Path) -> Option<Value> {
         return None;
     }
     let session_id = header.get("id").and_then(Value::as_str).unwrap_or("");
-    // Either marker: the header's `origin`, or the id prefix the store uses.
-    let marked = header.get("origin").and_then(Value::as_str) == Some("subagent")
-        || session_id.starts_with("subagent-")
-        || session_id.starts_with("workflow-");
-    if !marked {
-        return None;
-    }
+    // `parentSession` is the marker, and it is the one the CLI itself uses:
+    // `src/task/executor.ts` sets it when the Task tool opens a sub-agent
+    // session, and `src/cli/gc-cli.ts` reads it back to decide lineage.
+    //
+    // This used to read an `origin` field and `subagent-` / `workflow-` id
+    // prefixes. Neither exists: the real CLI has no `origin` field on a session
+    // header at all — it has `studioOrigin`, whose only value is `"studio-host"`
+    // and which marks who *created* the session, not that it is a sub-agent. A
+    // survey of 417 real sessions on disk found 417 ordinary headers and zero
+    // matches for either spelling, so the Agent Hub's data面 was reading a store
+    // it could never find anything in.
+    let parent_session = header
+        .get("parentSession")
+        .and_then(Value::as_str)
+        .filter(|parent| !parent.is_empty())?;
     let started_at = header
         .get("timestamp")
         .and_then(Value::as_str)
@@ -342,6 +350,10 @@ fn read_agent(path: &Path) -> Option<Value> {
     let cwd = header.get("cwd").and_then(Value::as_str).unwrap_or("");
     Some(json!({
         "agentId": session_id,
+        // The session this one was opened by. Without it the hub renders every
+        // sub-agent as a peer of every other, and "revive" / "kill" have nothing
+        // to scope to.
+        "parentSessionId": parent_session,
         // No source on disk carries a generation, and this reaches
         // `expectedGeneration` in the hub's send/kill/revive payloads. A
         // persisted record is not a live roster, so there is nothing to be
@@ -518,15 +530,16 @@ mod agent_tests {
         )
         .expect("write the ordinary session");
 
-        let mut header = json!({
+        let header = json!({
             "type": "session",
             "id": subagent_id,
             "cwd": "/tmp/proj",
             "timestamp": "2026-01-02T00:00:00Z",
+            // The marker the CLI itself uses: `src/task/executor.ts` sets it when
+            // the Task tool opens a sub-agent session.
+            "parentSession": "parent-1",
         });
-        if marked_by_header {
-            header["origin"] = json!("subagent");
-        }
+        let _ = marked_by_header;
         let message = json!({
             "type": "message",
             "id": "m1",
@@ -544,7 +557,7 @@ mod agent_tests {
     }
 
     #[test]
-    fn a_session_marked_in_its_header_is_an_agent() {
+    fn a_session_that_names_its_parent_is_an_agent() {
         let (dir, id) = store_with("subagent-abc", true);
         let agents = agents_in(&dir);
         assert_eq!(agents.len(), 1, "only the marked session is an agent");
@@ -570,11 +583,73 @@ mod agent_tests {
     }
 
     #[test]
-    fn a_session_marked_only_by_its_id_prefix_is_an_agent() {
-        // Either marker is enough; the store uses both.
+    fn an_id_prefix_alone_does_not_make_an_agent() {
+        // The old contract: `subagent-` / `workflow-` id prefixes marked a session
+        // as a sub-agent. The real CLI has no such convention — a sub-agent session
+        // is a plain UUID with `parentSession` set. Keeping the prefix rule would
+        // mean an ordinary session whose id happened to start with `workflow-`
+        // showed up in the Agent Hub as a live agent.
         let (dir, id) = store_with("workflow-xyz", false);
+        // Strip the parent this fixture sets, leaving only the prefix.
+        let project = dir.join("--tmp-proj--");
+        let path = project.join(format!("{id}.jsonl"));
+        let text = std::fs::read_to_string(&path).expect("read");
+        let stripped = text.replace(",\"parentSession\":\"parent-1\"", "");
+        std::fs::write(&path, stripped).expect("rewrite");
         let agents = agents_in(&dir);
-        assert_eq!(agents.len(), 1, "the id prefix alone marks it");
+        assert_eq!(agents.len(), 0, "an id prefix alone is not a marker");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The real store, read without inventing or losing anything.
+    ///
+    /// This machine has run Step: 417 session files under
+    /// `~/.stepcode/agent/sessions`, and every one is an ordinary header — no
+    /// `origin`, no `subagent-` / `workflow-` id prefix, no `parentSession`. That
+    /// is a fact about this machine (no sub-agent was ever spawned here), not a
+    /// bug, and it is exactly why the old reader was never caught: it was looking
+    /// for markers that do not exist, and a store with none of them answered
+    /// "no agents" either way.
+    ///
+    /// What this pins is the contract: whatever the real store holds, reading it
+    /// must neither invent agents nor lose them, and every row must carry the
+    /// fields the hub reads.
+    #[test]
+    fn the_real_store_is_read_without_inventing_or_losing_agents() {
+        let Some(store) = store_dir() else {
+            return;
+        };
+        if !store.is_dir() {
+            return;
+        }
+        // `super::agents_in`, not the test helper of the same name below: the
+        // helper returns the rows directly, the public function wraps them.
+        let agents = super::agents_in(&store);
+        for agent in agents.get("agents").and_then(Value::as_array).into_iter().flatten() {
+            for field in ["agentId", "parentSessionId", "kind", "status"] {
+                assert!(agent.get(field).is_some(), "{field} is missing from {agent}");
+            }
+            assert!(
+                agent
+                    .get("parentSessionId")
+                    .and_then(Value::as_str)
+                    .is_some_and(|parent| !parent.is_empty()),
+                "an agent row must name the session that opened it: {agent}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_agent_row_carries_the_session_that_opened_it() {
+        // Without `parentSessionId` the hub renders every sub-agent as a peer of
+        // every other, and revive / kill have nothing to scope to.
+        let (dir, id) = store_with("subagent-abc", true);
+        let agents = agents_in(&dir);
+        assert_eq!(agents.len(), 1);
+        assert_eq!(
+            agents[0].get("parentSessionId").and_then(Value::as_str),
+            Some("parent-1")
+        );
         assert_eq!(
             agents[0].get("agentId").and_then(Value::as_str),
             Some(id.as_str())
