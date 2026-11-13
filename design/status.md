@@ -844,8 +844,18 @@ artifacts 第一个撞上。
 `detectPlatform` 已经从 WebView 引擎推出同一个值，所以这一项是「本来就有」而不是新落地；
 从 32 个名字里划掉。
 
-**剩余 25 个**：产物 3、服务定义 3（HostApi，共 6 个）；媒体上传 4、实时音频 3、麦克风
+**剩余 16 个**（产物 3 与服务定义 3 已在第二、三批落地）：媒体上传 4、实时音频 3、麦克风
 权限 2（MediaApi，共 9 个）；浏览器观测 5（BrowserApi）；**预测通道 5 个**。
+
+32 个名字的当前归属（滚动更新）：
+
+| 组 | 已落地 | 剩余 |
+| --- | --- | --- |
+| HostApi | 项目集成 2、Skillshare 1、产物 3、服务定义 3 = 9 | 0 |
+| PlatformApi | 菜单 1、日志 2、平台 1 = 4 | 0 |
+| MediaApi | 0 | 媒体上传 4、实时音频 3、麦克风权限 2 |
+| BrowserApi | 0 | 浏览器观测 5 |
+| 预测通道（归属待定） | 0 | 5 |
 
 预测通道这 5 个（`attachPrediction` / `predictionInput` / `detachPrediction` /
 `importPredictionHistory` / `onPrediction`）在前面的 trait 归属表里**没有位置**——那张表
