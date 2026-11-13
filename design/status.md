@@ -525,6 +525,23 @@ D-1 的判据本就是个实证问题，直接查 `~/.stepcode`：
 
 定案：**每个 worktree 作为独立 project 传给适配器**，不需要 Step 有 worktree 概念；首页项目列表可以是多 project，与适配器不冲突。这解开了 M2.3 的三重阻塞之一（另两重是会话目录移植与多面）。
 
+### M5.4 第一块：daemon 进程树 RSS 曲线（2026-11-13 实测）
+
+用 `crates/studio-host/src/process.rs` 的同一套 `/proc` 遍历采样（1 Hz，60 s）：
+
+| 项 | 实测 | 门禁（§14.6） |
+|---|---|---|
+| daemon 进程树合计 RSS | **56 076 kB**，60 s 内恒定 | 稳态 60 s 斜率 < 1 MB/min |
+| 斜率 | **0.0 kB/min** | < 1024 kB/min |
+| 峰值 | 56 076 kB（= 均值，无增长） | — |
+
+口径：debug 构建，`--grace 600`，假 Step CLI（`fake-step.mjs`）。树含 daemon +
+适配器 + node 三进程；56 MB 里大头是 node（runtime 侧），不是 daemon 本身——
+daemon 单体在 M2.1 时实测 2.7 MB（release）。
+
+**未做**：renderer/WebView 的 RSS（G-1 的 165 MB 前置条件），需要真有 WebView2 的
+Windows 真机；以及 60 分钟 soak（§14.6 的 < 5 MB/h）。本次是 60 s 窗口，不是 soak。
+
 ### M3.2 进程树：阻塞点查清，并入 M2.3（2026-11-12）
 
 上一轮记「需从零设计契约面」。本轮查清真正卡住它的：**事实在 daemon 手里，壳拿不到**。
