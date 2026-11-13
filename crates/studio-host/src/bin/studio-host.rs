@@ -392,12 +392,34 @@ fn spawn_pump(
                 Some(serial) => {
                     // The others keep their slots: dropping them would close
                     // sockets that are mid-conversation.
-                    if let Some(index) = surfaces.iter().position(|(_, _, held)| *held == serial) {
-                        // A send that fails means that surface is gone. Retaining
-                        // it would leak a sender per dead surface for the
-                        // daemon's lifetime.
-                        if surfaces[index].0.send(frame.clone()).is_err() {
-                            surfaces.remove(index);
+                    match surfaces.iter().position(|(_, _, held)| *held == serial) {
+                        Some(index) => {
+                            // A send that fails means that surface is gone.
+                            // Retaining it would leak a sender per dead surface
+                            // for the daemon's lifetime.
+                            if surfaces[index].0.send(frame.clone()).is_err() {
+                                surfaces.remove(index);
+                            }
+                        }
+                        None => {
+                            // A surface that asked for this and is no longer in
+                            // the list. Its relay thread is still forwarding
+                            // requests, so every reply it is owed lands here and
+                            // is dropped — and the surface's `await_reply` has no
+                            // timeout, so it waits forever with nothing in any
+                            // log to say why. Reachable when the write half fails
+                            // while the read half stays open: the writer thread
+                            // exits, the pump removes the entry on the next
+                            // failed send, and the relay thread carries on.
+                            //
+                            // Logged rather than silently dropped. The fix beyond
+                            // the log is to close the socket when the writer
+                            // fails, which is what makes the relay thread notice
+                            // — that belongs with the writer's own error path.
+                            eprintln!(
+                                "step-studio-host: a reply for surface {serial} has \
+                                 nowhere to go; that surface will wait forever"
+                            );
                         }
                     }
                 }
@@ -644,6 +666,12 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
 
     // The writer owns the surface's write half and drains until the sender is
     // dropped, which happens when this function returns.
+    // The writer reports its own death, because a write that fails while the read
+    // half still delivers is otherwise invisible: the thread exits, the pump
+    // removes the surface on its next failed send, and the relay thread keeps
+    // forwarding requests whose replies now have nowhere to go. The surface then
+    // waits forever, because `await_reply` has no timeout of its own.
+    let (writer_dead, writer_dead_rx) = mpsc::channel::<()>();
     let writer = std::thread::spawn({
         let mut surface_writer = match stream.try_clone() {
             Ok(stream) => stream,
@@ -656,10 +684,13 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
                 return;
             }
         };
+        let writer_dead = writer_dead;
         move || {
             use std::io::Write;
             while let Ok(frame) = receiver.recv() {
                 if surface_writer.write_all(&frame).is_err() {
+                    eprintln!("step-studio-host: a surface's write half failed; closing it");
+                    let _ = writer_dead.send(());
                     return;
                 }
             }
@@ -830,6 +861,12 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
             if relay_done_rx.try_recv().is_ok() {
                 break;
             }
+            // The writer died while the reader still delivers. Closing the socket
+            // is what makes the relay thread notice: its read then ends, the
+            // session reports closed, and the shell's supervisor reconnects.
+            if writer_dead_rx.try_recv().is_ok() {
+                break;
+            }
             std::thread::sleep(Duration::from_millis(50));
         }
         // Closing the socket is what makes the surface notice. Its reader
@@ -903,12 +940,17 @@ impl Daemon {
     /// wait for a reply that goes to the other. Without the log line that is a
     /// hang with nothing to say why.
     fn expect(&self, request_id: &str, surface: u64) {
-        if let Some(displaced) = self
-            .pending
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .expect(request_id, surface)
-        {
+        // The lock is dropped before the log line, and that ordering is the
+        // whole point. `if let` keeps its scrutinee's temporaries alive to the
+        // end of the block, so writing the `eprintln!` inside it held `pending`
+        // across a write to stderr — and the adapter's pump takes `to_surface`
+        // and then `pending`, so a stderr whose reader had gone away would fill
+        // its pipe buffer and stall the pump, and with it every surface.
+        let displaced = {
+            let mut routes = self.pending.lock().unwrap_or_else(|p| p.into_inner());
+            routes.expect(request_id, surface)
+        };
+        if let Some(displaced) = displaced {
             eprintln!(
                 "step-studio-host: request {request_id} was already waiting on surface \
                  {displaced}; surface {surface} took it over"
