@@ -581,7 +581,7 @@ fn pump(
                             // come from this session's epochs, the snapshot from
                             // the stream, and the two lists from the session
                             // store. Nothing here asks the adapter.
-                            let history = crate::history::list(Some(10), None);
+                            let history = crate::history::list(Some(10), None, None);
                             let recent_threads: Vec<Value> = history
                                 .get("entries")
                                 .and_then(Value::as_array)
@@ -611,18 +611,19 @@ fn pump(
                                 },
                                 "snapshot": stream.snapshot.clone(),
                                 "recentThreads": recent_threads,
-                                "recentWorkspaces": crate::history::projects()
+                                "recentWorkspaces": crate::history::projects(crate::history::active_project().as_deref())
                                     .get("workspaces")
                                     .cloned()
                                     .unwrap_or(Value::Array(Vec::new())),
                             })
                         } else if job.command_name == "projects.list" {
-                            crate::history::projects()
+                            crate::history::projects(crate::history::active_project().as_deref())
                         } else if job.command_name == "history.list" {
                             let limit = job.operation.get("limit").and_then(Value::as_u64);
                             let workspace_id =
                                 job.operation.get("workspaceId").and_then(Value::as_str);
-                            crate::history::list(limit, workspace_id)
+                            let status = job.operation.get("status").and_then(Value::as_str);
+                            crate::history::list(limit, workspace_id, status)
                         } else if job.command_name == "workspace.fileTree" {
                             let workspace_id = job
                                 .operation

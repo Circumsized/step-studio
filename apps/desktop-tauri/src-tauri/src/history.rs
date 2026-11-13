@@ -27,7 +27,7 @@ const MAX_LIMIT: u64 = 200;
 const SNIPPET_CHARS: usize = 120;
 
 /// One page of session history.
-pub fn list(limit: Option<u64>, workspace_id: Option<&str>) -> Value {
+pub fn list(limit: Option<u64>, workspace_id: Option<&str>, status: Option<&str>) -> Value {
     let Some(store) = store_dir() else {
         return empty("the session store is not present on this machine");
     };
@@ -36,6 +36,15 @@ pub fn list(limit: Option<u64>, workspace_id: Option<&str>) -> Value {
     };
 
     // Every session file, newest first once their own timestamps are known.
+    // The contract's status filter. Every row here is `active`, because the
+    // store has no archive: a session on disk is one that happened. So a
+    // request for `archived` or `closed` is answered with nothing rather than
+    // with the active rows it did not ask for.
+    let wanted_status = status.unwrap_or("active");
+    if wanted_status != "active" {
+        return json!({ "entries": [], "total": 0 });
+    }
+
     let mut rows: Vec<Value> = Vec::new();
     for project in projects.flatten() {
         let project_dir = project.path();
@@ -208,9 +217,27 @@ mod tests {
 
     #[test]
     fn a_missing_store_is_an_honest_empty_rather_than_an_error() {
-        let model = list(Some(10), None);
+        let model = list(Some(10), None, None);
         assert!(model.get("entries").and_then(Value::as_array).is_some());
         assert!(model.get("total").and_then(Value::as_u64).is_some());
+    }
+
+    #[test]
+    fn a_status_filter_that_is_not_active_is_answered_with_nothing() {
+        // Every row is `active`, because the store has no archive. So asking
+        // for archived or closed must return nothing rather than the active
+        // rows that were not asked for.
+        for status in [Some("archived"), Some("closed")] {
+            let model = list(Some(50), None, status);
+            assert_eq!(
+                model.get("entries").and_then(Value::as_array).map(Vec::len),
+                Some(0),
+                "{status:?} must not be answered with active rows"
+            );
+        }
+        // And the default is active, which is what every renderer call asks for.
+        let model = list(Some(50), None, None);
+        assert!(model.get("entries").and_then(Value::as_array).is_some());
     }
 
     #[test]
@@ -218,7 +245,7 @@ mod tests {
         // This machine has run Step, so the store is real. The assertion is that
         // every row carries the fields the renderer reads, not that there is a
         // particular number of them.
-        let model = list(Some(200), None);
+        let model = list(Some(200), None, None);
         let entries = model.get("entries").and_then(Value::as_array).expect("entries");
         if entries.is_empty() {
             return;
@@ -262,7 +289,25 @@ mod tests {
 /// `name` is the basename and never a path, per the contract. The full path is
 /// what `workspaceId` carries, because that is what a file tree or a session
 /// filter needs to match against.
-pub fn projects() -> Value {
+/// The project the shell is operating on, or the launch directory.
+pub fn active_project() -> Option<String> {
+    ACTIVE
+        .get_or_init(std::sync::Mutex::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+}
+
+/// Mark a project active, so a later `projects.list` reports it.
+pub fn set_active_project(project: &str) {
+    let slot = ACTIVE.get_or_init(std::sync::Mutex::default);
+    let mut guard = slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    *guard = Some(project.to_string());
+}
+
+static ACTIVE: std::sync::OnceLock<std::sync::Mutex<Option<String>>> = std::sync::OnceLock::new();
+
+pub fn projects(active: Option<&str>) -> Value {
     let Some(store) = store_dir() else {
         return json!({ "workspaces": [] });
     };
@@ -294,18 +339,30 @@ pub fn projects() -> Value {
             // session in it is the closest thing, and it is a fact rather than a
             // guess.
             "lastOpenedAt": newest_session_at(&path),
-            "active": false,
+            // Which project is active is the caller's to say: the shell knows
+            // which one it opened last, and hardcoding `false` here meant a
+            // refresh lost it — the renderer reads this flag as the current
+            // project, and `workspace.open`'s failure path depends on finding
+            // one.
+            "active": active == Some(project.as_str()),
         }));
     }
+
+    // De-duplicated *before* sorting. The other order leaves two rows with the
+    // same id but different timestamps non-adjacent, so `dedup_by` keeps both —
+    // which then breaks `open()`'s "exactly one active" invariant.
+    workspaces.sort_by(|a, b| {
+        a.get("workspaceId")
+            .and_then(Value::as_str)
+            .cmp(&b.get("workspaceId").and_then(Value::as_str))
+    });
+    workspaces.dedup_by(|a, b| a.get("workspaceId") == b.get("workspaceId"));
 
     // Most recently used first, which is the order a project list is read in.
     workspaces.sort_by(|a, b| {
         let a_at = a.get("lastOpenedAt").and_then(Value::as_str).unwrap_or("");
         let b_at = b.get("lastOpenedAt").and_then(Value::as_str).unwrap_or("");
         b_at.cmp(a_at)
-    });
-    workspaces.dedup_by(|a, b| {
-        a.get("workspaceId") == b.get("workspaceId")
     });
     json!({ "workspaces": workspaces })
 }
@@ -347,8 +404,10 @@ fn newest_session_at(project: &Path) -> String {
         if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
             continue;
         }
-        // The last line's timestamp is the session's last activity, so only the
-        // tail is read rather than the whole file.
+        // The last line's timestamp is the session's last activity. The whole
+        // file is read to get it: `read_to_string` has no tail mode, and a
+        // session file is small. Claiming otherwise in a comment is how a
+        // reader comes to believe a cost is not being paid.
         if let Some(at) = last_line_timestamp(&path) {
             if at > newest {
                 newest = at;
@@ -402,7 +461,7 @@ mod project_tests {
 
     #[test]
     fn the_real_store_lists_the_projects_it_holds() {
-        let model = projects();
+        let model = projects(None);
         let workspaces = model.get("workspaces").and_then(Value::as_array).expect("workspaces");
         if workspaces.is_empty() {
             return;
@@ -430,7 +489,8 @@ mod project_tests {
 /// Mark a project active. Returns the list with that project flagged, which is
 /// what `workspace.open` answers with.
 pub fn open(workspace_id: &str) -> Value {
-    let mut model = projects();
+    set_active_project(workspace_id);
+    let mut model = projects(Some(workspace_id));
     if let Some(workspaces) = model.get_mut("workspaces").and_then(Value::as_array_mut) {
         for workspace in workspaces.iter_mut() {
             let is_active = workspace.get("workspaceId").and_then(Value::as_str) == Some(workspace_id);
