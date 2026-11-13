@@ -712,6 +712,53 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.6 第 2 步第五批：MediaApi 9 落地，同样不需要 flexaudio（2026-11-13）
+
+新增 `apps/desktop-tauri/src-tauri/src/media.rs`，从 Electron 侧 `media-upload.ts`、
+`live-audio.ts`、`chrome-media-access.ts` 移植。
+
+**与 BrowserApi 同一个发现，第二次应验：这里没有音频引擎，而这是设计。** 上传是分块流，
+落进本壳自己已拥有的产物库；实时音频是往运行时的私有 socket 转发 PCM；麦克风权限是 OS
+答一个状态，不是壳做一次采集。所以用户方案里点名要的 `flexaudio` 与 Tauri capabilities
+**在壳侧一样不需要**：采集发生在 WebView 的 `getUserMedia` 和运行时里，壳的活是转发，
+以及在字节上路之前拒绝畸形的那一些。
+
+留着并值得留的校验：上传分块有序 / 有界 / 计数（乱序或超限会损坏 payload，而产物库随后
+会拿出一个摘要与记录不符的文件）；PCM 逐样本检查（NaN 或超出 ±1.0 不是音频，转过去会把
+垃圾塞进运行时缓冲，而且让故障看起来像运行时的 bug 而不是渲染层的）；音频按窗口归属且
+要求可见窗口（隐藏窗口流麦克风，正是用户没同意的那件事）。
+
+顺带在 main.rs 的 setup 里接了两件原来没有的事：窗口销毁时结束它拥有的上传与音频连接
+（今天单窗口活过进程，所以只在关窗时触发；但第二个窗口不接就会漏掉 partial payload 和
+socket），以及一个十秒的空闲上传清扫（Electron 侧同一个 setInterval）。
+
+麦克风两个成员的诚实答案：`requestMicrophoneAccess` 一律 `granted`——WKWebView 与
+WebView2 各自拥有权限弹窗，壳层没有一个状态可报，答 `denied` 是发明一个 OS 从未表达过的
+状态；`openMicrophoneSettings` 只在 macOS 开一个**固定** URL（渲染层不给 URL，给了就是一
+个能打开任何东西的口子），其他地方返回 false。
+
+#### 过程中修掉一个自己写出来的永久自锁
+
+产物库的默认 root 由 `shell_state_dir()` 推导，而 cwd 未设 `STEP_STUDIO_CWD` 时它是**相对**
+路径（`./.step-studio`）。于是首次运行写下的 catalog 里 root 是相对的，而 `load()` 有一条
+「root 必须绝对」的检查——**库把自己写的东西拒了，而且永远读不回来**。已改为在空 catalog
+分支里 canonicalise。这个 bug 只在生产路径（相对 cwd）出现，单测用的临时目录都是绝对的，
+所以一套绿币的测试完全没看见它；是媒体上传测试第一次打到真实库才暴露的。
+
+#### 变异验证（五条逐条确认非空）
+
+| 变异 | 结果 |
+| --- | --- |
+| PCM 取值范围检查删掉 | FAILED ✓（第一版测试能过，见下） |
+| 分块序号检查删掉 | FAILED ✓ |
+| kind 与 mimeType 交叉检查删掉 | FAILED ✓ |
+| abort 不删 partial payload | FAILED ✓ |
+| 摘要不用流式哈希，改填常量 | FAILED ✓ |
+
+第一行的 PCM 测试第一版是**空测试**：它经 `append_audio` 驱动规则，而没有连接时那个函数
+在查表就返回了，所以断言「失败了」对「没有连接」同样成立——把整条规则删掉它照绿。已把规则
+抽成纯函数 `is_pcm` 并直接测。这是本会话第三次「只断言失败了、钉不住为什么失败」。
+
 ### M5.6 第 2 步第四批：浏览器观测 4 + 计算机截图 1 落地，壳是纯传输（2026-11-13）
 
 新增 `apps/desktop-tauri/src-tauri/src/browser_observation.rs`，从 Electron 侧
@@ -898,8 +945,9 @@ artifacts 第一个撞上。
 `detectPlatform` 已经从 WebView 引擎推出同一个值，所以这一项是「本来就有」而不是新落地；
 从 32 个名字里划掉。
 
-**剩余 16 个**（产物 3 与服务定义 3 已在第二、三批落地）：媒体上传 4、实时音频 3、麦克风
-权限 2（MediaApi，共 9 个）；浏览器观测 5（BrowserApi）；**预测通道 5 个**。
+**剩余 5 个**：全部是**预测通道**（`attachPrediction` / `predictionInput` /
+`detachPrediction` / `importPredictionHistory` / `onPrediction`），即第 32 个名字里唯一没有
+trait 归属的那一组。其余 27 个已全部落地。
 
 32 个名字的当前归属（滚动更新）：
 
@@ -908,7 +956,7 @@ artifacts 第一个撞上。
 | HostApi | 项目集成 2、Skillshare 1、产物 3、服务定义 3 = 9 | 0 |
 | PlatformApi | 菜单 1、日志 2、平台 1 = 4 | 0 |
 | BrowserApi | 浏览器观测 4、计算机截图 1 = 5 | 0 |
-| MediaApi | 0 | 媒体上传 4、实时音频 3、麦克风权限 2 |
+| MediaApi | 媒体上传 4、实时音频 3、麦克风权限 2 = 9 | 0 |
 | 预测通道（归属待定） | 0 | 5 |
 
 BrowserApi 5 个已全部落地，但**端到端仍被运行时的两个 operation 挡住**（见第四批记录）：

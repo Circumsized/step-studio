@@ -12,6 +12,7 @@ mod chrome;
 mod diagnostics;
 mod git;
 mod history;
+mod media;
 mod menu;
 mod pump;
 mod service_definitions;
@@ -113,6 +114,15 @@ fn main() {
             browser_observation::control_browser_observation,
             browser_observation::detach_browser_observation,
             browser_observation::read_computer_capture_command,
+            media::begin_media_upload,
+            media::append_media_upload,
+            media::finish_media_upload,
+            media::abort_media_upload,
+            media::attach_live_audio,
+            media::append_live_audio,
+            media::detach_live_audio,
+            media::request_microphone_access,
+            media::open_microphone_settings_command,
             service_definitions::list_service_definitions,
             service_definitions::save_service_definition,
             service_definitions::remove_service_definition,
@@ -229,11 +239,30 @@ fn main() {
                 });
             }
 
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Step Studio")
                 .inner_size(1280.0, 800.0)
                 .initialization_script(BRIDGE_INIT_SCRIPT)
                 .build()?;
+            // A closed window ends what it owned. One window outlives the process
+            // today, so this fires at shutdown — but a second window would leak
+            // its uploads' partial payloads and its audio socket without it.
+            let label = window.label().to_string();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::Destroyed = event {
+                    media::dispose_uploads(&label);
+                    media::dispose_audio(&label);
+                    browser_observation::dispose_window(&label);
+                }
+            });
+            // Idle uploads are abandoned: a renderer that crashes mid-upload
+            // leaves a partial payload and no catalog entry, and without this the
+            // payload stays forever. The Electron shell runs the same sweep on a
+            // ten-second interval.
+            std::thread::spawn(|| loop {
+                std::thread::sleep(std::time::Duration::from_secs(10));
+                media::reap_idle_uploads();
+            });
             Ok(())
         })
         .run(tauri::generate_context!())

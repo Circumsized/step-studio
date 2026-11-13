@@ -29,6 +29,7 @@ const RUST_COMMAND_MODULES = [
   "artifacts.rs",
   "service_definitions.rs",
   "browser_observation.rs",
+  "media.rs",
 ];
 const rustSources = RUST_COMMAND_MODULES.map(name =>
   readFileSync(join(packageRoot, "src-tauri", "src", name), "utf8"),
@@ -64,13 +65,20 @@ describe("the chrome bridge's surface", () => {
   test("it exposes exactly the shell-level subset", () => {
     const keys = Object.keys(createTauriChromeBridge()).sort();
     assert.deepEqual(keys, [
+      "abortMediaUpload",
+      "appendLiveAudio",
+      "appendMediaUpload",
       "attachBrowserObservation",
+      "attachLiveAudio",
+      "beginMediaUpload",
       "chooseArtifactDirectory",
       "clearAvatar",
       "controlBrowserObservation",
       "detachBrowserObservation",
+      "detachLiveAudio",
       "exportArtifact",
       "exportLogs",
+      "finishMediaUpload",
       "importArtifact",
       "listServiceDefinitions",
       "loadAvatar",
@@ -78,6 +86,7 @@ describe("the chrome bridge's surface", () => {
       "onBrowserObservation",
       "onMenuCommand",
       "openLogDir",
+      "openMicrophoneSettings",
       "openProjectDirectory",
       "openProjectInEditor",
       "openUrl",
@@ -86,6 +95,7 @@ describe("the chrome bridge's surface", () => {
       "removeServiceDefinition",
       "reportPayloadHealth",
       "reportPerformanceSample",
+      "requestMicrophoneAccess",
       "revealSkillshareToken",
       "saveAvatar",
       "saveServiceDefinition",
@@ -102,7 +112,7 @@ describe("the chrome bridge's surface", () => {
     // The three artifact members are deliberately *not* in this list. They were
     // when the shell ran no Host, but the shell now owns the artifact library
     // itself, so they are shell-level operations like any other.
-    for (const absent of ["beginMediaUpload", "getUpdateSnapshot", "attachPrediction", "requestMicrophoneAccess"]) {
+    for (const absent of ["getUpdateSnapshot", "attachPrediction"]) {
       assert.equal(bridge[absent], undefined, `${absent} must not be exposed`);
     }
   });

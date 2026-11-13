@@ -192,10 +192,17 @@ impl Library {
         let metadata = match std::fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,
             Err(_) => {
-                // First run: make the default payload root now, so the writability
-                // probe in `state` has somewhere to write.
-                let _ = std::fs::create_dir_all(self.default_payload_root());
-                return Ok(Catalog::empty(&self.default_payload_root()));
+                // First run: make the default payload root now, so the
+                // writability probe in `state` has somewhere to write — and
+                // *canonicalise* it, because the state directory is derived from
+                // the cwd and is relative when `STEP_STUDIO_CWD` is unset. A
+                // catalog written with a relative root is then refused by the
+                // absolute-root check below on the very next load, which is a
+                // library that can never be read again.
+                let root = self.default_payload_root();
+                let _ = std::fs::create_dir_all(&root);
+                let root = std::fs::canonicalize(&root).unwrap_or(root);
+                return Ok(Catalog::empty(&root));
             }
         };
         if !metadata.is_file() || metadata.len() > CATALOG_MAX_BYTES {
@@ -426,6 +433,88 @@ impl Library {
         });
         self.save(&catalog)?;
         Ok(record)
+    }
+
+    /// The active payload root, created if it is not there yet.
+    pub fn active_directory(&self) -> ChromeResult<PathBuf> {
+        let _guard = lock();
+        let catalog = self.load()?;
+        let directory = catalog.active_directory()?.to_string();
+        std::fs::create_dir_all(&directory).map_err(|error| {
+            ChromeError::failed(format!("cannot create the artifact location: {error}"))
+        })?;
+        Ok(PathBuf::from(directory))
+    }
+
+    /// Register a payload the caller has already written into the active root.
+    ///
+    /// Split from [`Self::register`] because the media upload streams chunks in
+    /// over IPC rather than copying a file: it owns the payload and the digest,
+    /// and this owns the catalog entry. Two writers of the same record would be
+    /// two chances to get the digest wrong.
+    pub fn commit(
+        &self,
+        input: &Value,
+        filename: &str,
+        digest: &str,
+        bytes: u64,
+    ) -> ChromeResult<Value> {
+        let _guard = lock();
+        let kind = input.get("kind").and_then(Value::as_str).unwrap_or("");
+        if !ARTIFACT_KINDS.contains(&kind) {
+            return Err(ChromeError::invalid("that is not an artifact kind"));
+        }
+        let name = input.get("name").and_then(Value::as_str).unwrap_or("");
+        if name.is_empty()
+            || name.len() > 512
+            || name.contains(['\0', '\r', '\n'])
+            || name != Path::new(name).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+        {
+            return Err(ChromeError::invalid("choose an artifact filename"));
+        }
+        let mime_type = input.get("mimeType").and_then(Value::as_str).unwrap_or("");
+        if !is_mime_type(mime_type) {
+            return Err(ChromeError::invalid("that is not a MIME type"));
+        }
+        let workspace_id = scope(input, "workspaceId")?;
+        let session_id = scope(input, "sessionId")?;
+        // A basename that starts with the artifact id, exactly as `register`
+        // names one — so a caller cannot commit a file the catalog did not create.
+        let artifact_id = filename
+            .split('.')
+            .next()
+            .unwrap_or_default()
+            .to_string();
+        if !crate::artifacts::is_artifact_id(&artifact_id) || !filename.starts_with(&artifact_id) {
+            return Err(ChromeError::invalid("that is not an artifact filename"));
+        }
+        if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(ChromeError::invalid("that is not an artifact digest"));
+        }
+
+        let mut catalog = self.load()?;
+        let root_id = catalog.active_root.clone();
+        catalog.artifacts.push(StoredArtifact {
+            record: json!({
+                "artifactId": artifact_id,
+                "kind": kind,
+                "name": name,
+                "mimeType": mime_type,
+                "bytes": bytes,
+                "createdAt": crate::chrome::now_iso_millis(),
+                "sha256": digest,
+                "workspaceId": workspace_id,
+                "sessionId": session_id,
+            }),
+            root_id,
+            filename: filename.to_string(),
+        });
+        self.save(&catalog)?;
+        Ok(catalog
+            .artifacts
+            .last()
+            .map(|item| item.record.clone())
+            .unwrap_or(Value::Null))
     }
 
     /// One page of artifacts, newest first.

@@ -43,6 +43,53 @@ const MENU_COMMAND_EVENT = "omp-studio:chrome:menu-command";
  */
 const BROWSER_EVENT_CHANNEL = "omp-studio:desktop:browser-event";
 
+/** Mirrors `ArtifactRecord` from `@omp-studio/studio-protocol`. */
+export interface ArtifactRecord {
+  readonly artifactId: string;
+  readonly kind: string;
+  readonly name: string;
+  readonly mimeType: string;
+  readonly bytes: number;
+  readonly createdAt: string;
+  readonly workspaceId?: string;
+  readonly sessionId?: string;
+  readonly sha256: string;
+}
+
+/** Mirrors `MediaUploadResult` in `apps/desktop/src/media-upload-shared.ts`. */
+export type MediaUploadResult =
+  | {
+      readonly ok: true;
+      readonly uploadId?: string;
+      readonly artifact?: ArtifactRecord;
+    }
+  | { readonly ok: false; readonly message: string };
+
+/** Mirrors `MediaUploadInput` in the same file. */
+export interface MediaUploadInput {
+  readonly kind: "image" | "video" | "audio";
+  readonly name: string;
+  readonly mimeType: string;
+  readonly workspaceId?: string;
+  readonly sessionId?: string;
+}
+
+/** Mirrors `LiveAudioResult` in `apps/desktop/src/live-audio-shared.ts`. */
+export type LiveAudioResult = { readonly ok: boolean; readonly message?: string };
+
+/** Mirrors `LiveAudioAttach` in the same file. */
+export interface LiveAudioAttach {
+  readonly audioId: string;
+  readonly sessionId: string;
+}
+
+/** Mirrors `LiveAudioChunk` in the same file. */
+export interface LiveAudioChunk {
+  readonly audioId: string;
+  readonly sequence: number;
+  readonly bytes: ArrayBuffer;
+}
+
 /** Mirrors `BrowserObservationResult` in `apps/desktop/src/browser-observation-shared.ts`. */
 export type BrowserObservationResult = { readonly ok: boolean; readonly message?: string };
 
@@ -192,6 +239,28 @@ export interface TauriChromeBridge {
     sessionId: string;
   }): Promise<{ ok: true; token: string; name: string } | { ok: false; message: string }>;
   /**
+   * Media upload: a chunked stream that lands in the artifact library. Four
+   * members, and the ids the renderer sends chunks against come from `begin`, so
+   * a renderer cannot finish or abort an upload it did not start.
+   */
+  beginMediaUpload(input: MediaUploadInput): Promise<MediaUploadResult>;
+  appendMediaUpload(input: { uploadId: string; sequence: number; bytes: ArrayBuffer }): Promise<MediaUploadResult>;
+  finishMediaUpload(input: { uploadId: string }): Promise<MediaUploadResult>;
+  abortMediaUpload(input: { uploadId: string }): Promise<MediaUploadResult>;
+  /**
+   * Live audio: a PCM transport to a socket the runtime owns. The capture is the
+   * WebView's `getUserMedia`; these members relay validated frames to it.
+   */
+  attachLiveAudio(input: LiveAudioAttach): Promise<LiveAudioResult>;
+  appendLiveAudio(input: LiveAudioChunk): Promise<LiveAudioResult>;
+  detachLiveAudio(input: { audioId: string }): Promise<LiveAudioResult>;
+  /**
+   * Microphone permission. `granted` everywhere, because the prompt belongs to
+   * the WebView engine and there is no shell-level state to report.
+   */
+  requestMicrophoneAccess(): Promise<"granted" | "denied">;
+  openMicrophoneSettings(): Promise<boolean>;
+  /**
    * Browser observation. The shell is a transport here, not a browser: the
    * runtime owns the tab and hands over a private socket, and these four members
    * relay to it. `attach` names the observation the runtime prepared, so a
@@ -305,6 +374,30 @@ export function createTauriChromeBridge(): TauriChromeBridge {
       }),
     removeServiceDefinition: ({ workspaceId, id, revision }) =>
       tauriInvoke("remove_service_definition", { workspaceId, id, revision }),
+    beginMediaUpload: input =>
+      tauriInvoke("begin_media_upload", {
+        kind: input.kind,
+        name: input.name,
+        mimeType: input.mimeType,
+        ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
+        ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
+      }),
+    appendMediaUpload: input =>
+      tauriInvoke("append_media_upload", {
+        uploadId: input.uploadId,
+        sequence: input.sequence,
+        bytes: input.bytes,
+      }),
+    finishMediaUpload: ({ uploadId }) => tauriInvoke("finish_media_upload", { uploadId }),
+    abortMediaUpload: ({ uploadId }) => tauriInvoke("abort_media_upload", { uploadId }),
+    attachLiveAudio: ({ audioId, sessionId }) =>
+      tauriInvoke("attach_live_audio", { audioId, sessionId }),
+    appendLiveAudio: ({ audioId, sequence, bytes }) =>
+      tauriInvoke("append_live_audio", { audioId, sequence, bytes }),
+    detachLiveAudio: ({ audioId }) => tauriInvoke("detach_live_audio", { audioId }),
+    requestMicrophoneAccess: () => tauriInvoke("request_microphone_access"),
+    openMicrophoneSettings: () => tauriInvoke("open_microphone_settings_command"),
+
     attachBrowserObservation: input =>
       tauriInvoke("attach_browser_observation", {
         observationId: input.observationId,
