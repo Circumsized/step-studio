@@ -101,6 +101,8 @@ struct Daemon {
     /// compare: two surfaces attached at once have separate senders, and removing
     /// by anything else would silence the wrong one.
     surface_serial: AtomicU64,
+    /// This daemon's identity, for the upgrade marker.
+    instance_id: String,
     /// Whether this process bound the endpoint, so it is the only one that may
     /// unlink it.
     bound_endpoint: AtomicBool,
@@ -182,6 +184,11 @@ fn main() {
         stopping: AtomicBool::new(false),
         retry_requested: AtomicBool::new(false),
         grace: Mutex::new(GraceClock::new(grace)),
+        // This daemon's identity, for the upgrade marker: an update names the
+        // daemon it means to stop, so a marker left by a half-finished update is
+        // read as stale by the next one rather than as an instruction to exit.
+        // See `upgrade::decide`.
+        instance_id: format!("daemon-{epoch}-{}", std::process::id()),
     });
     eprintln!(
         "step-studio-host: epoch {epoch}, endpoint {}",
@@ -1031,6 +1038,25 @@ fn watch(daemon: Arc<Daemon>) {
         std::thread::sleep(POLL_SLICE);
         if daemon.stopping.load(Ordering::Relaxed) {
             return;
+        }
+        // An upgrade that means *this* daemon: drain now, with the grace period
+        // forced to zero. The marker names the daemon, so one left by a
+        // half-finished update is stale to the next daemon and does not stop it.
+        let state_dir = std::path::PathBuf::from(&daemon.config.cwd).join(".step-studio");
+        match step_studio_host::upgrade::decide(&state_dir, &daemon.instance_id) {
+            decision if decision.should_drain() => {
+                eprintln!("step-studio-host: {}", decision.reason());
+                step_studio_host::upgrade::consume(&state_dir);
+                shutdown(&daemon);
+                return;
+            }
+            decision => {
+                // Logged, not acted on. A stale marker is evidence an update did
+                // not land, and swallowing it would hide that.
+                if !matches!(decision, step_studio_host::upgrade::Decision::Absent) {
+                    eprintln!("step-studio-host: {}", decision.reason());
+                }
+            }
         }
         let liveness = daemon
             .grace

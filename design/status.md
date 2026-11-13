@@ -712,6 +712,34 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.2 第二块：升级标记——daemon 立即排空的另一半，以及一个没人规划的崩溃（2026-11-13）
+
+§12.4 的热替换序列第一段（「通知 daemon 立即排空，升级场景宽限期强制 0」）落地：
+`crates/studio-host/src/upgrade.rs` + watch loop 每 250 ms 轮询时检查。
+
+**用标记文件而不是信号。** 方案目标是 Windows，那边没有 `SIGUSR1`；标记放在 daemon 自己的
+状态目录里，两端通用，且不需要新协议帧。watch loop 本来就在 250 ms 轮询，所以「立即」就是
+250 ms——序列里这个词指的就是这个量级。
+
+**标记写着它是给哪个 daemon 的，而这就是全部设计。** 升级方写标记 → 它点名的 daemon 消费并
+退出 → 换包 → 新 daemon 起来。如果被点名的 daemon **在消费之前就死了**——没人规划这一种——
+标记还在，而一个尊重标记的新 daemon 会在启动时立刻退出。**一台 daemon 永远起不来的机器，
+成因是一个半途失败的更新。**
+
+所以标记带 daemon 的 instance id，只有它点名的那个会消费。写着别人的标记是 stale：打日志、
+留在盘上（那是「更新没落地」的证据，不是垃圾），**绝不被消费**。不可解析的标记同样按 stale
+处理——一个没人能解析的文件不是这个 daemon 发出过的指令，尊重它等于让任何能写状态目录的东西
+停掉 daemon。
+
+崩在 decide 与 consume 之间也一样安全：标记还在，但下一个 daemon 的 id 不同，于是读成 stale
+而不是「该退出」。这就是半途失败可恢复的原因。
+
+变异验证：把 `decide` 的 id 相等判断改成「任意 id 都 drain」，7 个测试里 2 个立刻红（stale 与
+crash-between 两条）。
+
+门禁：studio-host 78 测试 0 失败；六 crate clippy 净；`cargo deny` 退出码 0；
+`npm run check` 全绿；shell 159 测试 0 失败。
+
 ### 收尾：删掉本会话第六个共享夹具 flake（2026-11-13）
 
 最终门禁跑出一次 159/160，连跑 30 次抓到它：`platform::tests::holding_and_releasing_moves_the_reported_state`。

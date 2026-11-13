@@ -19,3 +19,4 @@ pub mod state;
 pub mod supervisor;
 pub mod swap;
 pub mod migrate;
+pub mod upgrade;
