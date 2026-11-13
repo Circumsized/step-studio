@@ -49,52 +49,26 @@ const ADAPTER_NATIVE: &[(&str, &str)] = &[
     ("session.extensions.list", "stable"),
     ("session.transcript.read", "stable"),
     ("session.state", "stable"),
-    // Addressed to the daemon, not the adapter: the daemon intercepts it before
-    // the relay reaches the adapter. It travels the same wire, so it routes the
-    // same way.
-    ("process.tree.get", "limited"),
-    // Answered by the shell from Step's own session store, which is a fact about
-    // this machine rather than about the runtime.
-    ("history.list", "limited"),
-    // The projects Step has sessions for, from the same store.
-    ("projects.list", "limited"),
-    // Assembled from what the shell already holds, so it is local: no new data
-    // source, and no round trip for bytes the renderer already has.
-    ("home.get", "limited"),
-    ("workspace.open", "limited"),
-    // The capabilities page's three tabs. The adapter already serves both
-    // underlying lists and declares them stable; the facade spellings are what
-    // was missing.
-    ("mcp.get", "limited"),
-    ("skills.get", "limited"),
-    // Both are facts about this machine and this shell, so the shell answers
-    // them: no adapter round trip for information it already has.
-    ("environment.get", "limited"),
-    ("diagnostics.get", "limited"),
-    // The sub-agent sessions Step keeps on disk. Step excludes them from every
-    // RPC list, so the store is the source.
-    ("session.agents.list", "limited"),
 ];
 
 /// `core.prompt` sits apart because it is the one `Dispatch::Turn` operation.
 const PROMPT_CAPABILITY: (&str, &str) = ("core.prompt", "stable");
 
-/// Facade names the adapter spells differently.
-/// Facade names the shell answers or reshapes itself, with the grade the data
-/// earns. These are not adapter operation ids, so there is nothing to derive
-/// their grade from.
-const SHELL_ANSWERED: &[(&str, &str)] = &[
-    // The CLI's `/usage` panel as ANSI text: no per-hour or per-model numbers.
-    ("usage.get", "limited"),
-    // The catalog only. Roles, presets, cycle order and fallback chains have no
-    // Step data source.
-    ("models.get", "limited"),
+/// Facade names the shell answers itself, with the grade the data earns.
+///
+/// Separate from `ADAPTER_NATIVE` because these are not adapter operations:
+/// they are answered in the pump's local arm, and listing them among the
+/// adapter's ids routes them to the runtime — which rejects them, and does so
+/// with `result: null` rather than an error, so the renderer's `.catch` never
+/// fires and a panel silently empties. That is exactly what the first version
+/// of this table did.
+const SHELL_LOCAL: &[(&str, &str)] = &[
     // Answered by the shell from its own dispatch table.
     ("capabilities.get", "stable"),
     // Facts about the workspace, not about the runtime: the shell reads them from
     // the `git` CLI. The adapter has no git capability to offer.
     ("git.repository.get", "limited"),
-    // The write side. `limited` because three of the contract's ~30 operation
+    // The write side. `limited` because a third of the contract's ~30 operation
     // kinds are wired; the rest are refused with a message that says so.
     ("git.execute", "limited"),
     // The workspace's files, read from disk by the shell. The adapter has no
@@ -105,6 +79,22 @@ const SHELL_ANSWERED: &[(&str, &str)] = &[
     ("git.log.list", "limited"),
     ("git.branches.list", "limited"),
     ("git.diff.get", "limited"),
+    // Answered by the shell from Step's own session store, which is a fact
+    // about this machine rather than about the runtime.
+    ("history.list", "limited"),
+    // The projects Step has sessions for, from the same store.
+    ("projects.list", "limited"),
+    // Assembled from what the shell already holds, so it is local: no new data
+    // source, and no round trip for bytes the renderer already has.
+    ("home.get", "limited"),
+    // The sub-agent sessions Step keeps on disk. Step excludes them from every
+    // RPC list, so the store is the source.
+    ("session.agents.list", "limited"),
+    ("workspace.open", "limited"),
+    // Both are facts about this machine and this shell, so the shell answers
+    // them: no adapter round trip for information it already has.
+    ("environment.get", "limited"),
+    ("diagnostics.get", "limited"),
 ];
 
 const RENAMED: &[(&str, &str)] = &[
@@ -117,6 +107,10 @@ const RENAMED: &[(&str, &str)] = &[
     ("usage.get", "usage.panel"),
     // The facade's model config; the adapter has a catalog and nothing else.
     ("models.get", "session.models.list"),
+    // The capabilities page's two lists. The adapter serves both and declares
+    // them stable; the facade spellings and the reshape were what was missing.
+    ("mcp.get", "session.extensions.list"),
+    ("skills.get", "session.commands.list"),
 ];
 
 /// How the adapter answers an operation.
@@ -172,14 +166,16 @@ pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)>
         // None of the module's tests caught it: they call the module directly.
         return Some((spread(input, ""), Dispatch::Local));
     }
-    let kind = if let Some((_, renamed)) = RENAMED.iter().find(|(from, _)| *from == name) {
-        *renamed
-    } else if let Some((id, _)) = ADAPTER_NATIVE.iter().find(|(id, _)| *id == name) {
-        *id
-    } else {
-        return None;
-    };
-    Some((spread(input, kind), Dispatch::Control))
+    if let Some((_, renamed)) = RENAMED.iter().find(|(from, _)| *from == name) {
+        return Some((spread(input, renamed), Dispatch::Control));
+    }
+    if SHELL_LOCAL.iter().any(|(id, _)| *id == name) {
+        return Some((spread(input, ""), Dispatch::Local));
+    }
+    if let Some((id, _)) = ADAPTER_NATIVE.iter().find(|(id, _)| *id == name) {
+        return Some((spread(input, id), Dispatch::Control));
+    }
+    None
 }
 
 /// The capability manifest, derived from the dispatch tables so it cannot claim
@@ -212,15 +208,15 @@ pub fn capability_manifest() -> Value {
     // `ADAPTER_NATIVE` — which left `can()` false for `usage.get`, `models.get`,
     // `capabilities.get`, `session.create` and `conversation.open`, five names
     // this shell serves.
+    for (id, grade) in SHELL_LOCAL {
+        capabilities.push(json!({
+            "id": id,
+            "grade": grade,
+            "version": 1,
+            "evidence": "step-studio-tauri",
+        }));
+    }
     for (from, to) in RENAMED {
-        // Skipped when the shell answers this name itself: its grade describes
-        // what the shell can deliver, which is not the adapter's grade for the
-        // operation it happens to resolve to. Claiming both emitted the id
-        // twice with conflicting grades — `models.get` as `stable` from its
-        // target and `limited` from the reshape.
-        if SHELL_ANSWERED.iter().any(|(id, _)| id == from) {
-            continue;
-        }
         let grade = ADAPTER_NATIVE
             .iter()
             .find(|(id, _)| id == to)
@@ -228,16 +224,6 @@ pub fn capability_manifest() -> Value {
             .unwrap_or("limited");
         capabilities.push(json!({
             "id": from,
-            "grade": grade,
-            "version": 1,
-            "evidence": "step-studio-tauri",
-        }));
-    }
-    // The three the shell answers or reshapes itself, whose grade describes what
-    // the shell can deliver rather than what the adapter implements.
-    for (id, grade) in SHELL_ANSWERED {
-        capabilities.push(json!({
-            "id": id,
             "grade": grade,
             "version": 1,
             "evidence": "step-studio-tauri",
@@ -970,7 +956,7 @@ mod tests {
         // Both tables of facade spellings, not just one: `session.create` and
         // `conversation.open` resolve through RENAMED and were missing, so
         // `can()` returned false for two names this shell serves.
-        for id in SHELL_ANSWERED.iter().map(|(id, _)| *id) {
+        for id in SHELL_LOCAL.iter().map(|(id, _)| *id) {
             assert!(declared.contains(&id), "{id} resolves but is not declared");
         }
         for (from, _) in RENAMED.iter() {
@@ -979,26 +965,51 @@ mod tests {
         // Counted, and de-duplicated. The first version of this assertion baked
         // in the length of both tables, which pinned a duplicate: `usage.get`
         // and `models.get` were claimed once from RENAMED and once from
-        // SHELL_ANSWERED, with conflicting grades, and the count still matched.
+        // SHELL_LOCAL, with conflicting grades, and the count still matched.
+        let declared_count = declared.len();
         let mut sorted: Vec<&str> = declared.clone();
         sorted.sort_unstable();
-        let unique = sorted.len();
         sorted.dedup();
         assert_eq!(
             sorted.len(),
-            unique,
+            declared_count,
             "an id is declared twice: {:?}",
             sorted
         );
-        assert_eq!(
-            unique,
-            ADAPTER_NATIVE.len() + 1 + RENAMED.len() + SHELL_ANSWERED.len()
-                - RENAMED
-                    .iter()
-                    .filter(|(from, _)| SHELL_ANSWERED.iter().any(|(id, _)| id == from))
-                    .count()
-        );
         assert!(declared.contains(&"core.prompt"));
+        // The other direction, and the one that matters: everything this shell
+        // can resolve must be declared, so `can()` is never false for a name the
+        // pump will happily answer. A count assertion cannot check this — the
+        // previous version asserted a total, which is why a name could be
+        // routed to the adapter and still leave the suite green.
+        for name in [
+            "core.prompt",
+            "session.create",
+            "conversation.open",
+            "usage.get",
+            "models.get",
+            "mcp.get",
+            "skills.get",
+            "capabilities.get",
+            "history.list",
+            "projects.list",
+            "home.get",
+            "session.agents.list",
+            "workspace.open",
+            "workspace.fileTree",
+            "git.repository.get",
+            "git.log.list",
+            "git.branches.list",
+            "git.diff.get",
+            "git.execute",
+            "environment.get",
+            "diagnostics.get",
+        ] {
+            assert!(
+                declared.contains(&name),
+                "{name} resolves but is not declared, so can() is false for it"
+            );
+        }
         // `conversation.open` used to be excluded on the grounds that its target
         // was declared instead — which left `can()` false for a name the
         // renderer calls. The invariant is the other way round: every name the
@@ -1185,5 +1196,60 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0]["kind"], "state.changed");
         assert_eq!(events[0]["cursor"], 1);
+    }
+}
+
+#[cfg(test)]
+mod routing_tests {
+    use super::*;
+
+    #[test]
+    fn a_shell_local_name_is_never_sent_to_the_adapter() {
+        // The bug this pins: the shell-answered names sat in `ADAPTER_NATIVE`,
+        // which routes to `Dispatch::Control` — so they were sent to the
+        // runtime, which rejects them. Worse, it rejects them with
+        // `result: null` rather than an error, so the renderer's `.catch` never
+        // fired and a panel silently emptied instead of failing loudly.
+        for name in [
+            "history.list",
+            "projects.list",
+            "home.get",
+            "session.agents.list",
+            "workspace.open",
+            "environment.get",
+            "diagnostics.get",
+            "git.repository.get",
+            "git.execute",
+            "workspace.fileTree",
+            "git.log.list",
+            "git.branches.list",
+            "git.diff.get",
+            "capabilities.get",
+        ] {
+            let (_, dispatch) = resolve_operation(name, &json!({})).expect("resolves");
+            assert_eq!(
+                dispatch,
+                Dispatch::Local,
+                "{name} must be answered here, not sent to the runtime"
+            );
+        }
+    }
+
+    #[test]
+    fn a_capabilities_page_query_is_a_rename_not_a_local_answer() {
+        // Both underlying lists are adapter operations the runtime implements,
+        // so these travel and are reshaped on the way back.
+        for (name, target) in [
+            ("mcp.get", "session.extensions.list"),
+            ("skills.get", "session.commands.list"),
+        ] {
+            let (operation, dispatch) = resolve_operation(name, &json!({})).expect("resolves");
+            assert_eq!(dispatch, Dispatch::Control);
+            assert_eq!(
+                operation.get("kind").and_then(Value::as_str),
+                Some(target),
+                "{name} must resolve to the operation the runtime serves"
+            );
+        }
     }
 }
