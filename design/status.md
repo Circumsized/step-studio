@@ -609,6 +609,43 @@ M2.3 的「多面」卡在一件事上：daemon 的 adapter pump 把**每一帧*
 
 既有 `two_surfaces_both_receive_the_same_broadcast` 仍然成立：事件广播这条性质没变。
 
+### M5.6 方向定案：删 Electron、拆掉 `ompStudioChrome` 上帝接口、渲染层改依赖 read model + capability（2026-11-13）
+
+项目负责人裁定：**Electron 彻底删除，不在 `chrome.rs` 里补那 32 个方法，把 `ompStudioChrome` 这个上帝接口拆掉。**
+
+裁定附带的关键工程判断（比「补方法」或「砍功能」都干净）：55,092 行删除连锁的真正成因**不是「缺 32 个方法」，而是渲染层直接按 `ompStudioChrome` 的成员存在与否做分支**。每缺一个成员，对应组件整块消失，于是删 Electron 会级联撕掉 UI。
+
+**解法：渲染层不再依赖方法，改依赖 read model + capability manifest。** capability 为 false 时渲染降级态/置灰，不是消失。接口拆成 4 个 trait：
+
+| Trait | 承担 | 实现位置 |
+| --- | --- | --- |
+| `HostApi` | git / 文件 / 存储 / 产物 | 纯 Rust crate |
+| `MediaApi` | 音频 / 上传 / 权限 | Rust + 按需进程 |
+| `BrowserApi` | 浏览器观测 | 完全外置 |
+| `PlatformApi` | 菜单 / 日志 / 对话框 | Tauri 插件 + ACL |
+
+删 Electron 时只换 facade 实现，**渲染层零改动**。
+
+**对既有判断的三点校准**（避免后续踩坑）：
+
+1. 「系统音频采集、WebView 注入在 Tauri 侧做不到」——**错**。系统音频已有成熟 Rust 方案：`flexaudio` 统一三平台 loopback（cpal + WASAPI loopback + CoreAudio taps），macOS 14.2+ 可走 Core Audio Process Tap 免屏幕录制权限。真正麻烦的只是 TCC 授权，用 capability manifest 降级即可。
+2. 「完全无 Chromium」不能绝对化：所有能跑 JS 的方案都要外部 artifact（Chromium 二进制 / WebDriver / Node+driver），只有 `reqwest + scraper` 全自包含。`agent-browser` 默认会下载 Chrome for Testing。
+3. `agent-browser` 的最大收益**不是换了个小引擎，而是 idle 时一个浏览器进程都不起**：`--cdp`/`--auto-connect` 接管用户已运行的真 Chrome，`--profile` 复用登录态。这才撑得住 idle ≤180 MB / 活跃 ≤350 MB 的预算。
+
+**浏览器观测的选型**：主选 `agent-browser`（Apache-2.0，Rust CLI + 常驻 daemon + CDP，4.5 万+ stars，v0.42.0 活跃维护）；Lightpanda（AGPL-3.0，Beta、CORS 未解、仍带 V8）做批量抽取旁路，**法务先过**；h5i-browser 做安全沙箱场景。**Browsy（不执行 JS）与 Bruster（合成输入、无跨源 iframe、2 stars）第一版不押**——两者都做不了「实时观看 agent 正在操作的同一标签页」。
+
+**诚实的做不到清单**：向用户已登录的真 Chrome 注入 JS 到 WKWebView 是进程边界，做不到，用 `--cdp`/`--profile` 复用登录态而非自己同步 cookie；Lightpanda AGPL-3.0 闭源分发有开源义务；h5i 官方承认复杂站点不兼容；所有 JS-capable 引擎都要外部 artifact，安装包要么不打包要么按需下载。
+
+**落地顺序**（负责人给定）：
+
+1. **先改渲染层依赖**：41 个成员的调用全部收编到一个 facade + `capabilities` 布尔位。验收：把任意 capability 置 false，UI 出降级态而不是崩溃/消失。**这一步做完，55,092 行连锁就没了。**
+2. `HostApi` 先落地：OpenDAL / gix / notify / muda / tauri-plugin-log，约 20 个方法直接由 crate 接住。
+3. `BrowserApi` 外置：接 `agent-browser mcp` + `rmcp`，用 `chromiumoxide` 出 screencast 帧，Tauri 侧只做转发。帧走 `tauri::ipc::Channel<InvokeResponseBody::Raw>` 落成 JS 侧 `ArrayBuffer`，**不用 invoke 推帧**（单 WebView 约 1000 次 invoke/秒到瓶颈，>100 KB 必须换 Channel）。验收：idle 时进程列表里没有浏览器进程。
+4. `MediaApi` 按需：`flexaudio` + Tauri capabilities。验收：不开音频时 `capabilities()` 调用不触发任何权限弹窗。
+5. CI 门禁：`cargo deny` 查许可证（重点卡 AGPL）、`cargo test` 后 `git diff --exit-code contracts/generated/`、dhat 堆画像、「按需进程数 = 0」断言。
+
+**实测现状（第 1 步的输入）**：渲染层共 49 处 `globalThis.ompStudioChrome?.method` 后判空的写法，3 处显式 `=== undefined` 比较；`ompStudioChrome` 41 个成员中 Tauri `chrome.rs` 只实现 9 个。
+
 ### M5.6 前置测量：Electron 删除的真实规模远超方案估算（2026-11-13 实测，未执行）
 
 M5.6 是「egui 轻量壳定型 + Electron 删除（4-6 人日）」。egui 已在 v5.0 删除，所以实质是 Electron 删除。**实测结论：这不是删掉 `apps/desktop` 就完的事，方案的 4-6 人日不覆盖它。**
