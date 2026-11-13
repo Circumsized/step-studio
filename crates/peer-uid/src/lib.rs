@@ -9,8 +9,6 @@
 //! Unix only. On Windows the answer is "unknown", and the caller has to decide
 //! what that means — which is why this returns an `Option` rather than assuming.
 
-use std::os::unix::io::AsRawFd;
-use std::os::unix::net::UnixStream;
 
 /// What the kernel writes for `SO_PEERCRED` on Linux. The field order is the
 /// ABI, not a choice; `pid_t` is `i32` on every platform this builds for.
@@ -40,7 +38,18 @@ const SOL_SOCKET: std::os::raw::c_int = 1;
 const SO_PEERCRED: std::os::raw::c_int = 17;
 
 /// The peer's uid, or `None` where the platform cannot say.
-pub fn peer_uid(stream: &UnixStream) -> Option<u32> {
+///
+/// Generic over the socket type rather than taking a `UnixStream`, and that is
+/// what makes this crate compile on Windows at all: `UnixStream` does not exist
+/// there, so a signature naming it fails before any `#[cfg]` inside the body can
+/// help. The daemon's Windows gate (`cargo clippy --target x86_64-pc-windows-msvc`)
+/// was red for exactly this reason.
+///
+/// On Windows the answer is always `None`, which is honest: a named pipe carries
+/// no peer credential. The caller already treats an unknown peer as a platform
+/// that cannot say, rather than as a permitted one.
+#[cfg(unix)]
+pub fn peer_uid<T: std::os::unix::io::AsRawFd>(stream: &T) -> Option<u32> {
     #[cfg(unix)]
     {
         let mut cred = Ucred { pid: 0, uid: 0, gid: 0 };
@@ -63,11 +72,12 @@ pub fn peer_uid(stream: &UnixStream) -> Option<u32> {
         }
         Some(cred.uid)
     }
-    #[cfg(not(unix))]
-    {
-        let _ = stream;
-        None
-    }
+}
+
+/// Windows, and anything else without `SO_PEERCRED`.
+#[cfg(not(unix))]
+pub fn peer_uid<T>(_stream: &T) -> Option<u32> {
+    None
 }
 
 #[cfg(all(test, unix))]

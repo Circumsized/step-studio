@@ -11,7 +11,9 @@
 //! is why this is two handles rather than two connections.
 
 use std::fs;
-use std::io::{BufReader, Write};
+#[cfg(unix)]
+use std::io::BufReader;
+use std::io::Write;
 use std::path::Path;
 use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,12 +21,21 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
-use step_studio_bridge::client::{spawn_adapter, wait_for_socket, AdapterLaunch};
-use step_studio_bridge::frame::{read_frame, write_frame};
-use step_studio_bridge::handshake::{challenge_proof, verify_hello, PROTOCOL_VERSION};
-use step_studio_bridge::transport::{self, Stream};
+#[cfg(unix)]
+use step_studio_bridge::client::wait_for_socket;
+use step_studio_bridge::client::{spawn_adapter, AdapterLaunch};
+#[cfg(unix)]
+use step_studio_bridge::frame::read_frame;
+use step_studio_bridge::frame::write_frame;
+#[cfg(unix)]
+use step_studio_bridge::handshake::verify_hello;
+use step_studio_bridge::handshake::{challenge_proof, PROTOCOL_VERSION};
+#[cfg(unix)]
+use step_studio_bridge::transport;
+use step_studio_bridge::transport::Stream;
 
 /// How long to wait for the adapter's socket to appear.
+#[cfg(unix)]
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// What went wrong bringing the adapter up.
@@ -160,6 +171,36 @@ struct Identity {
 /// Split from [`launch`] so the caller can kill the child on the way out: the
 /// socket is the adapter's, and an adapter that never finishes its handshake
 /// has nothing to offer.
+/// Windows: not implemented, and said so rather than faked.
+///
+/// The design this file is built on needs one socket with two owners — a writer
+/// the supervisor holds and a reader that moves into the pump. A `UnixStream`
+/// duplicates, so that is two handles. A `named_pipe::PipeClient` does not
+/// duplicate and offers no synchronous duplex multiplexing: the only primitives
+/// are `read_async_owned` / `write_async_owned`, which take ownership. Serving
+/// both directions from one handle means either overlapping I/O or restructuring
+/// the pump to own the pipe and take writes from a channel.
+///
+/// Both are real work and both need a Windows machine to validate, which is why
+/// this is M5.1 and not a stub. What it must not be is a path that compiles and
+/// then deadlocks: a pump blocked in `read` while holding the only handle would
+/// hang the daemon with nothing in the log. Refusing here is recoverable and
+/// visible; a hang is neither.
+#[cfg(not(unix))]
+fn connect_and_handshake(
+    _launch: &AdapterLaunch,
+    _token: &str,
+    _challenge: &str,
+) -> Result<Identity, AdapterError> {
+    Err(AdapterError::Socket(
+        "the adapter transport needs a duplex handle, and a Windows named pipe \
+         does not provide one; this is M5.1 work and needs a Windows machine to \
+         validate"
+            .to_string(),
+    ))
+}
+
+#[cfg(unix)]
 fn connect_and_handshake(
     launch: &AdapterLaunch,
     token: &str,

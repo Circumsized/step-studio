@@ -17,12 +17,23 @@ use std::time::Duration;
 /// created `0700` and checked for ownership, because a directory an attacker
 /// can write lets them either squat the path (impersonating the daemon) or make
 /// it read-only (denying the user a daemon at all).
+#[cfg(unix)]
 pub fn own_uid() -> u32 {
     use std::os::unix::fs::MetadataExt;
     std::env::current_exe()
         .and_then(std::fs::metadata)
         .map(|meta| meta.uid())
         .unwrap_or(0)
+}
+
+/// Windows has no uid, and the daemon's per-user discriminator is the thing this
+/// returns. Zero for everyone is the honest answer until M5.1 lands a real one
+/// (the process token's user SID): it means one shared daemon per machine, which
+/// the endpoint comment already records as the state of things. Returning a
+/// fabricated per-user number would be worse — it would look like isolation.
+#[cfg(not(unix))]
+pub fn own_uid() -> u32 {
+    0
 }
 
 use step_studio_bridge::transport;

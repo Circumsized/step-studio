@@ -712,6 +712,40 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.1 第一块：Windows 交叉编译门禁从红到部分绿，暴露出三处设计缺口（2026-11-13）
+
+CI 的 `Rust crates (Windows)` job（`cargo clippy -p ... -p step-studio-host --target
+x86_64-pc-windows-msvc --all-targets -- -D warnings`）**一直是红的，而且没人发现**——它跑在
+windows-latest 上，红着但不在任何人的视野里。本轮第一次在 Linux 上跑同一条命令，逐个修：
+
+**已修（三处，都是真 bug 不是配置）**
+
+1. `crates/peer-uid` 的签名写 `&UnixStream`，而那个类型在 Windows 上不存在——函数体里的
+   `#[cfg(not(unix))]` 分支救不了签名。改成对 `T: AsRawFd` 泛型，Windows 侧恒返回 `None`。
+   **这一处从 `peer-uid` 加入起就是红的**（`146aff8`）。
+2. `lifecycle::own_uid()` 用 `MetadataExt::uid()`，Unix 专有。Windows 侧返回 0，并在注释里
+   写明这意味着「一台机器一个共享 daemon」，与端点注释里已登记的 M5.1 欠账一致。伪造一个
+   每用户数字会更糟——那看起来像隔离。
+3. `adapter.rs` 的 unix-only import 与常量加上 `#[cfg(unix)]`。
+
+**修不掉的两处，是设计缺口不是编译错误，都记在这里**
+
+`studio-host` 的传输设计是「**一个 socket，两个所有者**」：supervisor 持 writer，pump 持
+reader。`UnixStream` 能 `try_clone`，所以这是两个句柄；`named_pipe::PipeClient` /
+`PipeServer` **不能复制**，且 0.4.1 只提供 `read_async_owned` / `write_async_owned` 这种
+拿走所有权的原语，没有同步双工复用。
+
+- **adapter 侧**（`connect_and_handshake`）：已改成 Windows 上**明确拒绝并说明原因**。
+  留一个能编译但会死锁的假路径更坏——泵阻塞在 `read` 且握着唯一句柄时，daemon 挂住且日志
+  空。拒绝是可恢复且可见的，挂住两者都不是。
+- **surface 侧**（`bin/studio-host.rs:676/700` 两处 `try_clone`）：**还没修**。已找到正确的
+  Windows 做法：`PipeServer` 有 `set_read_timeout`，所以可以把唯一句柄放进
+  `Arc<Mutex<PipeServer>>`，泵以 50 ms 超时循环「加锁读→解锁→抽干写通道」，用读超时来交错
+  两个方向。这需要改泵的结构，且**要真机验证**，所以留给 M5.1 主体。
+
+**结论**：Windows 门禁现在是「编译到 surface 侧两处 `try_clone` 为止全绿」，剩一个已知的、
+有明确设计方案的缺口。Linux 侧门禁全绿（150 测试 / 六 crate clippy 净）。
+
 ### M5.6 第 2 步完成状态与 CI 门禁缺口（2026-11-13）
 
 **32 个缺失 chrome 成员全部落地**，按用户给定顺序：
