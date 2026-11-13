@@ -3,6 +3,8 @@
  * (FRONTEND_INTEGRATION.md). The desktop preload fixes it at startup; the Web
  * UI falls back to the browser's report.
  */
+import { shellSurface } from "./chrome";
+
 export type RendererPlatform = "win32" | "darwin" | "linux";
 
 interface NavigatorLike {
@@ -11,7 +13,10 @@ interface NavigatorLike {
 }
 
 export function detectPlatform(
-  chrome: { readonly platform?: string } | undefined = globalThis.ompStudioChrome,
+  // The facade, not `globalThis` directly: this file used to be a second reader
+  // of the preload's surface, and the whole point of `chrome/` is that there is
+  // exactly one. The parameter stays so a test can still inject a surface.
+  chrome: { readonly platform?: string } | undefined = shellSurface(),
   navigatorLike: NavigatorLike | undefined = globalThis.navigator as NavigatorLike | undefined,
 ): RendererPlatform {
   const fixed = chrome?.platform;
@@ -29,6 +34,6 @@ export const PLATFORM: RendererPlatform = detectPlatform();
  * shortcuts (⌘K, ⌘B, …); the renderer must not act on them a second time.
  * A browser on a Mac has no such menu.
  */
-export function nativeMenuOwnsShortcuts(chrome: { readonly platform?: string } | undefined = globalThis.ompStudioChrome): boolean {
+export function nativeMenuOwnsShortcuts(chrome: { readonly platform?: string } | undefined = shellSurface()): boolean {
   return chrome?.platform === "darwin";
 }

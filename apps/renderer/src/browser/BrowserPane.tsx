@@ -6,6 +6,7 @@ import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { WorkspaceEmpty } from "../workspaces/Workspace";
+import { shellCapabilities, shellSurface } from "../chrome";
 import { PREVIEW_BROWSER_TAB, PREVIEW_BROWSER_IMAGE } from "../preview/browserPreview";
 import "./browser.css";
 
@@ -18,16 +19,21 @@ export function BrowserPane({ client, sessionId, available, visible, capabilitie
   const [frame, setFrame] = useState<Extract<BrowserObservationEvent, { kind: "frame" }>>();
   const [error, setError] = useState(""); const [busy, setBusy] = useState(false); const [observing, setObserving] = useState(false); const [url, setUrl] = useState("");
   const observation = useRef<string | undefined>(undefined); const epoch = useRef(0); const scope = useRef(""); const urlDirty = useRef(false); const picture = useRef<HTMLImageElement>(null);
-  const chrome = globalThis.ompStudioChrome;
+  // A capability bit, not `!!shellSurface()?.attachBrowserObservation`. The old form
+  // answered "can this pane observe?" by asking whether one member existed, so a
+  // shell that wired three of the four browser-observation members looked
+  // available and then failed on the missing one — and a shell with none of them
+  // rendered a pane that could not do anything, with nothing to say why.
+  const browserCapability = shellCapabilities().browserObservation;
   const enabled = preview || (available && !!sessionId && capabilities?.capabilities.some(item => item.id === "browser.tabs.get" && item.grade !== "unavailable") === true);
-  const canObserve = preview || (enabled && !!chrome?.attachBrowserObservation && capabilities?.capabilities.some(item => item.id === "browser.observe.prepare" && item.grade !== "unavailable") === true);
+  const canObserve = preview || (enabled && browserCapability && capabilities?.capabilities.some(item => item.id === "browser.observe.prepare" && item.grade !== "unavailable") === true);
   const human = state?.control === "human";
-  const detach = useCallback(() => { const id = observation.current; observation.current = undefined; if (id) void globalThis.ompStudioChrome?.detachBrowserObservation?.({ observationId: id }); setObserving(false); setFrame(undefined); setState(undefined); }, []);
+  const detach = useCallback(() => { const id = observation.current; observation.current = undefined; if (id) void shellSurface()?.detachBrowserObservation?.({ observationId: id }); setObserving(false); setFrame(undefined); setState(undefined); }, []);
   const send = useCallback(async (input: BrowserObservationInput) => {
     if (preview) { if (input.kind === "take" || input.kind === "release") setState(current => ({ kind: "state", observationId: "demo", tabId: PREVIEW_BROWSER_TAB.id, title: PREVIEW_BROWSER_TAB.title, url: PREVIEW_BROWSER_TAB.url, busy: false, frozen: false, ...current, control: input.kind === "take" ? "human" : "agent" })); return; }
     const id = observation.current; if (!id) return;
     try {
-      const value = await globalThis.ompStudioChrome?.controlBrowserObservation?.({ observationId: id, input });
+      const value = await shellSurface()?.controlBrowserObservation?.({ observationId: id, input });
       if (!value?.ok && observation.current === id) setError(value?.message ?? (zh ? "浏览器控制不可用" : "Browser control unavailable"));
     } catch (cause) { if (observation.current === id) setError(hostErrorMessage(cause, zh ? "浏览器连接中断" : "Browser connection interrupted")); }
   }, [preview, zh]);
@@ -44,7 +50,7 @@ export function BrowserPane({ client, sessionId, available, visible, capabilitie
       } catch (cause) { if (active) setError(hostErrorMessage(cause, zh ? "浏览器目录读取失败" : "Cannot read browser targets")); }
       finally { if (active && !preview) timer = setTimeout(() => void poll(), 2000); }
     };
-    const unsubscribe = chrome?.onBrowserObservation?.(event => {
+    const unsubscribe = shellSurface()?.onBrowserObservation?.(event => {
       if (!active || observation.current !== event.observationId) return;
       if (event.kind === "frame") setFrame(event);
       else if (event.kind === "state") { setState(event); if (!urlDirty.current) setUrl(event.url); }
@@ -55,7 +61,7 @@ export function BrowserPane({ client, sessionId, available, visible, capabilitie
     const hide = () => { if (document.hidden) { epoch.current++; detach(); } }; document.addEventListener("visibilitychange", hide);
     void poll();
     return () => { active = false; epoch.current++; clearTimeout(timer); clearInterval(heartbeat); unsubscribe?.(); document.removeEventListener("visibilitychange", hide); detach(); };
-  }, [client, sessionId, available, visible, enabled, preview, chrome, detach, send, zh]);
+  }, [client, sessionId, available, visible, enabled, preview, browserCapability, detach, send, zh]);
   const observe = async () => {
     const target = tabs.find(tab => tab.id === selected); if (!target?.observable || !canObserve || busy || !visible) return;
     const generation = ++epoch.current; detach(); setBusy(true); setError(""); urlDirty.current = false; setUrl(target.url);
@@ -64,8 +70,8 @@ export function BrowserPane({ client, sessionId, available, visible, capabilitie
       const handle = await client.command("browser.observe.prepare", { sessionId: sessionId!, tabId: selected });
       const { result } = await waitReceipt<{ result: BrowserObservationResultMap["browser.observe.prepare"] }>(client, handle.requestId);
       if (generation !== epoch.current || !visible || document.hidden) return; observation.current = result.observationId;
-      const attached = await chrome?.attachBrowserObservation?.({ observationId: result.observationId, sessionId: result.sessionId, tabId: result.tabId });
-      if (generation !== epoch.current) { void chrome?.detachBrowserObservation?.({ observationId: result.observationId }); return; }
+      const attached = await shellSurface()?.attachBrowserObservation?.({ observationId: result.observationId, sessionId: result.sessionId, tabId: result.tabId });
+      if (generation !== epoch.current) { void shellSurface()?.detachBrowserObservation?.({ observationId: result.observationId }); return; }
       if (!attached?.ok) throw new Error(attached?.message ?? "Desktop observation unavailable"); setObserving(true);
     } catch (cause) { if (generation === epoch.current) { detach(); setError(hostErrorMessage(cause, zh ? "无法观察此标签" : "Cannot observe this tab")); } }
     finally { if (generation === epoch.current) setBusy(false); }
