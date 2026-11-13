@@ -274,17 +274,26 @@ impl Library {
         std::fs::create_dir_all(&self.directory).map_err(|error| {
             ChromeError::failed(format!("cannot create the artifact directory: {error}"))
         })?;
-        // Temp-then-rename. A truncated catalog reads as an empty library.
+        // Temp-then-rename, and fsync between them. Without the sync the rename can
+        // be durable while the content is not, which on a crash or power loss is
+        // exactly the "partially-written catalog" the module doc promises to
+        // prevent — the rename survives, the bytes do not, and the library reads as
+        // an empty one.
         let temporary = self
             .directory
             .join(format!(".catalog-{}.tmp", std::process::id()));
-        std::fs::write(&temporary, text.as_bytes()).map_err(|error| {
-            ChromeError::failed(format!("cannot write the artifact catalog: {error}"))
-        })?;
+        write_and_sync(&temporary, text.as_bytes())?;
         std::fs::rename(&temporary, self.catalog_path()).map_err(|error| {
             let _ = std::fs::remove_file(&temporary);
             ChromeError::failed(format!("cannot replace the artifact catalog: {error}"))
-        })
+        })?;
+        // The directory entry too: a rename is not durable until the directory that
+        // holds it is. Best-effort — some filesystems refuse to fsync a directory,
+        // and refusing the save over that would be worse than the risk.
+        if let Ok(dir) = std::fs::File::open(&self.directory) {
+            let _ = dir.sync_all();
+        }
+        Ok(())
     }
 
     /// Where artifacts live and how much is there.
@@ -492,12 +501,26 @@ impl Library {
         let session_id = scope(input, "sessionId")?;
         // A basename that starts with the artifact id, exactly as `register`
         // names one — so a caller cannot commit a file the catalog did not create.
+        //
+        // The basename check is the part that matters, and the first version had
+        // only the prefix: `load()` rejects an entry whose `filename` is not a
+        // basename, so one caller passing `<uuid>../../x` stored a row that made
+        // *every* subsequent read of the library fail — `list`, `state`,
+        // `register`, `remove`, `resolve` — until `catalog.json` was deleted by
+        // hand. The write site has to enforce the invariant the read site assumes.
         let artifact_id = filename
             .split('.')
             .next()
             .unwrap_or_default()
             .to_string();
-        if !crate::artifacts::is_artifact_id(&artifact_id) || !filename.starts_with(&artifact_id) {
+        let basename = Path::new(filename)
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if !crate::artifacts::is_artifact_id(&artifact_id)
+            || filename != basename
+            || !filename.starts_with(&artifact_id)
+        {
             return Err(ChromeError::invalid("that is not an artifact filename"));
         }
         if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
@@ -649,6 +672,20 @@ impl Library {
         }
         self.save(&catalog)
     }
+}
+
+/// Write bytes and fsync them, so a later rename cannot outrun the content.
+fn write_and_sync(path: &Path, bytes: &[u8]) -> ChromeResult<()> {
+    use std::io::Write;
+    let mut file = std::fs::File::create(path).map_err(|error| {
+        ChromeError::failed(format!("cannot write the artifact catalog: {error}"))
+    })?;
+    file.write_all(bytes).map_err(|error| {
+        ChromeError::failed(format!("cannot write the artifact catalog: {error}"))
+    })?;
+    file.sync_all().map_err(|error| {
+        ChromeError::failed(format!("cannot write the artifact catalog: {error}"))
+    })
 }
 
 /// The library this shell owns, under `.step-studio/artifact-library/v1`.

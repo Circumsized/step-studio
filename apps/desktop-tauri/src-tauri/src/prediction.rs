@@ -57,7 +57,12 @@ const IMPORT_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// One live channel per window.
 struct Channel {
-    session_id: String,
+    /// Which channel this is. Recorded so `control` and `import_history` can
+    /// refuse a `channelId` this window does not own, the same way
+    /// `browser_observation::control` looks its connection up by observation id.
+    /// Without it any UUID is accepted and the line is written to whatever socket
+    /// the window happens to hold, naming a channel it was not sent for.
+    channel_id: String,
     socket: Arc<Mutex<std::os::unix::net::UnixStream>>,
     /// The import in flight, if any.
     importing: Option<Importing>,
@@ -219,7 +224,7 @@ pub fn attach(app: tauri::AppHandle, window: String, input: Value) -> ChromeResu
     // `channel_id` is read once here and then owned by the reader thread; the
     // `session_id` is what the write path checks ownership against.
     let channel = Channel {
-        session_id: session_id.to_string(),
+        channel_id: channel_id.to_string(),
         socket: Arc::new(Mutex::new(socket)),
         importing: None,
     };
@@ -397,16 +402,18 @@ pub fn control(window: String, input: Value) -> ChromeResult<Value> {
     if !is_input(&action) {
         return Ok(json!({ "ok": false, "message": "History imports require the file picker" }));
     }
-    let socket = match channels()
+    // The channel this window holds must be the one named. The first version
+    // checked only `is_id(channel_id)`, so a renderer could send any UUID and have
+    // the line written to the socket the window happens to own — addressed to a
+    // channel it was not sent for. `browser_observation::control` already looked
+    // its connection up by id; this one now does the same.
+    let owned = channels()
         .get_or_insert_with(HashMap::new)
         .get(&window)
-        .filter(|channel| channel.session_id.len() <= 128)
-        .map(|channel| Arc::clone(&channel.socket))
-    {
-        Some(socket) if is_id(channel_id) => socket,
-        _ => {
-            return Ok(json!({ "ok": false, "message": "Prediction channel is not owned by this window" }))
-        }
+        .filter(|channel| is_id(channel_id) && channel.channel_id == channel_id)
+        .map(|channel| Arc::clone(&channel.socket));
+    let Some(socket) = owned else {
+        return Ok(json!({ "ok": false, "message": "Prediction channel is not owned by this window" }));
     };
     use std::io::Write;
     let text = match serde_json::to_string(&action) {
@@ -444,10 +451,13 @@ pub fn import_history(window: String, input: Value, picked: Option<PathBuf>) -> 
         table.insert(window.clone(), true);
     }
     let outcome = (|| -> ChromeResult<Value> {
+        // Same ownership rule as `control`: the staged history file is the user's,
+        // and an import naming a channel this window does not own would send it
+        // somewhere the renderer did not ask for.
         let has_channel = channels()
             .get_or_insert_with(HashMap::new)
             .get(&window)
-            .is_some_and(|_| is_id(channel_id));
+            .is_some_and(|channel| is_id(channel_id) && channel.channel_id == channel_id);
         if !has_channel {
             return Ok(json!({ "ok": false, "message": "Prediction channel is not owned by this window" }));
         }

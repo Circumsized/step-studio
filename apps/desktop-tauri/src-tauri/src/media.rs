@@ -275,6 +275,9 @@ pub fn append_upload(window: String, raw: Value) -> ChromeResult<Value> {
             .open(&upload.partial)
             .map_err(|_| ChromeError::failed(UPLOAD_FAILED))?;
         file.write_all(&bytes).map_err(|_| ChromeError::failed(UPLOAD_FAILED))?;
+        // fsync per chunk: an upload is long-lived, and a crash mid-upload should
+        // leave the bytes the renderer was already told landed, not lose them.
+        file.sync_all().map_err(|_| ChromeError::failed(UPLOAD_FAILED))?;
         upload.hasher.update(&bytes);
         upload.bytes += bytes.len() as u64;
         upload.sequence += 1;

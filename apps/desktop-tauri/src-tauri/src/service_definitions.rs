@@ -302,6 +302,11 @@ impl ServiceDefinitionStore {
         // not decrypt, and a world-readable one is a store that protects nothing.
         let temporary = self.file.with_extension("enc.tmp");
         write_private(&temporary, &protected)?;
+        // fsync before the rename, so the rename cannot be durable while the
+        // ciphertext is not. See `artifacts::write_and_sync`.
+        if let Ok(file) = std::fs::File::open(&temporary) {
+            let _ = file.sync_all();
+        }
         std::fs::rename(&temporary, &self.file).map_err(|error| {
             let _ = std::fs::remove_file(&temporary);
             StoreError::Failed(format!("cannot replace the configuration store: {error}"))
