@@ -396,6 +396,10 @@ impl Stream {
         let mut out = Vec::new();
         if kind == "conversation.turn.completed" || kind == "conversation.turn.aborted" {
             if let Some((request_id, command_name)) = self.pending_turn.take() {
+                // The turn is over, by receipt or by abort: either way the hold
+                // goes. Both paths arrive here, which is why it is released here
+                // rather than at each one.
+                crate::platform::release_power();
                 let (status, extra) = if kind == "conversation.turn.completed" {
                     ("completed", json!({ "result": {} }))
                 } else {
@@ -805,6 +809,10 @@ fn pump(
                     }
                     Dispatch::Turn => {
                         stream.pending_turn = Some((job.request_id.clone(), job.command_name.clone()));
+                        // Hold the machine awake for as long as the turn runs: a
+                        // laptop that sleeps mid-turn loses the output, and the
+                        // user did nothing to ask for that.
+                        crate::platform::hold_power();
                         // Fire and forget: waiting here would block the pump
                         // for the whole turn, and `core.abort` could never
                         // reach the session.

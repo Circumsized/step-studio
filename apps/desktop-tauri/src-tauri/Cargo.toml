@@ -15,7 +15,7 @@ workspace = true
 # built binary stays in dev mode: it loads `build.devUrl` instead of the
 # embedded `frontendDist`. `tauri build` passes this feature for you; a plain
 # `cargo build` does not, so it is declared here.
-tauri = { version = "2", features = ["custom-protocol"] }
+tauri = { version = "2", features = ["custom-protocol", "tray-icon"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

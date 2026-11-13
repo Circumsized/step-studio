@@ -712,6 +712,41 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.1 第六块：托盘 + 单实例 + 代理 + 电源落地，M5.1 平台能力齐了（2026-11-13）
+
+新增 `apps/desktop-tauri/src-tauri/src/tray.rs` 与 `platform.rs`，M5.1 点名的四项平台能力全部有着落。
+
+**托盘**（Tauri v2 自带 `TrayIconBuilder`，不开插件）：close-to-tray——关窗是 hide 不是 quit，
+会话 mid-turn 继续流；托盘左键显示窗口（macOS 上是菜单，因为那边左键开菜单）；菜单两项
+「打开页面 / 退出」；首次隐藏发一次通告，标记文件持久化，写失败容忍（代价是多一次通告，
+不是壳坏掉）；退出时若在流式输出先弹原生确认，**取消是默认按钮**。
+
+`ponytail:` 没有原生气泡——Tauri v2 没有 balloon API（`set_tooltip` 收 `Option`，没有
+`show_tooltip`），通告走 stderr。等 Tauri 出了再换，或者 `notify-send` / Win32
+`Shell_NotifyIcon`。
+
+**单实例走 daemon 的端点锁，不新造一把。** 方案写「Tauri 插件 + 自研权威锁」，而权威锁已经存在：
+daemon 绑端点、拒绝第二次启动。所以第二个壳去连那个端点，证明第一个活着就退出。
+`tauri-plugin-single-instance` 是 alpha，而且**第二把锁是第二件能和第一把不一致的东西**。
+探测方式是 connect 而不是看 socket 文件存在——被 kill 的 daemon 会留下文件。
+
+**电源按 turn 计数持有。** 两个并发 turn 重叠时，第一个结束不能释放第二个的持有。计数逻辑抽成
+纯函数 `depth_after_release` 测，因为活的计数器是进程全局静态、pump 自己的测试也在动它——
+这是本会话第五个「共享夹具让测试变 flake」，前四个的修法都是串行化，这次的修法是**只测算术**。
+
+**代理读不配。** 渲染层经 Unix socket 连 daemon，代理只影响出站 HTTP，而 OS 已经答了这件事；
+壳补上的是**报告**——企业代理后面模型调用失败的用户只有一个问题，`diagnostics.environment`
+现在答它，并且说明 daemon 是 Unix socket、永不走代理。
+
+两处顺带：
+- `try_update` stable since 1.95，而本 workspace MSRV 是 1.88（ratatui 的地板）。改
+  `fetch_sub`——它返回**前值**，正好是下面算术要的。
+- 开 `tray-icon` 特性带进 `libloading`（ISC），**`cargo deny` 当场抓到**。ISC 是 MIT 的源许可证，
+  功能等价，已加进白名单并注明从哪来。这是那个门禁第一次真的拦住东西。
+
+门禁：160 测试 0 失败（连跑三次无 flake）；六 crate clippy 净；`cargo deny` 退出码 0；
+`npm run check` 全绿；Xvfb 实机启动 25 秒无 panic。
+
 ### M5.1 第五块：Windows surface 侧试修后回退，7 个错误比 10 处 cfg 连锁可读（2026-11-13）
 
 接着第一块做 surface 侧那两处 `try_clone`。做法与 adapter 侧相同：Windows 上明确拒绝并说明

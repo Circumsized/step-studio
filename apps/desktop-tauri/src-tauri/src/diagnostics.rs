@@ -56,6 +56,10 @@ pub fn environment(runtime_id: String, authority_epoch: u64, runtime_epoch: u64)
             "status": "installed",
             "signature": "unknown",
         },
+        // The proxy the OS is configured with. A user behind a corporate proxy
+        // whose model calls fail has exactly one question, and this answers it —
+        // including that the daemon is a Unix socket and never goes through it.
+        "proxy": crate::platform::proxy_config(),
     })
 }
 

@@ -15,9 +15,11 @@ mod history;
 mod media;
 mod menu;
 mod prediction;
+mod platform;
 mod pump;
 mod service_definitions;
 mod terminal;
+mod tray;
 
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -253,7 +255,21 @@ fn main() {
             // today, so this fires at shutdown — but a second window would leak
             // its uploads' partial payloads and its audio socket without it.
             let label = window.label().to_string();
+            // `App` derefs to `AppHandle`, and the closure needs an owned one.
+            let app_for_hide = app.handle().clone();
             window.on_window_event(move |event| {
+                // Closing the window hides it. A session mid-turn keeps streaming,
+                // which is the whole point of a resident daemon: quitting the shell
+                // would be the user ending the conversation by tidying their screen.
+                // The tray's Quit is the only way out, and that one asks first when
+                // a turn is streaming.
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    if let Some(window) = app_for_hide.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                    return;
+                }
                 if let tauri::WindowEvent::Destroyed = event {
                     media::dispose_uploads(&label);
                     media::dispose_audio(&label);
@@ -269,6 +285,19 @@ fn main() {
                 std::thread::sleep(std::time::Duration::from_secs(10));
                 media::reap_idle_uploads();
             });
+            // A second instance defers to the one already running, which is the
+            // daemon's endpoint rather than a second lock.
+            if platform::other_instance_running() {
+                platform::wake_running_instance();
+                app.handle().exit(0);
+                return Ok(());
+            }
+            // The tray. Built after the window so a click has something to show,
+            // and its own failure is reported rather than fatal: a shell with no
+            // tray still runs, and close-to-tray is the part that would be missing.
+            if let Err(error) = tray::install(app.handle()) {
+                eprintln!("step-studio-desktop-tauri: the tray could not be installed: {error}");
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
