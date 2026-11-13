@@ -1018,34 +1018,42 @@ fn mcp_read_model(payload: &Value) -> Value {
 /// surface, because Step has no separate skills registry to read. So the
 /// reshape maps one to the other rather than inventing a second source.
 fn skills_read_model(payload: &Value) -> Value {
-    let skills: Vec<Value> = payload
-        .get("commands")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|command| {
-            let name = command.get("name").and_then(Value::as_str)?;
-            if name.is_empty() {
-                return None;
-            }
-            Some(json!({
+    let mut skills: Vec<Value> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for command in payload.get("commands").and_then(Value::as_array).into_iter().flatten() {
+        let Some(name) = command.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        if name.is_empty() {
+            continue;
+        }
+        if !seen.insert(name.to_string()) {
+            // Two sources declaring the same slash command is a real collision,
+            // and `warnings` is where the contract says it goes. Listing both
+            // rows silently makes the page show a duplicate with no explanation.
+            warnings.push(format!("duplicate command name: {name}"));
+            continue;
+        }
+        skills.push(json!({
                 "name": name,
                 "desc": command.get("description").and_then(Value::as_str).unwrap_or(""),
-                // Step ships its commands with the CLI, so they are builtin;
-                // `workspace` and `global` would need a per-directory scan the
-                // CLI does not expose.
-                "scope": "builtin",
+                // The catalog is "slash commands from every source", so `builtin`
+                // would be wrong for all of them. There is no scope in the data;
+                // `global` is the least wrong, because these come from the
+                // user's own CLI configuration rather than from a workspace
+                // directory.
+                "scope": "global",
                 "sourceKind": "native",
                 "sourceLabel": "Step",
                 "enabled": true,
                 "hide": false,
-            }))
-        })
-        .collect();
+            }));
+    }
     json!({
         "skills": skills,
         "plugins": [],
-        "warnings": [],
+        "warnings": warnings,
         "generatedAt": pump::iso_utc(pump::now_millis()),
     })
 }
@@ -1249,18 +1257,27 @@ mod capability_tests {
                 { "name": "usage", "description": "Show usage" },
                 { "name": "models", "description": "Pick a model" },
                 { "name": "", "description": "ignored" },
+                // A second `usage` from another source: a real collision, which
+                // belongs in `warnings` rather than as a silent duplicate row.
+                { "name": "usage", "description": "Show usage again" },
             ],
         }));
         let skills = model.get("skills").and_then(Value::as_array).expect("skills");
-        assert_eq!(skills.len(), 2);
+        assert_eq!(skills.len(), 2, "the collision is not a second row");
         assert_eq!(skills[0].get("name").and_then(Value::as_str), Some("usage"));
-        assert_eq!(skills[0].get("scope").and_then(Value::as_str), Some("builtin"));
+        assert_eq!(skills[0].get("scope").and_then(Value::as_str), Some("global"));
         assert_eq!(skills[0].get("sourceLabel").and_then(Value::as_str), Some("Step"));
         // The facade has a plugins list too, and Step's catalog has no plugins
         // in it — so it is empty rather than filled with the same rows twice.
         assert_eq!(
             model.get("plugins").and_then(Value::as_array).map(Vec::len),
             Some(0)
+        );
+        let warnings = model.get("warnings").and_then(Value::as_array).expect("warnings");
+        assert_eq!(warnings.len(), 1, "the collision is reported, not hidden");
+        assert!(
+            warnings[0].as_str().is_some_and(|w| w.contains("usage")),
+            "the warning names the command: {warnings:?}"
         );
     }
 }

@@ -281,9 +281,16 @@ pub struct Job {
 /// read model per token is a cost, not a feature. Mirroring that keeps the
 /// renderer's max-tracking `advanceConnection` honest.
 struct Stream {
-    /// The snapshot this session started with. Replaced whenever a fresher one
-    /// arrives, so a later `home.get` answers with the current state rather than
-    /// the one the shell booted with.
+    /// The snapshot this session started with, which is what `home.get` answers
+    /// with.
+    ///
+    /// It is *not* kept current: nothing re-seeds it, because the renderer never
+    /// issues `session.state` (no call site in `apps/renderer/src`), so the
+    /// `session.state` branch that would replace it never runs. The impact is
+    /// bounded because `App.tsx:436` prefers `state.bootstrap.snapshot` and only
+    /// falls back to this one. Making it current needs `home.get` to reach the
+    /// session, which the local arm cannot do — that is a real change, not a
+    /// comment fix.
     snapshot: Value,
     cursor: u64,
     /// Which adapter this session is talking to. It changes when the adapter

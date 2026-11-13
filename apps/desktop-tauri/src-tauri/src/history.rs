@@ -655,6 +655,12 @@ fn read_agent(path: &Path) -> Option<Value> {
     let cwd = header.get("cwd").and_then(Value::as_str).unwrap_or("");
     Some(json!({
         "agentId": session_id,
+        // No source on disk carries a generation, and this reaches
+        // `expectedGeneration` in the hub's send/kill/revive payloads. A
+        // persisted record is not a live roster, so there is nothing to be
+        // concurrent *with*; 1 is a stable placeholder for that, not a count of
+        // anything. If the hub ever starts rejecting on it, this is the field
+        // that needs a real source.
         "generation": 1,
         "kind": "subagent",
         "displayName": session_id,
