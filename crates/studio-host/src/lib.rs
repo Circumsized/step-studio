@@ -13,6 +13,7 @@ pub mod adapter;
 pub mod lifecycle;
 pub mod process;
 pub mod relay;
+pub mod routes;
 pub mod state;
 pub mod signing;
 pub mod supervisor;

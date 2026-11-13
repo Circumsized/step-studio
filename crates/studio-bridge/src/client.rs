@@ -95,7 +95,6 @@ pub struct BridgeSession {
     shared: Arc<Shared>,
     epoch: u64,
     instance_id: String,
-    request_seq: AtomicU64,
 }
 
 /// Where the adapter lives and how to launch it.
@@ -179,7 +178,6 @@ impl BridgeSession {
             shared,
             epoch: verified.runtime_epoch,
             instance_id: verified.runtime_instance_id,
-            request_seq: AtomicU64::new(0),
         })
     }
 
@@ -388,8 +386,21 @@ impl BridgeSession {
     }
 
     fn next_request_id(&self) -> String {
-        let seq = self.request_seq.fetch_add(1, Ordering::Relaxed) + 1;
-        format!("shell-req-{seq}")
+        // Unique across every session in this process *and* across processes,
+        // because the daemon multiplexes surfaces over its one adapter
+        // connection and correlates a reply by this id. A per-session counter
+        // made two surfaces mint the same id, and the daemon — which now routes
+        // by id rather than broadcasting — handed one surface's reply to the
+        // other, or to neither.
+        //
+        // The process id is what separates two processes (a shell and a TUI
+        // attached to one daemon); the counter separates the sessions inside
+        // one process. A pid is reused only after the process that held it is
+        // gone, and a gone process's surface is gone with it, so its entries
+        // have already been dropped from the daemon's map.
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let seq = COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
+        format!("shell-{}-{seq}", std::process::id())
     }
 }
 

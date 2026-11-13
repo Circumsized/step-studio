@@ -91,6 +91,25 @@ pub fn body_of(frame: &[u8]) -> Option<serde_json::Value> {
     serde_json::from_slice(frame.get(body_start..)?).ok()
 }
 
+/// The `requestId` a frame's body carries, if it has one.
+///
+/// This — not the header's `frameId` — is what correlates a reply with the
+/// request it answers. The adapter mints a fresh `frameId` for every frame it
+/// writes, so a request's id never comes back; the `requestId` inside the body
+/// does. Reading it is what lets the daemon hand a reply to the surface that
+/// asked instead of to every surface at once.
+///
+/// Only receipts carry one. The event envelope is `{type, runtimeEpoch,
+/// eventSeq, stateVersion, occurredAt, event}` with no such field, which is
+/// what keeps an event from being mistaken for an answer and routed to one
+/// surface instead of broadcast.
+pub fn request_id_of(frame: &[u8]) -> Option<String> {
+    let body = body_of(frame)?;
+    body.get("requestId")
+        .and_then(|id| id.as_str())
+        .map(str::to_string)
+}
+
 /// `read_exact` that reports a clean end as `None` rather than an error.
 fn read_exact_or_eof<R: Read>(from: &mut R, buf: &mut [u8]) -> std::io::Result<Option<()>> {
     let mut filled = 0;
@@ -249,6 +268,50 @@ mod tests {
         bytes.extend_from_slice(&12u32.to_be_bytes());
         assert!(body_of(&bytes).is_none());
         assert!(body_of(&[]).is_none());
+    }
+
+    #[test]
+    fn the_request_id_comes_from_the_body_not_the_header() {
+        // The bug this pins: the adapter mints a fresh header `frameId` for
+        // every frame it writes, so the request's id never comes back. Keying
+        // the daemon's routing on the header would route nothing at all.
+        let bytes = step_studio_bridge::frame::FrameEncoder::encode_with_id(
+            "rust-99".to_string(),
+            4,
+            &serde_json::json!({"type": "studio.receipt", "requestId": "shell-1234-7"}),
+        )
+        .expect("encode");
+        assert_eq!(
+            request_id_of(&bytes).as_deref(),
+            Some("shell-1234-7"),
+            "the body's requestId, whatever the header calls the frame"
+        );
+    }
+
+    #[test]
+    fn an_event_has_no_request_id_to_route_by() {
+        // The event envelope carries no `requestId`, and that is what makes it
+        // safe to route by one: an event must be broadcast, never handed to a
+        // single surface.
+        let bytes = frame_bytes(
+            1,
+            serde_json::json!({
+                "type": "studio.event",
+                "eventSeq": 4,
+                "stateVersion": 4,
+                "event": { "kind": "conversation.message.delta", "delta": "hi" },
+            }),
+        );
+        assert!(request_id_of(&bytes).is_none());
+    }
+
+    #[test]
+    fn a_frame_with_no_body_has_no_request_id() {
+        assert!(request_id_of(&[]).is_none());
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&20u32.to_be_bytes());
+        bytes.extend_from_slice(&12u32.to_be_bytes());
+        assert!(request_id_of(&bytes).is_none());
     }
 
     #[test]

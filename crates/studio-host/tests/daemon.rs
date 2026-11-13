@@ -680,3 +680,59 @@ fn two_surfaces_both_receive_the_same_broadcast() {
         "a second surface can drive the same session"
     );
 }
+
+#[test]
+fn two_surfaces_asking_at_the_same_time_each_get_their_own_reply() {
+    // What this pins: two surfaces attached at once can each complete a
+    // request, with both in flight simultaneously. Two relay threads then write
+    // to the one adapter connection through the shared writer, and a frame
+    // interleaved between them would corrupt the adapter's stream — the adapter
+    // would fail to decode, nobody would answer, and this would time out.
+    //
+    // What it does *not* pin is the duplicate-id collision. That one is
+    // `routes::tests::a_repeated_id_is_reported_rather_than_absorbed`, because
+    // it is not observable from here: with two surfaces minting the same id,
+    // the second reply finds nothing to settle and falls through to the
+    // broadcast, which rescues the surface that lost its slot. An end-to-end
+    // test therefore passes either way, which is exactly why the routing table
+    // was moved into the library where it can be tested directly.
+    //
+    // The existing `two_surfaces_both_receive_the_same_broadcast` asks
+    // sequentially, so only this one overlaps the two requests.
+    let daemon = Daemon::start("concurrent");
+    let first = connect(&daemon);
+    let second = connect(&daemon);
+    // One request each, in flight at the same moment. Attached before either
+    // asks, so both are live surfaces of one daemon.
+    let (first_tx, first_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = first_tx.send(first.snapshot().map(|snapshot| {
+            snapshot
+                .pointer("/snapshot/sessionId")
+                .and_then(|id| id.as_str())
+                .unwrap_or("")
+                .to_string()
+        }));
+    });
+    let (second_tx, second_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = second_tx.send(second.snapshot().map(|snapshot| {
+            snapshot
+                .pointer("/snapshot/sessionId")
+                .and_then(|id| id.as_str())
+                .unwrap_or("")
+                .to_string()
+        }));
+    });
+
+    for (who, rx) in [("the first surface", first_rx), ("the second surface", second_rx)] {
+        // A reply that never arrives is the failure. Without a timeout here the
+        // test would hang rather than fail, and a hung test proves nothing to
+        // whoever runs the suite next.
+        let session_id = rx
+            .recv_timeout(Duration::from_secs(30))
+            .unwrap_or_else(|_| panic!("{who} never got a reply to its own request"))
+            .unwrap_or_else(|error| panic!("{who} failed its own request: {error}"));
+        assert!(!session_id.is_empty(), "{who} got a snapshot with no session");
+    }
+}

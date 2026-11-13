@@ -23,6 +23,7 @@ use step_studio_host::adapter::{self, AdapterHandle};
 use step_studio_peer_uid::peer_uid;
 use step_studio_host::lifecycle::{self, Acquire, GraceClock, Liveness};
 use step_studio_host::relay;
+use step_studio_host::routes::Routes;
 use step_studio_host::state;
 use step_studio_host::supervisor::{Next, Policy, Supervisor};
 
@@ -70,11 +71,9 @@ struct Daemon {
     epoch: u64,
     /// The adapter while one is alive. `None` between attempts.
     adapter: Mutex<Option<AdapterHandle>>,
-    /// Where the adapter's pump thread puts frames for the active surface.
+    /// Where the adapter's pump thread puts each frame for the surface that
+    /// asked for it.
     ///
-    /// One slot, not one per surface: the adapter broadcasts, and two surfaces
-    /// reading one stream would split it between them. A second surface waits
-    /// rather than competing.
     /// One entry per attached surface.
     ///
     /// A set rather than one slot, because the adapter broadcasts with no
@@ -87,6 +86,9 @@ struct Daemon {
     /// adapter's entries would drop a healthy adapter's frames into sockets
     /// nobody closes.
     to_surface: Mutex<Vec<Surface>>,
+    /// Which surface is waiting on which request, so a reply can be handed to
+    /// the one that asked instead of to everybody.
+    pending: Mutex<Routes>,
     /// Set once the daemon has decided to go away, so the supervisor does not
     /// restart the adapter it just drained.
     stopping: AtomicBool,
@@ -173,6 +175,7 @@ fn main() {
         epoch,
         adapter: Mutex::new(None),
         to_surface: Mutex::new(Vec::new()),
+        pending: Mutex::new(Routes::new()),
         adapter_serial: AtomicU64::new(0),
         surface_serial: AtomicU64::new(0),
         bound_endpoint: AtomicBool::new(false),
@@ -371,10 +374,33 @@ fn spawn_pump(
             // Nobody attached is a normal state, not an error: the frames are
             // dropped, because there is nobody to deliver them to.
             let mut surfaces = daemon.to_surface.lock().unwrap_or_else(|p| p.into_inner());
-            // A send that fails means that surface is gone. Retaining it would
-            // leak a sender per dead surface for the daemon's lifetime, and
-            // holding the lock across a slow surface would stall the others.
-            surfaces.retain(|(sender, _, _)| sender.send(frame.clone()).is_ok());
+            // An answer goes to the surface that asked for it and nowhere else.
+            // Anything else is an event, and events are for everybody — the
+            // adapter broadcasts them with no addressing, so there is nothing
+            // to narrow them by.
+            //
+            // This is M2.3's multiplexing, and it is the whole reason two
+            // surfaces can attach at once: before it, every reply went to every
+            // surface, so each one saw the other's receipts and turns.
+            let asked = relay::request_id_of(&frame).and_then(|id| daemon.settle(&id));
+            match asked {
+                Some(serial) => {
+                    // The others keep their slots: dropping them would close
+                    // sockets that are mid-conversation.
+                    if let Some(index) = surfaces.iter().position(|(_, _, held)| *held == serial) {
+                        // A send that fails means that surface is gone. Retaining
+                        // it would leak a sender per dead surface for the
+                        // daemon's lifetime.
+                        if surfaces[index].0.send(frame.clone()).is_err() {
+                            surfaces.remove(index);
+                        }
+                    }
+                }
+                None => {
+                    // Same failure handling, across everybody.
+                    surfaces.retain(|(sender, _, _)| sender.send(frame.clone()).is_ok());
+                }
+            }
             Ok(())
         });
         if let Err(error) = outcome {
@@ -679,6 +705,13 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     {
         let mut adapter_writer = AdapterWriter(Arc::clone(&handle.writer));
         if let Some(frame) = head {
+            // Recorded like every other forwarded frame: this one arrived
+            // before the relay thread existed, and a request sent as the very
+            // first frame would otherwise have its reply broadcast instead of
+            // routed back.
+            if let Some(id) = relay::request_id_of(&frame) {
+                daemon.expect(&id, surface);
+            }
             use std::io::Write;
             let _ = adapter_writer.write_all(&frame);
         }
@@ -723,6 +756,13 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
                                 }
                                 continue;
                             }
+                        }
+                        // Recorded before it goes, so the answer can find its
+                        // way back here. A frame the daemon answers itself
+                        // never reaches this point, so it is never recorded and
+                        // never routed: it already went straight to the surface.
+                        if let Some(id) = relay::request_id_of(&frame) {
+                            daemon.expect(&id, surface);
                         }
                         use std::io::Write;
                         if adapter_writer.write_all(&frame).is_err() {
@@ -816,8 +856,45 @@ fn close_socket(_stream: &transport::Stream) {}
 impl Daemon {
     /// Give up the relay and wake whoever is waiting for it.
     fn let_go(&self, surface: u64) {
-        let mut surfaces = self.to_surface.lock().unwrap_or_else(|p| p.into_inner());
-        surfaces.retain(|(_, _, held)| *held != surface);
+        {
+            let mut surfaces = self.to_surface.lock().unwrap_or_else(|p| p.into_inner());
+            surfaces.retain(|(_, _, held)| *held != surface);
+        }
+        // And the requests it will never get an answer to.
+        self.pending
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .forget(surface);
+    }
+
+    /// Remember that `surface` is waiting on `request_id`, so the reply can be
+    /// routed back to it rather than broadcast.
+    ///
+    /// A displaced surface is reported rather than swallowed: it means two
+    /// surfaces minted the same id, and the one that lost its slot is about to
+    /// wait for a reply that goes to the other. Without the log line that is a
+    /// hang with nothing to say why.
+    fn expect(&self, request_id: &str, surface: u64) {
+        if let Some(displaced) = self
+            .pending
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .expect(request_id, surface)
+        {
+            eprintln!(
+                "step-studio-host: request {request_id} was already waiting on surface \
+                 {displaced}; surface {surface} took it over"
+            );
+        }
+    }
+
+    /// Take the surface waiting on `request_id`. `None` means the frame is an
+    /// event rather than an answer, and events are for everybody.
+    fn settle(&self, request_id: &str) -> Option<u64> {
+        self.pending
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .settle(request_id)
     }
 }
 

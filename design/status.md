@@ -539,6 +539,26 @@ D-1 的判据本就是个实证问题，直接查 `~/.stepcode`：
 （同时驱动 desktop 与 web 两条 transport）。这两个包要等 Electron 删除（M5.6）之后才能
 动——不是技术阻塞，是顺序依赖。
 
+### M2.3 多面第二块：回执按 requestId 路由，不再广播给所有 surface（2026-11-13）
+
+M2.3 的「多面」卡在一件事上：daemon 的 adapter pump 把**每一帧**扇给所有附着的 surface。于是两个 surface 会互相收到对方的回执与回合——渲染层会把别人的回合画进自己的对话流。
+
+做法：daemon 现在按 body 里的 `requestId` 把回执送回**发问的那个** surface，其余帧（事件）照旧广播。
+
+追代码追出的两个反直觉点，都写进了注释：
+
+**一、关联键是 body 的 `requestId`，不是帧头的 `frameId`。** 第一版我按 `frameId` 写，查适配器时发现它每写一帧都新铸一个 id（`write_frame` → `next_frame_id()`），请求自己的 id 永远不回来。两侧皆然：TS 侧 `encodeFrame(\`request:${requestId}\`, ...)`、Rust 侧 `write_frame` 都是新铸。真正被带回的只有 body 里的 `requestId`。而事件信封 `{type, runtimeEpoch, eventSeq, stateVersion, occurredAt, event}` **不带** `requestId`——这正是按它路由安全的原因：事件永远不会被误判成回执而只送给一个 surface。
+
+**二、requestId 原来是每会话计数器，两个 surface 会铸出同一个 id。** `shell-req-{seq}`，每个 `BridgeSession` 从 1 开始。而 daemon 把 N 个 surface 复用到**一条** adapter 连接上，协议的关联键却是每会话唯一的——这是协议与拓扑之间的真实裂缝。不修它，上面的路由会把 A 的回执送给 B，A 永久挂起（`await_reply` 自己没有超时）。改为进程唯一：`shell-{pid}-{seq}`（pid 分开两个进程——壳与 TUI 是不同进程；计数器分开同进程内的多个会话）。pid 复用要求旧进程已退出，而旧进程退出时它的 surface 一并消失、daemon 里的条目已被 `forget` 清掉，所以实际无害。
+
+**路由表放进 lib 而不是留在 bin 里**（`crates/studio-host/src/routes.rs`，45 个单测里的 6 个是它）：它是整块复用逻辑中唯一纯逻辑的部分，纯逻辑才能不起 daemon、不起适配器就测。而且它守的失败是**静默的**——回执送错 surface，发问的那边永远等下去，日志里什么都没有。
+
+`expect` 因此**返回被挤掉的那个 surface** 并由 daemon 打日志：两个 surface 铸了同一个 id 是协议违规，吞掉它就是把一次无法诊断的挂起写成默认行为。这一条有变异验证：把返回值改成 `None`（吞掉），`a_repeated_id_is_reported_rather_than_absorbed` 立刻失败。
+
+**一个诚实的否定结论**：我最初写的并发端到端测试（两个 surface 同时各发一个请求）**钉不住这个 bug**——带缺陷跑它也过。原因是第二份回执 `settle` 时条目已被移除，落到广播兜底，把丢掉 slot 的那个 surface 救回来了。端到端看不到「收到了不属于自己的回执」（`drain_events` 只倒事件，回执不进公开 API），所以这条缺陷只能单测钉。测试注释已改成它真正证明的东西：两个 surface 同时各发请求都能完成（两条 relay 线程经共享 writer 写同一条 adapter 连接，帧交错会损坏适配器的流，那样没人应答、测试超时）。
+
+既有 `two_surfaces_both_receive_the_same_broadcast` 仍然成立：事件广播这条性质没变。
+
 ### M6a.1 spike：`hqtui` 不存在，选型作废；退路 ratatui 的 headless 渲染器已实证可用（2026-11-13）
 
 方案 §9.4 把表面 D 押在 `ports/rust` crate `hqtui` 0.2.0 上（「约 1.82 万行零依赖」fork 自管 + vendored path）。**查证结论：那个上游不存在，这一条选型无法执行。**
