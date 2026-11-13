@@ -54,17 +54,21 @@ fn state_dir(app: &tauri::AppHandle) -> ChromeResult<PathBuf> {
     let dir = app
         .path()
         .app_data_dir()
-        .map_err(|error| ChromeError::failed(format!("cannot locate the app data directory: {error}")))?
+        .map_err(|error| {
+            ChromeError::failed(format!("cannot locate the app data directory: {error}"))
+        })?
         .join("step-studio");
-    std::fs::create_dir_all(&dir)
-        .map_err(|error| ChromeError::failed(format!("cannot create {}: {error}", dir.display())))?;
+    std::fs::create_dir_all(&dir).map_err(|error| {
+        ChromeError::failed(format!("cannot create {}: {error}", dir.display()))
+    })?;
     Ok(dir)
 }
 
 fn profile_dir(app: &tauri::AppHandle) -> ChromeResult<PathBuf> {
     let dir = state_dir(app)?.join("profile");
-    std::fs::create_dir_all(&dir)
-        .map_err(|error| ChromeError::failed(format!("cannot create {}: {error}", dir.display())))?;
+    std::fs::create_dir_all(&dir).map_err(|error| {
+        ChromeError::failed(format!("cannot create {}: {error}", dir.display()))
+    })?;
     Ok(dir)
 }
 
@@ -88,11 +92,7 @@ fn avatar_path(dir: &std::path::Path, mime: &str) -> ChromeResult<PathBuf> {
 }
 
 #[tauri::command]
-pub fn save_avatar(
-    app: tauri::AppHandle,
-    mime: String,
-    bytes: Vec<u8>,
-) -> ChromeResult<Value> {
+pub fn save_avatar(app: tauri::AppHandle, mime: String, bytes: Vec<u8>) -> ChromeResult<Value> {
     if bytes.len() > AVATAR_MAX_BYTES {
         return Err(ChromeError::invalid(format!(
             "avatar is {} bytes; the limit is {AVATAR_MAX_BYTES}",
@@ -206,7 +206,10 @@ pub fn open_project_in_editor(workspace_id: String) -> ChromeResult<Value> {
     // reveal instead and say which happened. The renderer shows the returned
     // `mode`, so a caller can tell "opened in an editor" from "revealed".
     let (mode, outcome) = if cfg!(target_os = "macos") {
-        ("editor", Command::new("open").args(["-t"]).arg(path).spawn())
+        (
+            "editor",
+            Command::new("open").args(["-t"]).arg(path).spawn(),
+        )
     } else if cfg!(target_os = "windows") {
         ("reveal", Command::new("explorer").arg(path).spawn())
     } else {
@@ -271,7 +274,9 @@ pub fn open_log_dir() -> ChromeResult<()> {
     } else {
         Command::new("xdg-open").arg(&dir).spawn()
     };
-    outcome.map_err(|error| ChromeError::failed(format!("cannot reveal the log directory: {error}")))?;
+    outcome.map_err(|error| {
+        ChromeError::failed(format!("cannot reveal the log directory: {error}"))
+    })?;
     Ok(())
 }
 
@@ -392,15 +397,23 @@ pub fn report_payload_health(status: String) -> ChromeResult<bool> {
 /// and inventing a store before there is a reader is speculation.
 #[tauri::command]
 pub fn report_performance_sample(sample: Value) -> ChromeResult<bool> {
-    let role = sample.get("role").and_then(Value::as_str).unwrap_or("unknown");
+    let role = sample
+        .get("role")
+        .and_then(Value::as_str)
+        .unwrap_or("unknown");
     // Whichever figure the renderer actually sent. It reports heap numbers from
     // its own runtime and RSS only where the platform exposes it, so logging a
     // fixed "rss" field would print `unknown` for every renderer sample.
-    let figures: Vec<String> = ["rssBytes", "heapUsedBytes", "heapTotalBytes", "arrayBuffersBytes"]
-        .iter()
-        .filter_map(|key| sample.get(*key).and_then(Value::as_u64))
-        .map(|bytes| format!("{} KiB", bytes / 1024))
-        .collect();
+    let figures: Vec<String> = [
+        "rssBytes",
+        "heapUsedBytes",
+        "heapTotalBytes",
+        "arrayBuffersBytes",
+    ]
+    .iter()
+    .filter_map(|key| sample.get(*key).and_then(Value::as_u64))
+    .map(|bytes| format!("{} KiB", bytes / 1024))
+    .collect();
     match figures.is_empty() {
         true => eprintln!("[chrome] perf sample role={role} (no figures)"),
         false => eprintln!("[chrome] perf sample role={role} {}", figures.join(" ")),

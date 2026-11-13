@@ -10,6 +10,7 @@ mod chrome;
 mod diagnostics;
 mod git;
 mod history;
+mod menu;
 mod pump;
 mod terminal;
 
@@ -48,8 +49,14 @@ fn trace_sink(payload: &Value) {
                 .unwrap_or("");
             eprintln!(
                 "[self-check] #{} {} {}",
-                payload.get("streamSeq").and_then(Value::as_u64).unwrap_or(0),
-                update.and_then(|u| u.get("kind")).and_then(Value::as_str).unwrap_or("?"),
+                payload
+                    .get("streamSeq")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0),
+                update
+                    .and_then(|u| u.get("kind"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("?"),
                 delta
             );
         }
@@ -57,8 +64,14 @@ fn trace_sink(payload: &Value) {
             let receipt = payload.get("receipt");
             eprintln!(
                 "[self-check] receipt {} -> {}",
-                receipt.and_then(|r| r.get("commandName")).and_then(Value::as_str).unwrap_or("?"),
-                receipt.and_then(|r| r.get("status")).and_then(Value::as_str).unwrap_or("?")
+                receipt
+                    .and_then(|r| r.get("commandName"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("?"),
+                receipt
+                    .and_then(|r| r.get("status"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("?")
             );
         }
         _ => eprintln!("[self-check] {kind}"),
@@ -120,6 +133,11 @@ fn main() {
                 inner: Arc::clone(&inner),
             });
             app.manage(terminal::TerminalState::default());
+
+            // The native application menu. Installed here rather than in the
+            // builder because it forwards to the renderer, and the renderer is
+            // not up yet when the builder runs.
+            menu::install(app.handle());
 
             // The supervisor owns the connection from here on: it connects, and
             // connects again whenever the session ends. Establishing it before
@@ -197,15 +215,11 @@ fn main() {
                 });
             }
 
-            WebviewWindowBuilder::new(
-                app,
-                "main",
-                WebviewUrl::App("index.html".into()),
-            )
-            .title("Step Studio")
-            .inner_size(1280.0, 800.0)
-            .initialization_script(BRIDGE_INIT_SCRIPT)
-            .build()?;
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                .title("Step Studio")
+                .inner_size(1280.0, 800.0)
+                .initialization_script(BRIDGE_INIT_SCRIPT)
+                .build()?;
             Ok(())
         })
         .run(tauri::generate_context!())

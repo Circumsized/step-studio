@@ -21,6 +21,13 @@
  */
 
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { listen as tauriListen } from "@tauri-apps/api/event";
+
+/**
+ * The channel the Rust menu emits on. Kept in step with
+ * `src-tauri/src/menu.rs`; a drift there is a menu that appears to do nothing.
+ */
+const MENU_COMMAND_EVENT = "omp-studio:chrome:menu-command";
 
 /** Mirrors `ChromeAvatarBytes` in `apps/desktop/src/chrome-profile-shared.ts`. */
 export interface AvatarBytes {
@@ -48,6 +55,12 @@ export interface TauriChromeBridge {
   openProjectDirectory(workspaceId: string): Promise<void>;
   openProjectInEditor(workspaceId: string): Promise<{ mode: "editor" | "reveal" }>;
   openLogDir(): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
+
+  /**
+   * Native menu commands. The listener gets an allowlisted id and returns an
+   * unsubscribe function, matching the Electron preload's shape.
+   */
+  onMenuCommand(listener: (command: string) => void): () => void;
   exportLogs(): Promise<
     | { readonly ok: true }
     | { readonly ok: false; readonly cancelled: true }
@@ -92,6 +105,19 @@ export function createTauriChromeBridge(): TauriChromeBridge {
     // derives it — the bridge is the one that writes the file, so it decides.
     openLogDir: () => tauriInvoke("open_log_dir"),
     exportLogs: () => tauriInvoke("export_logs"),
+
+    // The shell builds a native menu and emits the allowlisted id; this only
+    // subscribes. The id is not narrowed here because the shell already enforces
+    // the closed set — an id outside it never reaches the channel.
+    onMenuCommand: listener => {
+      let unsubscribe = () => {};
+      void tauriListen<string>(MENU_COMMAND_EVENT, event => {
+        listener(event.payload);
+      }).then(unlisten => {
+        unsubscribe = unlisten;
+      });
+      return () => unsubscribe();
+    },
 
     notify: payload =>
       tauriInvoke<void>(
