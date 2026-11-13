@@ -345,12 +345,17 @@ fn a_surface_is_released_when_its_adapter_dies() {
     let daemon = Daemon::start("adapter-death");
     let session = connect(&daemon);
     let _ = session.snapshot().expect("snapshot");
-    wait_until("the adapter to come up", || !daemon.adapter_pids().is_empty());
+    wait_until("the adapter to come up", || {
+        !daemon.adapter_pids().is_empty()
+    });
 
     // Kill the adapter out from under the daemon. The supervisor will bring up
     // another one, but this surface belongs to the dead one.
     for pid in daemon.adapter_pids() {
-        let _ = std::process::Command::new("kill").arg("-9").arg(pid.to_string()).status();
+        let _ = std::process::Command::new("kill")
+            .arg("-9")
+            .arg(pid.to_string())
+            .status();
     }
 
     // The surface must be released rather than left holding a dead relay. What
@@ -372,7 +377,9 @@ fn a_surface_is_released_when_its_adapter_dies() {
 
     // And the daemon is still serving: a new surface gets a new session.
     let replacement = connect(&daemon);
-    let snapshot = replacement.snapshot().expect("a snapshot from the new adapter");
+    let snapshot = replacement
+        .snapshot()
+        .expect("a snapshot from the new adapter");
     assert!(
         snapshot.pointer("/snapshot/sessionId").is_some(),
         "the daemon kept serving after the adapter was replaced"
@@ -400,7 +407,10 @@ fn a_usage_prompt_comes_back_on_the_notify_channel() {
         .pointer("/result/panel")
         .and_then(|v| v.as_str())
         .expect("the panel text");
-    assert!(panel.contains("Usage"), "the panel is the CLI's own: {panel}");
+    assert!(
+        panel.contains("Usage"),
+        "the panel is the CLI's own: {panel}"
+    );
     assert!(
         panel.contains("Total tokens"),
         "the panel carries the totals the structured arrays cannot: {panel}"
@@ -431,7 +441,10 @@ fn a_model_catalog_reaches_the_shell_through_the_bridge() {
     // one — an entry without it is a model the UI cannot select.
     for model in models {
         assert!(
-            model.get("selector").and_then(Value::as_str).is_some_and(|s| !s.is_empty()),
+            model
+                .get("selector")
+                .and_then(Value::as_str)
+                .is_some_and(|s| !s.is_empty()),
             "every catalog entry carries a selector: {model}"
         );
     }
@@ -474,7 +487,11 @@ fn a_daemon_whose_adapter_cannot_start_exits_instead_of_degrading() {
     let deadline = Instant::now() + Duration::from_secs(90);
     let output = loop {
         match child.try_wait() {
-            Ok(Some(_)) => break child.wait_with_output().expect("collect the daemon's output"),
+            Ok(Some(_)) => {
+                break child
+                    .wait_with_output()
+                    .expect("collect the daemon's output")
+            }
             Ok(None) if Instant::now() < deadline => {
                 std::thread::sleep(Duration::from_millis(200));
             }
@@ -492,7 +509,10 @@ fn a_daemon_whose_adapter_cannot_start_exits_instead_of_degrading() {
         "the daemon should say why it is leaving: {stderr}"
     );
     // It left the endpoint behind for nobody.
-    assert!(!Path::new(&endpoint).exists(), "the socket file was cleaned up");
+    assert!(
+        !Path::new(&endpoint).exists(),
+        "the socket file was cleaned up"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -594,7 +614,10 @@ fn the_daemon_answers_the_process_tree_itself() {
         .pointer("/result/processes")
         .and_then(Value::as_array)
         .expect("the tree");
-    assert!(!processes.is_empty(), "the daemon itself is in its own tree");
+    assert!(
+        !processes.is_empty(),
+        "the daemon itself is in its own tree"
+    );
     // The daemon is the root, and its direct child is the adapter — the role
     // comes from the depth, not from the executable's name.
     assert_eq!(
@@ -603,7 +626,9 @@ fn the_daemon_answers_the_process_tree_itself() {
         "the tree is rooted at the daemon"
     );
     assert!(
-        processes.iter().any(|p| p.get("role").and_then(Value::as_str) == Some("adapter")),
+        processes
+            .iter()
+            .any(|p| p.get("role").and_then(Value::as_str) == Some("adapter")),
         "the adapter the daemon spawned is in the tree: {processes:?}"
     );
     // And the total is the sum of what was reported, never invented.
@@ -612,7 +637,9 @@ fn the_daemon_answers_the_process_tree_itself() {
         .filter_map(|p| p.get("rssBytes").and_then(Value::as_u64))
         .sum();
     assert_eq!(
-        receipt.pointer("/result/totalRssBytes").and_then(Value::as_u64),
+        receipt
+            .pointer("/result/totalRssBytes")
+            .and_then(Value::as_u64),
         Some(summed)
     );
 }
@@ -725,7 +752,10 @@ fn two_surfaces_asking_at_the_same_time_each_get_their_own_reply() {
         }));
     });
 
-    for (who, rx) in [("the first surface", first_rx), ("the second surface", second_rx)] {
+    for (who, rx) in [
+        ("the first surface", first_rx),
+        ("the second surface", second_rx),
+    ] {
         // A reply that never arrives is the failure. Without a timeout here the
         // test would hang rather than fail, and a hung test proves nothing to
         // whoever runs the suite next.
@@ -733,6 +763,9 @@ fn two_surfaces_asking_at_the_same_time_each_get_their_own_reply() {
             .recv_timeout(Duration::from_secs(30))
             .unwrap_or_else(|_| panic!("{who} never got a reply to its own request"))
             .unwrap_or_else(|error| panic!("{who} failed its own request: {error}"));
-        assert!(!session_id.is_empty(), "{who} got a snapshot with no session");
+        assert!(
+            !session_id.is_empty(),
+            "{who} got a snapshot with no session"
+        );
     }
 }

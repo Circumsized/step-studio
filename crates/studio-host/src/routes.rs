@@ -42,11 +42,21 @@ impl Routes {
 
     /// Take the surface waiting on `request_id`.
     ///
+    /// `terminal` is whether this receipt ends the request. A non-terminal one
+    /// — `accepted`, which the runtime sends before the terminal receipt — is
+    /// routed to the waiting surface but does **not** consume the entry: the
+    /// terminal receipt carries the same `requestId`, and consuming it early
+    /// would broadcast that one to every attached surface.
+    ///
     /// `None` means nobody is waiting on it, which is the normal case for an
     /// event: the event envelope carries no `requestId`, so an event must be
     /// broadcast rather than routed.
-    pub fn settle(&mut self, request_id: &str) -> Option<u64> {
-        self.waiting.remove(request_id)
+    pub fn settle(&mut self, request_id: &str, terminal: bool) -> Option<u64> {
+        let surface = self.waiting.get(request_id).copied()?;
+        if terminal {
+            self.waiting.remove(request_id);
+        }
+        Some(surface)
     }
 
     /// Forget everything a departing surface was waiting for.
@@ -77,10 +87,37 @@ mod tests {
     fn a_request_is_routed_to_the_surface_that_asked() {
         let mut routes = Routes::new();
         assert_eq!(routes.expect("shell-1-1", 7), None, "nobody was waiting");
-        assert_eq!(routes.settle("shell-1-1"), Some(7));
+        assert_eq!(routes.settle("shell-1-1", true), Some(7));
         // Settled, so a second frame with the same id is not an answer to
-        // anybody: the adapter would have to send the same receipt twice.
-        assert_eq!(routes.settle("shell-1-1"), None);
+        // anybody.
+        assert_eq!(routes.settle("shell-1-1", true), None);
+    }
+
+    #[test]
+    fn a_non_terminal_receipt_does_not_end_the_request() {
+        // The bug this pins, and the reason `settle` takes a terminality at all:
+        // the runtime sends `accepted` before the terminal receipt, both with
+        // the same requestId. Consuming the entry on the first of the pair
+        // broadcasts the terminal receipt to every attached surface — one
+        // foreign receipt per turn, for as long as the daemon lives.
+        //
+        // The first version of this table had no terminality and a test that
+        // asserted the second `settle` returned `None`, with the comment "the
+        // adapter would have to send the same receipt twice". That comment is
+        // false for `core.prompt`, so the test pinned the bug.
+        let mut routes = Routes::new();
+        routes.expect("shell-1-1", 7);
+        assert_eq!(
+            routes.settle("shell-1-1", false),
+            Some(7),
+            "the accepted receipt still goes to the surface that asked"
+        );
+        assert_eq!(
+            routes.settle("shell-1-1", true),
+            Some(7),
+            "and so does the terminal one — not broadcast to everybody"
+        );
+        assert_eq!(routes.settle("shell-1-1", true), None, "and only once");
     }
 
     #[test]
@@ -90,7 +127,7 @@ mod tests {
         // single surface.
         let mut routes = Routes::new();
         routes.expect("shell-1-1", 7);
-        assert_eq!(routes.settle("studio.event"), None);
+        assert_eq!(routes.settle("studio.event", true), None);
     }
 
     #[test]
@@ -100,8 +137,8 @@ mod tests {
         routes.expect("shell-2-1", 9);
         // Out of order, which is what concurrent surfaces produce: the adapter
         // answers whichever request finishes first.
-        assert_eq!(routes.settle("shell-2-1"), Some(9));
-        assert_eq!(routes.settle("shell-1-1"), Some(7));
+        assert_eq!(routes.settle("shell-2-1", true), Some(9));
+        assert_eq!(routes.settle("shell-1-1", true), Some(7));
         assert!(routes.is_empty());
     }
 
@@ -120,7 +157,7 @@ mod tests {
         );
         // And the newcomer is the one that gets the reply, which is exactly why
         // the displacement has to be loud.
-        assert_eq!(routes.settle("shell-1-1"), Some(9));
+        assert_eq!(routes.settle("shell-1-1", true), Some(9));
     }
 
     #[test]
@@ -130,10 +167,10 @@ mod tests {
         routes.expect("shell-1-2", 7);
         routes.expect("shell-2-1", 9);
         routes.forget(7);
-        assert_eq!(routes.settle("shell-1-1"), None);
-        assert_eq!(routes.settle("shell-1-2"), None);
+        assert_eq!(routes.settle("shell-1-1", true), None);
+        assert_eq!(routes.settle("shell-1-2", true), None);
         assert_eq!(
-            routes.settle("shell-2-1"),
+            routes.settle("shell-2-1", true),
             Some(9),
             "the other surface is untouched"
         );

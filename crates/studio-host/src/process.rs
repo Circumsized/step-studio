@@ -192,7 +192,10 @@ fn rss_of(pid: u32) -> Option<u64> {
 fn parse_status_field(status: &str, key: &str) -> Option<u64> {
     for line in status.lines() {
         if let Some(rest) = line.strip_prefix(key) {
-            return rest.split_whitespace().next().and_then(|value| value.parse().ok());
+            return rest
+                .split_whitespace()
+                .next()
+                .and_then(|value| value.parse().ok());
         }
     }
     None
@@ -223,7 +226,10 @@ mod tests {
     #[test]
     fn the_tree_is_rooted_at_the_daemon() {
         let processes = tree();
-        assert!(!processes.is_empty(), "the daemon itself is always in the tree");
+        assert!(
+            !processes.is_empty(),
+            "the daemon itself is always in the tree"
+        );
         let root = &processes[0];
         assert_eq!(root.pid, std::process::id(), "the root is this process");
         assert_eq!(root.role, Role::Daemon);
@@ -245,7 +251,11 @@ mod tests {
             .iter()
             .find(|process| process.pid == child.id())
             .expect("the spawned child is in the tree");
-        assert_eq!(found.role, Role::Adapter, "a direct child of the daemon is the adapter");
+        assert_eq!(
+            found.role,
+            Role::Adapter,
+            "a direct child of the daemon is the adapter"
+        );
         assert_eq!(found.parent_pid, Some(std::process::id()));
 
         let _ = child.kill();
@@ -284,7 +294,10 @@ mod tests {
             model.get("selfPid").and_then(Value::as_u64),
             Some(u64::from(std::process::id()))
         );
-        let processes = model.get("processes").and_then(Value::as_array).expect("processes");
+        let processes = model
+            .get("processes")
+            .and_then(Value::as_array)
+            .expect("processes");
         assert!(!processes.is_empty());
         for process in processes {
             assert!(process.get("pid").and_then(Value::as_u64).is_some());
@@ -296,7 +309,10 @@ mod tests {
             .iter()
             .filter_map(|process| process.get("rssBytes").and_then(Value::as_u64))
             .sum();
-        assert_eq!(model.get("totalRssBytes").and_then(Value::as_u64), Some(summed));
+        assert_eq!(
+            model.get("totalRssBytes").and_then(Value::as_u64),
+            Some(summed)
+        );
     }
 
     #[test]

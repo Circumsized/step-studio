@@ -61,10 +61,16 @@ impl std::fmt::Display for Rejection {
             Self::BadSignature => write!(f, "the manifest signature does not verify"),
             Self::Malformed(detail) => write!(f, "malformed manifest: {detail}"),
             Self::NotNewer { offered, running } => {
-                write!(f, "version {offered} is not newer than the running {running}")
+                write!(
+                    f,
+                    "version {offered} is not newer than the running {running}"
+                )
             }
             Self::DigestMismatch { expected, actual } => {
-                write!(f, "artifact digest {actual} does not match the manifest's {expected}")
+                write!(
+                    f,
+                    "artifact digest {actual} does not match the manifest's {expected}"
+                )
             }
         }
     }
@@ -101,7 +107,9 @@ pub fn verify(
         return Err(Rejection::Malformed("signature is not hex".to_string()));
     };
     let Ok(signature) = Signature::from_slice(&signature_bytes) else {
-        return Err(Rejection::Malformed("signature is not 64 bytes".to_string()));
+        return Err(Rejection::Malformed(
+            "signature is not 64 bytes".to_string(),
+        ));
     };
     verifying
         .verify(&signing_bytes(&signed.manifest), &signature)
@@ -131,7 +139,8 @@ pub fn check_digest(manifest: &Manifest, artifact: &[u8]) -> Result<(), Rejectio
 
 /// Read an artifact from disk and check it against a verified manifest.
 pub fn check_artifact(manifest: &Manifest, path: &Path) -> Result<(), Rejection> {
-    let bytes = std::fs::read(path).map_err(|error| Rejection::Malformed(format!("read artifact: {error}")))?;
+    let bytes = std::fs::read(path)
+        .map_err(|error| Rejection::Malformed(format!("read artifact: {error}")))?;
     check_digest(manifest, &bytes)
 }
 
@@ -217,7 +226,10 @@ mod tests {
         let signed = sign(&older, &signing);
         assert_eq!(
             verify(&signed, &verifying, 1),
-            Err(Rejection::NotNewer { offered: 1, running: 1 })
+            Err(Rejection::NotNewer {
+                offered: 1,
+                running: 1
+            })
         );
         // And the same version as what is running is also refused.
         let mut same = manifest();
@@ -225,7 +237,10 @@ mod tests {
         let signed = sign(&same, &signing);
         assert_eq!(
             verify(&signed, &verifying, 5),
-            Err(Rejection::NotNewer { offered: 5, running: 5 })
+            Err(Rejection::NotNewer {
+                offered: 5,
+                running: 5
+            })
         );
     }
 

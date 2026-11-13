@@ -276,6 +276,7 @@ fn session_list() -> SessionTree {
             },
         ],
         total: 2,
+        unavailable_reason: None,
     }
 }
 
@@ -400,12 +401,31 @@ fn session_tree_list() {
 }
 
 #[test]
+fn session_tree_no_store() {
+    // "There is no store on this machine" and "the store has no sessions" are
+    // different facts, and the reader produces the first specifically so the two
+    // are not conflated. The reason rides in the header, so a fresh machine does
+    // not look like a genuinely empty one.
+    golden(
+        "session-tree-no-store",
+        &render_sessions(&SessionTree {
+            entries: Vec::new(),
+            total: 0,
+            unavailable_reason: Some(
+                "the session store is not present on this machine".to_string(),
+            ),
+        }),
+    );
+}
+
+#[test]
 fn session_tree_empty() {
     golden(
         "session-tree-empty",
         &render_sessions(&SessionTree {
             entries: Vec::new(),
             total: 0,
+            unavailable_reason: None,
         }),
     );
 }

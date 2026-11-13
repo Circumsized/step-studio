@@ -58,8 +58,7 @@ pub fn render(frame: &mut Frame, tree: &ProcessTree, selection: &mut TableState)
         .processes
         .iter()
         .map(|process| {
-            let depth = depth_of(tree, process.pid);
-            let indent = "  ".repeat(depth);
+            let indent = "  ".repeat(depth_of(tree, process.pid));
             let role_style = match process.role {
                 Role::Daemon => Style::default().fg(Color::Cyan),
                 Role::Adapter => Style::default().fg(Color::Green),
@@ -67,8 +66,16 @@ pub fn render(frame: &mut Frame, tree: &ProcessTree, selection: &mut TableState)
             };
             Row::new(vec![
                 Cell::from(Span::raw(process.pid.to_string())),
-                Cell::from(Span::styled(process.role.label(), role_style)),
-                Cell::from(Span::raw(indent)),
+                // The indent is part of the role's cell, not a column of its
+                // own. A column of leading whitespace is invisible: the column
+                // has a fixed width either way, so the RSS column starts at the
+                // same x for every depth and the tree reads as a flat list. The
+                // `process_tree_deep` golden fixture was byte-identical to
+                // `process_tree_full` in this column, which made it vacuous.
+                Cell::from(Span::styled(
+                    format!("{indent}{}", process.role.label()),
+                    role_style,
+                )),
                 Cell::from(Span::raw(format_rss(process.rss_bytes))),
             ])
         })
@@ -76,8 +83,7 @@ pub fn render(frame: &mut Frame, tree: &ProcessTree, selection: &mut TableState)
 
     let widths = [
         Constraint::Length(8),
-        Constraint::Length(9),
-        Constraint::Min(10),
+        Constraint::Min(20),
         Constraint::Length(10),
     ];
     let table = Table::new(rows, widths)

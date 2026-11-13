@@ -14,18 +14,18 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use serde_json::Value;
 use serde_json::json;
+use serde_json::Value;
 use step_studio_bridge::client::AdapterLaunch;
 use step_studio_bridge::frame::write_frame;
 use step_studio_bridge::transport::{self, Accepted};
 use step_studio_host::adapter::{self, AdapterHandle};
-use step_studio_peer_uid::peer_uid;
 use step_studio_host::lifecycle::{self, Acquire, GraceClock, Liveness};
 use step_studio_host::relay;
 use step_studio_host::routes::Routes;
 use step_studio_host::state;
 use step_studio_host::supervisor::{Next, Policy, Supervisor};
+use step_studio_peer_uid::peer_uid;
 
 /// How long the daemon keeps running with no surface attached.
 ///
@@ -382,7 +382,12 @@ fn spawn_pump(
             // This is M2.3's multiplexing, and it is the whole reason two
             // surfaces can attach at once: before it, every reply went to every
             // surface, so each one saw the other's receipts and turns.
-            let asked = relay::request_id_of(&frame).and_then(|id| daemon.settle(&id));
+            // Terminality matters: the runtime sends `accepted` before the
+            // terminal receipt, both with the same requestId, and consuming the
+            // routing entry on the first would broadcast the terminal one to
+            // every surface.
+            let asked =
+                relay::receipt_of(&frame).and_then(|(id, terminal)| daemon.settle(&id, terminal));
             match asked {
                 Some(serial) => {
                     // The others keep their slots: dropping them would close
@@ -737,9 +742,7 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
                         // multiplexing goes.
                         if let Some(body) = relay::body_of(&frame) {
                             if body.get("type").and_then(|t| t.as_str()) == Some("studio.request")
-                                && body
-                                    .pointer("/operation/kind")
-                                    .and_then(|k| k.as_str())
+                                && body.pointer("/operation/kind").and_then(|k| k.as_str())
                                     == Some("process.tree.get")
                             {
                                 let request_id =
@@ -890,11 +893,15 @@ impl Daemon {
 
     /// Take the surface waiting on `request_id`. `None` means the frame is an
     /// event rather than an answer, and events are for everybody.
-    fn settle(&self, request_id: &str) -> Option<u64> {
+    ///
+    /// `terminal` says whether this receipt ends the request; see
+    /// [`step_studio_host::relay::receipt_of`] for why the non-terminal case has
+    /// to keep the entry.
+    fn settle(&self, request_id: &str, terminal: bool) -> Option<u64> {
         self.pending
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .settle(request_id)
+            .settle(request_id, terminal)
     }
 }
 

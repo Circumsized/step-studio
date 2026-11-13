@@ -110,6 +110,30 @@ pub fn request_id_of(frame: &[u8]) -> Option<String> {
         .map(str::to_string)
 }
 
+/// The `requestId` a receipt carries, and whether that receipt ends the request.
+///
+/// The terminality is the part that is easy to get wrong, and getting it wrong
+/// is silent. The runtime sends a **non-terminal** `accepted` receipt before the
+/// terminal one, both with the same `requestId` (`bridge_server.rs` emits
+/// `receipt(id, "accepted", None)` on accepting a prompt and
+/// `receipt(id, "completed", …)` when it settles). A router that consumed the
+/// mapping on the first of the pair would then broadcast the terminal receipt to
+/// every attached surface — which is precisely the cross-surface leakage
+/// multiplexing exists to prevent, and it leaks one foreign receipt per turn.
+///
+/// `accepted` is the only non-terminal status in the protocol's own vocabulary
+/// (`packages/studio-protocol/src/validation.ts`: accepted, completed, rejected,
+/// failed, outcome_unknown).
+pub fn receipt_of(frame: &[u8]) -> Option<(String, bool)> {
+    let body = body_of(frame)?;
+    if body.get("type").and_then(|t| t.as_str()) != Some("studio.receipt") {
+        return None;
+    }
+    let request_id = body.get("requestId").and_then(|id| id.as_str())?;
+    let terminal = body.get("status").and_then(|s| s.as_str()) != Some("accepted");
+    Some((request_id.to_string(), terminal))
+}
+
 /// `read_exact` that reports a clean end as `None` rather than an error.
 fn read_exact_or_eof<R: Read>(from: &mut R, buf: &mut [u8]) -> std::io::Result<Option<()>> {
     let mut filled = 0;
@@ -286,6 +310,54 @@ mod tests {
             Some("shell-1234-7"),
             "the body's requestId, whatever the header calls the frame"
         );
+    }
+
+    #[test]
+    fn a_non_terminal_receipt_is_reported_as_such() {
+        // The bug this pins: the runtime sends `accepted` before the terminal
+        // receipt, both with the same requestId. A router that treated the first
+        // as the end of the request would broadcast the terminal one to every
+        // surface — one foreign receipt per turn, which is the exact leakage
+        // multiplexing exists to prevent.
+        let accepted = frame_bytes(
+            1,
+            serde_json::json!({ "type": "studio.receipt", "requestId": "r-1", "status": "accepted" }),
+        );
+        let completed = frame_bytes(
+            1,
+            serde_json::json!({ "type": "studio.receipt", "requestId": "r-1", "status": "completed", "result": { "ok": true } }),
+        );
+        assert_eq!(receipt_of(&accepted), Some(("r-1".to_string(), false)));
+        assert_eq!(receipt_of(&completed), Some(("r-1".to_string(), true)));
+    }
+
+    #[test]
+    fn every_terminal_status_ends_the_request() {
+        // `accepted` is the only non-terminal status in the protocol's
+        // vocabulary. Anything else must consume the routing entry, or the
+        // surface waits for a reply that has already been delivered.
+        for status in ["completed", "rejected", "failed", "outcome_unknown"] {
+            let frame = frame_bytes(
+                1,
+                serde_json::json!({ "type": "studio.receipt", "requestId": "r-1", "status": status }),
+            );
+            assert_eq!(
+                receipt_of(&frame),
+                Some(("r-1".to_string(), true)),
+                "{status} must be terminal"
+            );
+        }
+    }
+
+    #[test]
+    fn a_frame_that_is_not_a_receipt_has_no_receipt_to_route() {
+        // A request is not a receipt, and neither is an event. Routing either
+        // would hand a surface's own outbound frame back to it.
+        let request = frame_bytes(
+            1,
+            serde_json::json!({ "type": "studio.request", "requestId": "r-1" }),
+        );
+        assert!(receipt_of(&request).is_none());
     }
 
     #[test]

@@ -39,7 +39,24 @@ pub fn list(limit: Option<u64>, workspace_id: Option<&str>, status: Option<&str>
     let Some(store) = store_dir() else {
         return empty("the session store is not present on this machine");
     };
-    let Ok(projects) = std::fs::read_dir(&store) else {
+    list_in(&store, limit, workspace_id, status)
+}
+
+/// The same, against a store the caller names.
+///
+/// Exists so a test can build a fixture store instead of mutating the process
+/// environment to point `HOME` somewhere: `std::env::set_var` is `unsafe`, and
+/// this workspace forbids `unsafe` outright (`unsafe_code = "forbid"`). It is
+/// also what lets the TUI's contract test exercise the real reader rather than a
+/// hand-written payload — which is the only kind that catches a field being
+/// dropped.
+pub fn list_in(
+    store: &Path,
+    limit: Option<u64>,
+    workspace_id: Option<&str>,
+    status: Option<&str>,
+) -> Value {
+    let Ok(projects) = std::fs::read_dir(store) else {
         return empty("the session store could not be read");
     };
 
@@ -244,12 +261,15 @@ pub fn project_path(project_dir: &Path) -> Option<String> {
 /// process, and nothing here enumerates processes. `hasLiveSession` is therefore
 /// false, and `hasTranscript` is true, because the file *is* the transcript.
 pub fn agents(_session_id: Option<&str>) -> Value {
-    // The `sessionId` the contract passes is deliberately unread: see the module
-    // comment. Taking it and ignoring it would look like a filter that works.
     let Some(store) = store_dir() else {
         return json!({ "agents": [] });
     };
-    let Ok(projects) = std::fs::read_dir(&store) else {
+    agents_in(&store)
+}
+
+/// The same, against a store the caller names. See [`list_in`] for why.
+pub fn agents_in(store: &Path) -> Value {
+    let Ok(projects) = std::fs::read_dir(store) else {
         return json!({ "agents": [] });
     };
 

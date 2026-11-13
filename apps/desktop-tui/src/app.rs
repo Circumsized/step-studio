@@ -97,6 +97,27 @@ impl App {
         };
         match outcome {
             Ok((receipt, _)) => {
+                // The status is checked before the result. A `failed` or
+                // `rejected` receipt carries no `result`, and reading only the
+                // result turns it into `Null` — which then fails to parse and
+                // gets suppressed by `none_or_error` whenever a model is already
+                // showing. The panel would keep rendering last minute's token
+                // counts as current, with nothing to say otherwise.
+                let status = receipt
+                    .get("status")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("completed");
+                if status != "completed" {
+                    let detail = receipt
+                        .pointer("/error/message")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("（无原因）");
+                    self.error = Some(format!(
+                        "{} 返回 {status}：{detail}",
+                        self.dashboard.title()
+                    ));
+                    return;
+                }
                 let result = receipt
                     .get("result")
                     .cloned()
@@ -190,8 +211,6 @@ impl App {
 
     pub fn draw(&mut self, frame: &mut ratatui::Frame) {
         let title = self.dashboard.title();
-        let error = self.error.clone();
-        let _ = error;
         match self.dashboard {
             Dashboard::ProcessTree => {
                 if let Some(tree) = &self.process_tree {
@@ -222,6 +241,38 @@ impl App {
                 }
             }
         }
+        self.draw_status(frame);
+    }
+
+    /// The status line, drawn over the last row when something is wrong.
+    ///
+    /// Only when there is something to say: the normal path leaves the
+    /// dashboard's own border alone. When a refresh fails or a model stops
+    /// parsing, the model above is still the last good one — and without this
+    /// line it would pass for current data, which is the failure M2.5 kept
+    /// finding. Labelling it stale is cheaper than blanking it, and more honest
+    /// than showing it silently.
+    fn draw_status(&self, frame: &mut ratatui::Frame) {
+        use ratatui::layout::Rect;
+        use ratatui::style::{Color, Modifier, Style};
+        use ratatui::widgets::Paragraph;
+        let Some(reason) = &self.error else {
+            return;
+        };
+        let area = frame.area();
+        if area.height == 0 || area.width == 0 {
+            return;
+        }
+        let line = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
+        frame.render_widget(
+            Paragraph::new(format!("⚠ {reason}（上方为上一次成功的数据）")).style(
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            line,
+        );
     }
 
     /// An honest empty, with the reason when there is one.
@@ -256,8 +307,9 @@ impl App {
 /// Report a parse failure only when there is nothing already showing.
 ///
 /// A model that stops parsing must not blank a panel that was rendering fine a
-/// second ago; but the first failure has to be visible, or the dashboard is
-/// silently empty forever.
+/// second ago — but the failure is still recorded, and `draw` shows it in the
+/// status line, so the stale model is labelled rather than passed off as
+/// current. Suppressing it entirely is what made a failed refresh invisible.
 fn none_or_error(error: serde_json::Error, nothing_showing: bool) -> Option<String> {
     if nothing_showing {
         Some(format!("数据形状不符：{error}"))

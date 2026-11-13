@@ -155,6 +155,14 @@ pub struct SessionTree {
     pub entries: Vec<SessionEntry>,
     #[serde(default)]
     pub total: u64,
+    /// Why the list is empty, when it is empty for a reason.
+    ///
+    /// The store reader produces this specifically to tell "there is no store on
+    /// this machine" apart from "the store has no sessions". Dropping it made
+    /// those two render identically — a fresh machine and a genuinely empty one
+    /// looked the same.
+    #[serde(rename = "unavailableReason", default)]
+    pub unavailable_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

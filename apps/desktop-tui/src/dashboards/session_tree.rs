@@ -7,7 +7,7 @@
 //! empty string that looks like a rendering bug.
 
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState};
 use ratatui::Frame;
@@ -39,16 +39,27 @@ fn pin_mark(entry: &SessionEntry) -> &'static str {
 pub fn render(frame: &mut Frame, model: &SessionTree, selection: &mut TableState) {
     let chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(frame.area());
 
+    // The reason rides in the header rather than replacing the table: "no store
+    // on this machine" and "the store has no sessions" are different facts, and
+    // the reader produces the first specifically so the two are not conflated.
+    let mut header = vec![
+        Span::raw("共 "),
+        Span::styled(
+            model.total.to_string(),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" 条会话"),
+    ];
+    if let Some(reason) = &model.unavailable_reason {
+        header.push(Span::raw("  ·  "));
+        header.push(Span::styled(
+            reason.clone(),
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::raw("共 "),
-            Span::styled(
-                model.total.to_string(),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" 条会话"),
-        ]))
-        .block(Block::default().title("会话树").borders(Borders::ALL)),
+        Paragraph::new(Line::from(header))
+            .block(Block::default().title("会话树").borders(Borders::ALL)),
         chunks[0],
     );
 
@@ -119,6 +130,7 @@ mod tests {
         let text = render_to_string(&SessionTree {
             entries: vec![entry(None, false)],
             total: 1,
+            unavailable_reason: None,
         });
         assert!(text.contains("（未命名）"), "untitled is stated: {text}");
     }
@@ -130,6 +142,7 @@ mod tests {
         let text = render_to_string(&SessionTree {
             entries: vec![entry(Some("keep me"), true)],
             total: 1,
+            unavailable_reason: None,
         });
         assert!(text.contains("keep me"), "{text}");
         assert!(text.contains('★'), "the pin is visible: {text}");
@@ -142,6 +155,7 @@ mod tests {
         let text = render_to_string(&SessionTree {
             entries: vec![entry(Some("/home/ubuntu/workspace/step-studio"), false)],
             total: 1,
+            unavailable_reason: None,
         });
         // The dashboard renders whatever it is given, so this is a guard on the
         // *shape*: no row adds a path of its own.
@@ -157,6 +171,7 @@ mod tests {
         let text = render_to_string(&SessionTree {
             entries: Vec::new(),
             total: 0,
+            unavailable_reason: None,
         });
         assert!(text.contains("共 0"), "{text}");
     }
