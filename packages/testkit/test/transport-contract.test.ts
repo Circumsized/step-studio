@@ -1,16 +1,18 @@
 /**
- * Identical transport contract suite invoked for both P0 adapters.
+ * The transport contract suite, invoked for the one adapter that ships.
  *
- * `runTransportContract` registers the same assertion tree for the desktop
- * and web factories, so both adapters execute byte-for-byte the same
- * checks. The call sites below are also compile-time pins: each adapter's
- * API type must accept the shared `ContractFixtureApi` shape.
+ * It used to run twice — once for the desktop adapter and once for the web one —
+ * so both executed byte-for-byte the same checks. The web adapter's only consumer
+ * was this test: no product in this workspace serves a browser, the plan scopes the
+ * shell to Windows, and `transport-web` was deleted with the rest of M7. What is
+ * left is the desktop adapter's contract, which is the one the Tauri shell drives.
+ *
+ * The call site below is still a compile-time pin: the adapter's API type must
+ * accept the shared `ContractFixtureApi` shape.
  */
 
 import { createDesktopTransport } from "@omp-studio/transport-desktop";
-import { createWebTransport } from "@omp-studio/transport-web";
 
 import { runTransportContract } from "../src/index.js";
 
 runTransportContract("desktop", (api) => createDesktopTransport(api));
-runTransportContract("web", (api) => createWebTransport(api));

@@ -24,6 +24,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
+    "apps/renderer",
     "apps/desktop-tauri",
     "apps/desktop-tui"
   ],
@@ -58,7 +59,7 @@
     "updates:build": "node scripts/build-update-assets-v2.mjs",
     "updates:verify": "node scripts/verify-update-assets-v2.mjs",
     "test:built": "npm run test:built --workspaces --if-present",
-    "build:packages": "npm run build -w @omp-studio/studio-protocol && npm run build -w @omp-studio/client-contract && npm run build -w @omp-studio/platform && npm run build -w @omp-studio/runtime-installer && npm run build -w @omp-studio/transport-desktop && npm run build -w @omp-studio/transport-web && npm run build -w @omp-studio/client && npm run build -w @omp-studio/platform-win32 && npm run build -w @omp-studio/platform-darwin && npm run build -w @omp-studio/studio-host && npm run build -w @omp-studio/host-client-api && npm run build -w @omp-studio/testkit",
+    "build:packages": "npm run build -w @omp-studio/studio-protocol && npm run build -w @omp-studio/client-contract && npm run build -w @omp-studio/platform && npm run build -w @omp-studio/runtime-installer && npm run build -w @omp-studio/transport-desktop && npm run build -w @omp-studio/client && npm run build -w @omp-studio/platform-win32 && npm run build -w @omp-studio/studio-host && npm run build -w @omp-studio/host-client-api && npm run build -w @omp-studio/testkit",
     "test:core": "node scripts/test-core.mjs",
     "test:tooling": "npm run build:packages && node --test scripts/*.test.mjs"
   },

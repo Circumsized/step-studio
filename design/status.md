@@ -712,6 +712,51 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.6 主体 + M7 剩余：Electron 删除，以及它解开的两道 gate（2026-11-13）
+
+**M5.6 主体完成**：`apps/desktop` 整目录删除，254 个文件、约 3.7 万行。删除前核实的两个前置
+（都是 M5.6 方向定案时写下的验收条件）都满足：渲染层 src 直读 chrome 清零且有测试守着；
+壳侧 31 个命令成员全部在位（3 个事件订阅走 `tauriListen` 而非 `invoke`，没有
+`#[tauri::command]` 是对的）。
+
+**删不掉的逐个搬到该在的地方**，三处、都因为它们被活代码引用：
+
+| 原位置 | 去处 | 为什么 |
+| --- | --- | --- |
+| `apps/desktop/src/remote/shared.ts`（58 行、零 electron 依赖、9 导出） | `packages/platform/src/remote-contract.ts` | 渲染层 11 个文件按相对路径导入它，不搬 `apps/desktop` 根本删不掉。同目录其余 2416 行 SSH 实现随 Electron 退场 |
+| `apps/desktop/src/update-index.ts`（537 行、14 导出） | `packages/runtime-installer` | 更新索引与规划层，与包内已有 `update-manifest`（签名清单层）不重叠 |
+| `compareRuntimeVersions` / `compareSemver` / `parseSemver` | `version-compare.ts` / `semver.ts` | 三个纯函数，更新资产构建与索引用 |
+
+**M7 剩余部分完成**：`platform-darwin` 与 `transport-web` 删除（17 文件、2102 行）。
+
+`transport-web` 的唯一消费者是 testkit 的契约测试，而那个测试的目的是「同一套断言跑两个
+adapter」。desktop 适配器还在、web 已无产品消费者——**契约测试退化成一个 adapter 的自测**，
+所以保留 desktop 那一半、删掉 web 那一半，注释写清了它原来跑两次以及为什么现在跑一次。
+`platform-darwin` 本来就只有构建脚本和架构表引用它，没有任何 import 方。
+
+**两道 gate 一并解除**：M7 剩余部分（等 Electron 删除）与 M2.4 删除连锁（2507 行 TS，等回退
+路径关闭）。后者要做的就是把 `packages/runtime-stepcode` 的两个测试改指 Rust 适配器或删除——
+那是一件独立的事，见下面的待办。
+
+**一起退场的**（全部 Electron 专属、无第二个消费者）：SSH 远端工具链 7 脚本 + release-cache
+三件、electron-builder 包装 9 脚本、`packaging/` 除 keys 与 README、3 个直接 import electron 的
+脚本、release.yml 的 build/build-macos/build-remote 三个 job、ci.yml 的 macos-package。
+
+**架构规则从「只有 apps/desktop 可以依赖 electron」变成「什么都不可以」**——同一个不变量，
+少一个特例，而特例正是泄漏能藏在「但我才是被允许的那个」后面的原因。
+
+#### 过程中两个自己的错误，都值得记
+
+1. **`packaging/keys/` 第一遍删多了**。那是签名密钥，三个 workflow 读它
+   （`trusted-keys.json` 的 `activeKeyId`）。已从 HEAD 恢复。判断依据是「目录名像 Electron 的」
+  而不是「这个文件被谁读」——后者才是该看的。
+2. **workspaces 列表漏了 `apps/renderer`**。把 `apps/*` 改成显式枚举时刻意列了 desktop-tauri 和
+   desktop-tui，漏了 renderer，于是它的依赖（含 vitest）从没被安装，`test:renderer` 报
+   「Cannot find module vitest」。这是「显式枚举比通配符安全」的反例：通配符不会漏。
+
+门禁：npm run check 全绿；shell 162 测试、studio-host 78 测试 0 失败；六 crate clippy 净；
+`cargo deny` 退出码 0；contracts 2/2；architecture 7/7。
+
 ### M5.7 对抗评审：16 条 finding，5 条已修，其余分类记账（2026-11-13）
 
 对 M5 这轮新写的六个模块做对抗评审（独立 reviewer，只读）。16 条 finding，按严重度排序后处置。

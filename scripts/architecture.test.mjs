@@ -27,9 +27,7 @@ const ALLOWED_INTERNAL_DEPS = {
   // from a workspace package rather than through `client-contract`.
   "platform": ["client-contract"],
   "transport-desktop": ["client-contract", "client"],
-  "transport-web": ["client-contract"],
   "platform-win32": ["platform"],
-  "platform-darwin": ["platform"],
   "runtime-installer": ["studio-protocol"],
   "studio-host": ["runtime-installer", "studio-protocol"],
   "host-client-api": ["client-contract", "studio-host", "studio-protocol"],
