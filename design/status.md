@@ -539,6 +539,8 @@ D-1 的判据本就是个实证问题，直接查 `~/.stepcode`：
 （同时驱动 desktop 与 web 两条 transport）。这两个包要等 Electron 删除（M5.6）之后才能
 动——不是技术阻塞，是顺序依赖。
 
+**键位对标 tuicr 的比对（M6a.3 的另一半）**：tuicr 的核心是 vim 式导航——`j`/`k` 上下、`q` 退出，另有 `c` 加评论、`y` 复制到剪贴板、`:submit` 推送。本 TUI 已实现 `j`/`k` 与方向键（选择行）、`Tab`/`BackTab`（切仪表盘）、`q`/`Esc` 退出——导航与退出与 tuicr 一致。`Tab` 切仪表盘是本surface 自己的扩展，tuicr 没有对应物（它是单一 diff 视图）。**缺 `y`**：tuicr 用 `y` 把审查结果复制到剪贴板，而 crossterm 0.29 有 `clipboard.rs` 的 `CopyToClipboard`（base64 + OSC 52），实现成本低但尚未做。
+
 ### M6a.3 golden fixtures：15 组对拍门禁落地并验证非空（2026-11-13）
 
 §9.4 要「13 组 golden fixtures 作对拍门禁」。落在 `apps/desktop-tui/tests/golden/`，**15 组**（进程树 5 组：完整/不完整/无 RSS/深层/仅 daemon；Agent 2 组：有名册/空；用量 3 组：有数组/仅 CLI 面板/不可用 + 全零；会话树 3 组：有列表/空/未命名；外加一份 tab 顺序与查询表）。
