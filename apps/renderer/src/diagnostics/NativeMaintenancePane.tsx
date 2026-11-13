@@ -22,6 +22,7 @@ import {
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { WorkspaceEmpty, WorkspaceStatus } from "../workspaces/Workspace";
 import "./maintenance.css";
+import { shellSurface } from "../chrome";
 const CATEGORIES: GcCategory[] = ["blobs", "archive", "wal", "stale"];
 const LABELS: Record<GcCategory, [string, string]> = {
   blobs: ["无引用附件", "Unreferenced attachments"],
@@ -348,7 +349,7 @@ export function NativeMaintenancePane({
             </span>
             <button
               className="btn small outline"
-              disabled={!preview && !globalThis.ompStudioChrome?.exportArtifact}
+              disabled={!preview && !shellSurface()?.exportArtifact}
               onClick={() => {
                 if (preview) {
                   setNotice(
@@ -358,7 +359,7 @@ export function NativeMaintenancePane({
                   );
                   return;
                 }
-                void globalThis.ompStudioChrome!.exportArtifact!({
+                void shellSurface()!.exportArtifact!({
                   artifactId: exportState.result!.asset.artifactId,
                 })
                   .then((result) => {

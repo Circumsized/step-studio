@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 
 import { Icon } from "../icons";
 import type { ImageMimeType } from "./types";
+import { shellSurface } from "../chrome";
 
 export type ImagePreviewSubject = {
   readonly url: string;
@@ -143,7 +144,7 @@ export function ImagePreview({ image, onClose, onError }: Props) {
 
   const runCopy = async (): Promise<void> => {
     setMenu(null);
-    const chrome = globalThis.ompStudioChrome;
+    const chrome = shellSurface();
     if (chrome?.copyImage === undefined) {
       onError?.("当前环境无法复制图片。");
       return;
@@ -162,7 +163,7 @@ export function ImagePreview({ image, onClose, onError }: Props) {
 
   const runSave = async (): Promise<void> => {
     setMenu(null);
-    const chrome = globalThis.ompStudioChrome;
+    const chrome = shellSurface();
     if (chrome?.saveImage === undefined) {
       onError?.("当前环境无法保存图片。");
       return;

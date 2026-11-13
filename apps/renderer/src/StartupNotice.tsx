@@ -10,6 +10,7 @@ import {
   dismissStartupNoticeForever,
   shouldShowStartupNotice,
 } from "./settings/startupNotice";
+import { shellSurface } from "./chrome";
 
 export function StartupNoticeDialog({
   onClose,
@@ -44,7 +45,7 @@ export function StartupNoticeDialog({
   }, []);
   const openGithub = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
-    const openUrl = globalThis.ompStudioChrome?.openUrl;
+    const openUrl = shellSurface()?.openUrl;
     if (openUrl !== undefined) {
       void openUrl({ url: PROJECT_GITHUB_URL });
       return;

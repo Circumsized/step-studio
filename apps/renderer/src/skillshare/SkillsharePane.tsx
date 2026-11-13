@@ -20,6 +20,7 @@ import {
   PREVIEW_SKILLSHARE_TOKENS,
 } from "../preview/skillsharePreview";
 import "./skillshare.css";
+import { shellSurface } from "../chrome";
 
 const ACTION_LABELS: Record<
   SkillshareAction["type"],
@@ -1036,7 +1037,7 @@ export function SkillsharePane({
                 !enabled ||
                 (!preview &&
                   (!status?.privateTokenChannel ||
-                    !globalThis.ompStudioChrome?.revealSkillshareToken))
+                    !shellSurface()?.revealSkillshareToken))
               }
               onClick={() =>
                 prepare({
@@ -1178,10 +1179,10 @@ export function SkillsharePane({
           {action.link ? (
             <button
               className="btn small outline"
-              disabled={!globalThis.ompStudioChrome?.openUrl}
+              disabled={!shellSurface()?.openUrl}
               onClick={() => {
                 if (!preview)
-                  void globalThis.ompStudioChrome?.openUrl({
+                  void shellSurface()?.openUrl({
                     url: action.link!,
                   });
               }}
@@ -1193,12 +1194,12 @@ export function SkillsharePane({
             <button
               className="btn small primary"
               disabled={
-                busy || !globalThis.ompStudioChrome?.revealSkillshareToken
+                busy || !shellSurface()?.revealSkillshareToken
               }
               onClick={() =>
                 void run(async (generation) => {
                   const view = secretView.current;
-                  const value = await globalThis.ompStudioChrome!
+                  const value = await shellSurface()!
                     .revealSkillshareToken!({
                     sessionId: sessionId!,
                     secretId: action.secretId!,

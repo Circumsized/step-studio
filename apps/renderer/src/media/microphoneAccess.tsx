@@ -4,6 +4,8 @@
  * there. Windows and the Web UI leave consent to Chromium's own prompt.
  */
 
+import { shellSurface } from "../chrome";
+
 export class MicrophoneDeniedError extends Error {
   constructor(zh: boolean) {
     super(zh
@@ -20,7 +22,7 @@ export class MicrophoneDeniedError extends Error {
  */
 export function ensureMicrophoneAccess(
   zh: boolean,
-  api: { readonly platform?: string; requestMicrophoneAccess?(): Promise<"granted" | "denied"> } | undefined = globalThis.ompStudioChrome,
+  api: { readonly platform?: string; requestMicrophoneAccess?(): Promise<"granted" | "denied"> } | undefined = shellSurface(),
 ): Promise<void> | undefined {
   if (api?.platform !== "darwin" || !api.requestMicrophoneAccess) return undefined;
   return api.requestMicrophoneAccess().then((status) => {
@@ -29,7 +31,7 @@ export function ensureMicrophoneAccess(
 }
 
 export function MicrophoneSettingsButton({ zh }: { zh: boolean }) {
-  const open = globalThis.ompStudioChrome?.openMicrophoneSettings;
+  const open = shellSurface()?.openMicrophoneSettings;
   if (!open) return null;
   return (
     <button type="button" className="btn small outline" onClick={() => { void open().catch(() => undefined); }}>

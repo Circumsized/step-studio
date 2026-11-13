@@ -13,6 +13,7 @@ import { useBackground } from "./BackgroundProvider";
 import { BackgroundMedia } from "./BackgroundMedia";
 import { titlebarTint, type BackgroundTheme } from "./backgroundTint";
 import { BACKDROP_VARIABLES, backdropCssVars } from "./backgroundVars";
+import { shellSurface } from "../chrome";
 
 export function AppBackgroundLayer({
   route,
@@ -55,7 +56,7 @@ export function AppBackgroundLayer({
   }, [effectiveScrim, settings, strength, visible]);
 
   useEffect(() => {
-    const chrome = globalThis.ompStudioChrome;
+    const chrome = shellSurface();
     const tint = visible && settings.scope === "app" && activeAvgColor !== undefined
       ? titlebarTint(theme, activeAvgColor)
       : undefined;

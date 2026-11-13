@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { shellSurface } from "./chrome";
 
 type Status = "ready" | "failed";
 
@@ -40,7 +41,7 @@ export function createWorkbenchHealth(options: {
 }
 
 const health = createWorkbenchHealth({
-  report: (status) => { void globalThis.ompStudioChrome?.reportPayloadHealth?.(status).catch(() => {}); },
+  report: (status) => { void shellSurface()?.reportPayloadHealth?.(status).catch(() => {}); },
   requestFrame: (callback) => requestAnimationFrame(callback),
   cancelFrame: (id) => cancelAnimationFrame(id),
 });

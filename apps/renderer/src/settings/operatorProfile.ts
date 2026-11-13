@@ -8,6 +8,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import { cropSourceRect, initialCropView } from "./avatarCrop";
+import { shellSurface } from "../chrome";
 
 export type AvatarMime = "image/jpeg" | "image/webp" | "image/png";
 
@@ -135,7 +136,7 @@ type AvatarDisk = {
 };
 
 function diskFromChrome(): AvatarDisk | undefined {
-  const chrome = globalThis.ompStudioChrome;
+  const chrome = shellSurface();
   if (chrome?.saveAvatar === undefined || chrome.loadAvatar === undefined || chrome.clearAvatar === undefined) {
     return undefined;
   }

@@ -30,6 +30,7 @@ import { AudioCapturePane } from "./AudioCapturePane";
 import { previewMediaUrl } from "../preview/mediaFixtureUrls";
 import { artifactUrl } from "./ArtifactLibraryPane";
 import "./mediaWorkbench.css";
+import { shellSurface } from "../chrome";
 
 export const MEDIA_INTENT_KEY = "omp.mediaIntent";
 export function setMediaIntent(type: MediaKind): void {
@@ -1156,7 +1157,7 @@ export function MediaWorkbench({
                   {!visible ? null : (
                       preview
                         ? previewMediaUrl(output.kind)
-                        : globalThis.ompStudioChrome?.exportArtifact
+                        : shellSurface()?.exportArtifact
                     ) ? (
                     output.kind === "image" ? (
                       <img

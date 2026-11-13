@@ -20,6 +20,7 @@ import { hostErrorMessage, waitReceipt } from "../hostError";
 import { SettingRow, SettingSection } from "../settings/SettingRow";
 import { Icon } from "../icons";
 import "./media.css";
+import { shellSurface } from "../chrome";
 
 export function artifactUrl(artifactId: string): string {
   return `omp-artifact://library/${encodeURIComponent(artifactId)}`;
@@ -82,7 +83,7 @@ export function ArtifactStorageSettings({
           type="button"
           className="btn small outline"
           disabled={
-            !preview && !globalThis.ompStudioChrome?.chooseArtifactDirectory
+            !preview && !shellSurface()?.chooseArtifactDirectory
           }
           onClick={() => {
             if (preview) {
@@ -91,7 +92,7 @@ export function ArtifactStorageSettings({
               );
               return;
             }
-            void globalThis.ompStudioChrome
+            void shellSurface()
               ?.chooseArtifactDirectory?.()
               .then((result) => {
                 if (!result.ok) setError(result.message);
@@ -215,7 +216,7 @@ export function ArtifactLibraryPane({
     setBusy(true);
     setError("");
     try {
-      const result = await globalThis.ompStudioChrome?.importArtifact?.({
+      const result = await shellSurface()?.importArtifact?.({
         kind: kind || "image",
         ...(workspaceId ? { workspaceId } : {}),
         ...(sessionId ? { sessionId } : {}),
@@ -264,7 +265,7 @@ export function ArtifactLibraryPane({
           type="button"
           className="btn small outline"
           disabled={
-            busy || (!preview && !globalThis.ompStudioChrome?.importArtifact)
+            busy || (!preview && !shellSurface()?.importArtifact)
           }
           onClick={() => void importFile()}
         >
@@ -364,11 +365,11 @@ export function ArtifactLibraryPane({
                 type="button"
                 className="btn small outline"
                 disabled={
-                  !preview && !globalThis.ompStudioChrome?.exportArtifact
+                  !preview && !shellSurface()?.exportArtifact
                 }
                 onClick={() => {
                   if (preview) return;
-                  void globalThis.ompStudioChrome
+                  void shellSurface()
                     ?.exportArtifact?.({ artifactId: selected.artifactId })
                     .then((result) => {
                       if (!result.ok) setError(result.message);
@@ -382,7 +383,7 @@ export function ArtifactLibraryPane({
               </button>
             </div>
             {!visible ? null : !preview &&
-              !globalThis.ompStudioChrome?.exportArtifact ? (
+              !shellSurface()?.exportArtifact ? (
               <p className="muted">{t("media.unavailable")}</p>
             ) : selected.kind === "graphic" || graphicFormat(selected.name) ? (
               <GraphicPreview

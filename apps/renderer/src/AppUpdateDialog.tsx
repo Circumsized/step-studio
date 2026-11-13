@@ -4,6 +4,7 @@ import { Brand } from "./brands";
 import { Icon } from "./icons";
 import { useI18n } from "./i18n";
 import { PLATFORM } from "./platform";
+import { shellSurface } from "./chrome";
 
 /** macOS swaps the app bundle itself: there is no installer to download or launch. */
 const UPDATE_COPY = PLATFORM === "darwin"
@@ -159,7 +160,7 @@ export function AppUpdateDialog({
   const openGithub = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     const url = update.htmlUrl ?? "https://github.com/the-snowpear/omp-studio/releases";
-    const openUrl = globalThis.ompStudioChrome?.openUrl;
+    const openUrl = shellSurface()?.openUrl;
     if (openUrl !== undefined) {
       void openUrl({ url });
       return;

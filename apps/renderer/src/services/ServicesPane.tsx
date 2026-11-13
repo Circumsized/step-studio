@@ -24,6 +24,7 @@ import {
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { useI18n } from "../i18n";
 import "./services.css";
+import { shellSurface } from "../chrome";
 
 type Definition = {
   id: string;
@@ -157,14 +158,14 @@ export function ServicesPane({
       ]);
       return;
     }
-    if (!workspaceId || !globalThis.ompStudioChrome?.listServiceDefinitions) {
+    if (!workspaceId || !shellSurface()?.listServiceDefinitions) {
       setDefinitions([]);
       return;
     }
     try {
-      const value = await globalThis.ompStudioChrome.listServiceDefinitions({
-        workspaceId,
-      });
+      const list = shellSurface()?.listServiceDefinitions;
+      if (!list) throw new Error("Secure desktop storage is unavailable");
+      const value = await list({ workspaceId });
       if (epoch !== generation.current) return;
       if (!value.ok) throw new Error(value.message);
       setDefinitions(value.definitions);
@@ -287,9 +288,9 @@ export function ServicesPane({
         setForm(false);
         return;
       }
-      if (!workspaceId || !globalThis.ompStudioChrome?.saveServiceDefinition)
-        throw new Error("Secure desktop storage is unavailable");
-      const result = await globalThis.ompStudioChrome.saveServiceDefinition({
+      const save = shellSurface()?.saveServiceDefinition;
+      if (!workspaceId || !save) throw new Error("Secure desktop storage is unavailable");
+      const result = await save({
         workspaceId,
         spec: value,
         ...(editing ? { id: editing.id, revision: editing.revision } : {}),
@@ -574,7 +575,7 @@ export function ServicesPane({
             </section>
           ) : null}
           <h4>{label("保存的配置", "Saved configurations")}</h4>
-          {!preview && !globalThis.ompStudioChrome?.saveServiceDefinition ? (
+          {!preview && !shellSurface()?.saveServiceDefinition ? (
             <p className="small muted">
               {label(
                 "此环境不提供加密配置存储。可以直接创建服务。",
@@ -612,7 +613,7 @@ export function ServicesPane({
                       return;
                     }
                     const result =
-                      await globalThis.ompStudioChrome?.removeServiceDefinition?.(
+                      await shellSurface()?.removeServiceDefinition?.(
                         {
                           workspaceId: row.workspaceId,
                           id: row.id,
@@ -857,7 +858,7 @@ export function ServicesPane({
                       busy ||
                       (!preview &&
                         (!workspaceId ||
-                          !globalThis.ompStudioChrome?.saveServiceDefinition))
+                          !shellSurface()?.saveServiceDefinition))
                     }
                     onClick={() => void save()}
                   >

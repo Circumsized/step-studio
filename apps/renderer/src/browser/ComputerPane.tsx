@@ -9,6 +9,7 @@ import { hostErrorMessage, waitReceipt } from "../hostError";
 import { WorkspaceDialog } from "../workspaces/Workspace";
 import { PREVIEW_COMPUTER, PREVIEW_COMPUTER_IMAGE } from "../preview/computerPreview";
 import "./computer.css";
+import { shellSurface } from "../chrome";
 
 type ComputerPaneProps = {
   client: StudioClient;
@@ -67,7 +68,7 @@ export function ComputerPane({ client, sessionId, available, visible, capabiliti
   const currentBlob = useRef<string | undefined>(undefined);
   const can = (kind: string) => preview || (available && !!sessionId && capabilities?.capabilities.some(item => item.id === kind && item.grade !== "unavailable") === true);
   const canRead = can("computer.status");
-  const desktopCapture = preview || !!globalThis.ompStudioChrome?.readComputerCapture;
+  const desktopCapture = preview || !!shellSurface()?.readComputerCapture;
 
   const invoke = useCallback(async <K extends keyof ComputerObservationResultMap>(kind: K, input: CommandInput<K>): Promise<ComputerObservationResultMap[K]> => {
     const handle = await client.command(kind, input);
@@ -158,7 +159,7 @@ export function ComputerPane({ client, sessionId, available, visible, capabiliti
       }
       const value = await invoke("computer.capture", { sessionId: sessionId!, targetId: selected });
       if (epoch !== captureGeneration.current) return;
-      const result = await globalThis.ompStudioChrome!.readComputerCapture!({ captureId: value.captureId, sessionId: value.sessionId, targetId: value.targetId });
+      const result = await shellSurface()!.readComputerCapture!({ captureId: value.captureId, sessionId: value.sessionId, targetId: value.targetId });
       if (epoch !== captureGeneration.current) return;
       if (!result.ok) throw new Error(result.message);
       clearCapture();

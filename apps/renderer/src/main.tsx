@@ -26,8 +26,9 @@ import { resolveLanguage } from "./i18n";
 import { initPerformanceTimelineCleanup } from "./performanceTimelineCleanup";
 import { createRendererPerformanceReporter } from "./rendererPerformance";
 import { PLATFORM } from "./platform";
+import { shellSurface } from "./chrome";
 
-const stopPerformanceReporter = createRendererPerformanceReporter(globalThis.ompStudioChrome);
+const stopPerformanceReporter = createRendererPerformanceReporter(shellSurface());
 window.addEventListener("pagehide", stopPerformanceReporter, { once: true });
 import.meta.hot?.dispose(() => { window.removeEventListener("pagehide", stopPerformanceReporter); stopPerformanceReporter(); });
 

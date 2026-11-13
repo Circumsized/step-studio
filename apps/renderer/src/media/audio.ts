@@ -1,7 +1,8 @@
 import type { ArtifactRecord } from "@omp-studio/studio-protocol";
+import { shellSurface } from "../chrome";
 const MAX_AUDIO_SECONDS = 600;
 export async function uploadMediaBlob(blob: Blob, name: string, scope: { workspaceId?: string | undefined; sessionId?: string | undefined }, signal?: AbortSignal): Promise<ArtifactRecord> {
-  const api = globalThis.ompStudioChrome;
+  const api = shellSurface();
   if (!api?.beginMediaUpload || !api.appendMediaUpload || !api.finishMediaUpload) throw new Error("Desktop media upload is unavailable");
   if (!blob.size || blob.size > 64 * 1024 * 1024) throw new Error("Choose a media file up to 64 MiB");
   const mimeType = blob.type.split(";")[0] ?? ""; const kind = mimeType.split("/")[0];

@@ -13,6 +13,7 @@ import { waitReceipt, hostErrorMessage } from "../hostError";
 import type { NativePreferencesContext } from "./NativePreferencesPane";
 import { SettingSection, SettingRow } from "./SettingRow";
 import { PLATFORM } from "../platform";
+import { shellSurface } from "../chrome";
 export function PredictionSettingsPane({
   client,
   context,
@@ -103,7 +104,7 @@ export function PredictionSettingsPane({
       const previous = channel.current;
       channel.current = undefined;
       if (previous)
-        void globalThis.ompStudioChrome
+        void shellSurface()
           ?.detachPrediction?.({ channelId: previous.channelId })
           .catch(() => {});
     };
@@ -120,7 +121,7 @@ export function PredictionSettingsPane({
     const previous = channel.current;
     channel.current = undefined;
     if (previous)
-      void globalThis.ompStudioChrome
+      void shellSurface()
         ?.detachPrediction?.({ channelId: previous.channelId })
         .catch(() => {});
   }, [visible]);
@@ -273,7 +274,7 @@ export function PredictionSettingsPane({
       );
       return;
     }
-    const chrome = globalThis.ompStudioChrome;
+    const chrome = shellSurface();
     if (!chrome?.attachPrediction || !chrome.importPredictionHistory) return;
     lock.current = true;
     setBusy("import");
@@ -462,7 +463,7 @@ export function PredictionSettingsPane({
           disabled={
             !has("prediction.prepare") ||
             !!busy ||
-            (!preview && !globalThis.ompStudioChrome?.importPredictionHistory)
+            (!preview && !shellSurface()?.importPredictionHistory)
           }
           onClick={() => void importHistory()}
         >

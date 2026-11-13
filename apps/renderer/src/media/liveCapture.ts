@@ -1,10 +1,11 @@
 import captureModule from "./live-capture.worklet.js?url&no-inline";
+import { shellSurface } from "../chrome";
 export interface LiveCapture { audioId: string; pause(): void; stop(): void }
 /** Chromium owns device consent; Main owns the Runtime endpoint/token and transport. */
 export async function openLiveCapture(options: {
   deviceId?: string; signal: AbortSignal; attach(): Promise<string>; onFault(message: string): void;
 }): Promise<LiveCapture> {
-  const api = globalThis.ompStudioChrome;
+  const api = shellSurface();
   if (!api?.attachLiveAudio || !api.appendLiveAudio || !api.detachLiveAudio) throw new Error("Desktop Live audio is unavailable");
   options.signal.throwIfAborted();
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, ...(options.deviceId ? { deviceId: { exact: options.deviceId } } : {}) }, video: false });

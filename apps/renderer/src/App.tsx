@@ -81,7 +81,7 @@ import { FileRowMenu, MenuItem, type FileMenuAction, type FileMenuController, ty
 import { I18nProvider, useI18n, type TranslationParams } from "./i18n";
 import { SHORTCUTS, formatShortcut, isPrimaryModifier } from "./keyboard/shortcuts";
 import { PLATFORM, nativeMenuOwnsShortcuts } from "./platform";
-import { shellCapabilities, shellDegradedReason, shellSurface } from "./chrome";
+import { shellSurface, shellCapabilities, shellDegradedReason } from "./chrome";
 import { fileManagerName } from "./platformCopy";
 import { HomePage, SecondaryPage } from "./HomePage";
 import { HistoryPage } from "./HistoryPage";
@@ -4149,7 +4149,7 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
       setRemotePlanPath("PLAN.md");
       return new Promise(resolve => setRemotePlanSave({ resolve }));
     }
-    const chrome = globalThis.ompStudioChrome;
+    const chrome = shellSurface();
     if (chrome?.pickPlanSavePath !== undefined) {
       if (activeWorkspace === undefined) {
         setStatusToast("没有可用的本地项目，无法选择保存位置");
@@ -6493,7 +6493,7 @@ function AppShell({ state, client, onRoute, selectedHistoryId, onSelectThread, o
   useEffect(() => {
     if (previewMode.preview) return;
     let disposed = false;
-    void globalThis.ompStudioChrome?.getAppVersion?.().then((info) => {
+    void shellSurface()?.getAppVersion?.().then((info) => {
       if (!disposed) setLocalAppVersion(info.version);
     }).catch(() => {});
     void appUpdate.check(true);
@@ -8265,7 +8265,7 @@ function AppShell({ state, client, onRoute, selectedHistoryId, onSelectThread, o
       case "help.shortcuts": openDialog("shortcuts"); return;
     }
   };
-  useEffect(() => globalThis.ompStudioChrome?.onMenuCommand?.((command) => runMenuCommand.current(command)), []);
+  useEffect(() => shellSurface()?.onMenuCommand?.((command) => runMenuCommand.current(command)), []);
 
   // 项目 shell 动作（外部编辑器 / 文件管理器）：AppShell 统一持有，
   // 顶栏面包屑菜单与侧栏应用菜单共用同一套状态与 Toast 提示。
@@ -8386,7 +8386,7 @@ function AppShell({ state, client, onRoute, selectedHistoryId, onSelectThread, o
 
   const openProjectInEditor = () => {
     const workspace = realActiveWorkspace;
-    const openInEditor = globalThis.ompStudioChrome?.openProjectInEditor;
+    const openInEditor = shellSurface()?.openProjectInEditor;
     if (workspace === undefined || openInEditor === undefined) return;
     void runProjectShellAction("editor", () => openInEditor(workspace.workspaceId));
   };
@@ -8409,7 +8409,7 @@ function AppShell({ state, client, onRoute, selectedHistoryId, onSelectThread, o
   const [fileOpeners, setFileOpeners] = useState<ReadonlyArray<FileOpenerOption>>([]);
   useEffect(() => {
     const workspace = realActiveWorkspace;
-    const list = globalThis.ompStudioChrome?.listFileOpeners;
+    const list = shellSurface()?.listFileOpeners;
     if (workspace === undefined || list === undefined) {
       setFileOpeners([]);
       return;
@@ -8426,10 +8426,10 @@ function AppShell({ state, client, onRoute, selectedHistoryId, onSelectThread, o
       cancelled = true;
     };
   }, [realActiveWorkspace]);
-  const fileShellUnavailable = globalThis.ompStudioChrome?.openFile === undefined ? "仅桌面端可用" : undefined;
+  const fileShellUnavailable = shellSurface()?.openFile === undefined ? "仅桌面端可用" : undefined;
 
   const runFileShellAction = (workspaceId: string, action: FileMenuAction, target: FileMenuTarget) => {
-    const desktop = globalThis.ompStudioChrome;
+    const desktop = shellSurface();
     const messageOf = (cause: unknown): string => (cause instanceof Error && cause.message ? cause.message : String(cause));
     const notice = (text: string, icon: string): void => {
       setShellNotice({ text, icon });

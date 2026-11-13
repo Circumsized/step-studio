@@ -6,7 +6,7 @@ import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { WorkspaceEmpty } from "../workspaces/Workspace";
-import { shellCapabilities, shellSurface } from "../chrome";
+import { shellSurface, shellCapabilities } from "../chrome";
 import { PREVIEW_BROWSER_TAB, PREVIEW_BROWSER_IMAGE } from "../preview/browserPreview";
 import "./browser.css";
 

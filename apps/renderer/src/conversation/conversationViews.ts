@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from "react";
 import type { ConversationIdentity } from "./conversationHost";
+import { shellSurface } from "../chrome";
 
 export type ConversationViewState = { runtimeEpoch: number; visibleSessionIds: readonly string[]; blockedSessionIds?: readonly string[] };
 export class ConversationViewLeases {
@@ -34,13 +35,13 @@ export class ConversationViewLeases {
   }
 }
 export const conversationViewLeases = new ConversationViewLeases((state) => {
-  void globalThis.ompStudioChrome?.setConversationViewState?.(state).catch(() => {});
+  void shellSurface()?.setConversationViewState?.(state).catch(() => {});
 });
 
 export function useConversationViewLease(identity: ConversationIdentity | null, demo: boolean, host: RefObject<HTMLElement | null>, enabled = true): void {
   const epoch = identity?.runtimeEpoch, id = identity?.sessionId;
   useEffect(() => {
-    if (demo || !enabled || epoch === undefined || id === undefined || host.current === null || globalThis.ompStudioChrome?.setConversationViewState === undefined) return;
+    if (demo || !enabled || epoch === undefined || id === undefined || host.current === null || shellSurface()?.setConversationViewState === undefined) return;
     let release: (() => void) | undefined;
     const update = (visible: boolean) => {
       if (visible && release === undefined) release = conversationViewLeases.acquire(Number(epoch), id);

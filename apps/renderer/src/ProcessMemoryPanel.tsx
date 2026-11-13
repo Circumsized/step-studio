@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { shellSurface } from "./chrome";
 
 export interface ProcessMemoryRow {
   readonly kind: string;
@@ -57,7 +58,7 @@ export function useProcessMemory(enabled: boolean): {
     // `app.getAppMetrics()` may be slow under memory pressure. Never let the
     // fixed interval enqueue overlapping Main-process samples indefinitely.
     if (inFlight.current) return;
-    const chrome = globalThis.ompStudioChrome;
+    const chrome = shellSurface();
     if (chrome?.sampleProcessMemory === undefined) {
       setUnsupported(true);
       return;

@@ -11,6 +11,7 @@
  */
 
 import { getAppSettings } from "./appSettings";
+import { shellSurface } from "../chrome";
 
 export type DesktopNoticeKind = "task" | "error" | "ask" | "longTask";
 
@@ -31,7 +32,7 @@ export function desktopNotice(kind: DesktopNoticeKind, title: string, body?: str
   if (!getAppSettings()[PREF_BY_KIND[kind]]) return;
   if ((kind === "task" || kind === "longTask") && typeof document !== "undefined" && document.hasFocus()) return;
   try {
-    void globalThis.ompStudioChrome?.notify?.({ title, ...(body === undefined ? {} : { body }) });
+    void shellSurface()?.notify?.({ title, ...(body === undefined ? {} : { body }) });
   } catch {
     /* 通道异常时静默；通知是尽力而为的附加提示。 */
   }

@@ -3,6 +3,7 @@ import { useI18n } from "../i18n";
 import { PREVIEW_DESKTOP_RECOVERY } from "../preview/fixtures";
 import { useAppUpdate } from "./appUpdate";
 import { SettingRow } from "./SettingRow";
+import { shellSurface } from "../chrome";
 
 export function DesktopUpdateRecovery({ preview }: { preview: boolean }) {
   const { t } = useI18n();
@@ -15,7 +16,7 @@ export function DesktopUpdateRecovery({ preview }: { preview: boolean }) {
   const ready = preview ? demoReady : updates.state.rollbackReady === true;
   const applying = !preview && (updates.state.applying || (pending && ready));
   const busy = pending || (!preview && (updates.state.downloading || updates.state.checking || updates.state.applying));
-  const available = version !== undefined && (preview || Boolean(globalThis.ompStudioChrome?.rollbackUpdate));
+  const available = version !== undefined && (preview || Boolean(shellSurface()?.rollbackUpdate));
   const act = async () => {
     if (inFlight.current || busy || !available) return;
     if (preview) {

@@ -646,20 +646,20 @@ M2.3 的「多面」卡在一件事上：daemon 的 adapter pump 把**每一帧*
 
 **实测现状（第 1 步的输入）**：`ompStudioChrome` 41 个成员中 Tauri `chrome.rs` 只实现 9 个；渲染层直读 `globalThis.ompStudioChrome` 共 **86 处、32 个文件**（其中约 49 处是 `?.method` 后判空的写法，3 处显式 `=== undefined` 比较）。
 
-**第 1 步进度（2026-11-13）**：facade 与 capability 位已落地并带验收测试；已收编 3 个文件（`platform.ts`、`App.tsx` 的项目目录/编辑器入口、`BrowserPane`），**剩 83 处、约 30 个文件**。剩余直读按域分布：
+**第 1 步已完成（2026-11-13）**：渲染层 src 内直读 `globalThis.ompStudioChrome` **清零**（原 86 处 / 32 文件）。测试文件里的桩（`globalThis.ompStudioChrome = {…}` 与 `= originalChrome`）不动——那是测试在造 surface，不是产品代码在读它。
 
-| 文件 | 处数 | 域 |
-| --- | --- | --- |
-| `settings/updates.ts` | 8 | 更新 |
-| `settings/appUpdate.ts` | 7 | 更新 |
-| `services/ServicesPane.tsx` | 7 | HostApi 服务定义 |
-| `media/ArtifactLibraryPane.tsx` | 7 | HostApi 产物 |
-| `App.tsx` | 7 | 混合 |
-| `DiagnosticsPage.tsx` | 6 | 平台/诊断 |
-| `skillshare/SkillsharePane.tsx` | 5 | HostApi |
-| 其余 24 个文件 | 36 | 媒体/浏览器/预测/Composer/启动通知 |
+facade 落在 `apps/renderer/src/chrome/index.ts`：11 个 capability 位按壳侧 4 trait 分组，`shellSurface()` 是唯一取值点，`shellDegradedReason()` 给每个位一句人话。规则一条：**`chrome/` 之外没有文件读 `globalThis.ompStudioChrome`。**
 
-每一处都是同一机械变换：`globalThis.ompStudioChrome?.x` → `shellSurface()?.x`，成员存在性分支 → `shellCapabilities()` 的位。每批改动带 `npm run check -- --only renderer` 门禁。
+位按「组」推导而非按单个方法：媒体上传要四个成员全在位才算可用。半接线的组若按单方法判断会显得可用、然后在缺失的那个成员上炸。
+
+变换中暴露出的真实类型不安全（原代码假设 surface 与成员一定存在，用 `!` 压住）：
+- `settings/updates.ts`：`chrome.subscribeUpdateProgress(handle)` 直接解引用，`shellSurface()` 可能是 undefined——这是原来就存在的 crash 路径，转换让 TypeScript 把它指了出来。
+- `LiveAudioPane` / `DictationControl` / `ComputerPane` / `NativeMaintenancePane` / `SkillsharePane`：`globalThis.ompStudioChrome!.x!(...)` 把「壳没接这个能力」变成 TypeError。改为经 facade 取 `?.`，缺失时抛出可读消息。
+- `ServicesPane`：守卫用 `shellSurface()?.saveServiceDefinition` 判过，调用却又写 `shellSurface()!.saveServiceDefinition`——同一个表达式两种写法，TypeScript 拒绝后者。统一为先取成员再判再调。
+
+验收标准的落地形态：`App.tsx` 的项目 shell 两项在 capability 缺失时走 `shellItemProps` → `{disabled: true, title: <原因>}`，即置灰 + 原因，不是消失。原来的 `仅桌面端可用` 一个答案覆盖「没有壳」「壳旧了」「这台机器没接」三种不同事实。
+
+**这一步做完，55,092 行连锁的成因已消除**：渲染层不再按成员存在性做分支，删 Electron 时只剩换 facade 实现。
 
 ### M5.6 前置测量：Electron 删除的真实规模远超方案估算（2026-11-13 实测，未执行）
 

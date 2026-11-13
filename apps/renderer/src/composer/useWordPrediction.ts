@@ -8,6 +8,7 @@ import { usePreviewMode } from "../preview/PreviewContext";
 import { waitReceipt } from "../hostError";
 import { insertPlainText } from "./editorDom";
 import "./prediction.css";
+import { shellSurface } from "../chrome";
 export interface ComposerPrediction {
   client: StudioClient;
   sessionId?: string | undefined;
@@ -102,7 +103,7 @@ export function useWordPrediction(
       (!preview && (!options.available || !options.sessionId))
     )
       return;
-    const chrome = globalThis.ompStudioChrome;
+    const chrome = shellSurface();
     if (
       !preview &&
       (!chrome?.attachPrediction ||

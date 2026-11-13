@@ -8,6 +8,7 @@ import { openLiveCapture, type LiveCapture } from "../media/liveCapture";
 import { ensureMicrophoneAccess, MicrophoneDeniedError, MicrophoneSettingsButton } from "../media/microphoneAccess";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { Icon } from "../icons";
+import { shellSurface } from "../chrome";
 
 const DEMO: DictationState = { available: true, enabled: true, phase: "off", text: "", model: "local/nemotron-streaming-en-0.6b", language: "zh", cloud: false, downloadRequired: false };
 
@@ -17,7 +18,7 @@ export function DictationControl({ client, sessionId, available, onText }: { cli
   const target = useExecutionTarget();
   const [state, setState] = useState<DictationState>(); const [review, setReview] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [denied, setDenied] = useState(false);
   const generation = useRef(0); const capture = useRef<LiveCapture | undefined>(undefined); const id = useRef<string | undefined>(undefined); const abort = useRef<AbortController | undefined>(undefined); const locked = useRef(false); const finishing = useRef(false); const callback = useRef(onText); callback.current = onText;
-  const enabled = preview || (available && !!sessionId && !target.id && !!globalThis.ompStudioChrome?.attachLiveAudio);
+  const enabled = preview || (available && !!sessionId && !target.id && !!shellSurface()?.attachLiveAudio);
   const invoke = useCallback(async <K extends keyof DictationResultMap>(kind: K, input: CommandInput<K>): Promise<DictationState> => {
     const handle = await client.command(kind, input); return (await waitReceipt<{ result: DictationState }>(client, handle.requestId, kind === "dictation.stop" ? 130000 : 30000)).result;
   }, [client]);
@@ -49,7 +50,7 @@ export function DictationControl({ client, sessionId, available, onText }: { cli
         const prepared = await invoke("dictation.prepare", { sessionId: sessionId! });
         if (!prepared.audioId) throw new Error("Dictation input was not prepared");
         if (epoch !== generation.current || controller.signal.aborted) { void invoke("dictation.cancel", { sessionId: sessionId!, audioId: prepared.audioId }).catch(() => {}); throw new Error("Dictation target changed"); }
-        id.current = prepared.audioId; const attached = await globalThis.ompStudioChrome!.attachLiveAudio!({ sessionId: sessionId!, audioId: prepared.audioId });
+        id.current = prepared.audioId; const attached = await shellSurface()!.attachLiveAudio!({ sessionId: sessionId!, audioId: prepared.audioId });
         if (!attached.ok) throw new Error(attached.message ?? "Microphone attach failed"); return prepared.audioId;
       } });
       capture.current = input;

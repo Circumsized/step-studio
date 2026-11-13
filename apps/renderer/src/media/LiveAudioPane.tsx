@@ -9,6 +9,7 @@ import { PREVIEW_LIVE_AUDIO } from "../preview/liveAudioPreview";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { openLiveCapture, type LiveCapture } from "./liveCapture";
 import { MicrophoneDeniedError, MicrophoneSettingsButton, ensureMicrophoneAccess } from "./microphoneAccess";
+import { shellSurface } from "../chrome";
 
 export function LiveAudioPane({ client, sessionId, available, visible = true }: { client: StudioClient; sessionId?: string | undefined; available: boolean; visible?: boolean }) {
   const { preview } = usePreviewMode(); const { resolvedLanguage } = useI18n(); const zh = resolvedLanguage === "zh";
@@ -16,7 +17,7 @@ export function LiveAudioPane({ client, sessionId, available, visible = true }: 
   const [state, setState] = useState<LiveAudioState>(); const [voice, setVoice] = useState("sol"); const [device, setDevice] = useState(""); const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [review, setReview] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [micDenied, setMicDenied] = useState(false);
   const generation = useRef(0); const lock = useRef(false); const capture = useRef<LiveCapture | undefined>(undefined); const abort = useRef<AbortController | undefined>(undefined); const audioId = useRef<string | undefined>(undefined); const confirm = useRef<HTMLButtonElement>(null);
-  const desktop = !!globalThis.ompStudioChrome?.attachLiveAudio && !!navigator.mediaDevices?.getUserMedia;
+  const desktop = !!shellSurface()?.attachLiveAudio && !!navigator.mediaDevices?.getUserMedia;
   const enabled = visible && (preview || (desktop && available && !!sessionId));
   const active = !!state && !["off", "error"].includes(state.phase);
   const invoke = useCallback(async <K extends keyof LiveAudioResultMap>(kind: K, input: CommandInput<K>): Promise<LiveAudioState> => {
@@ -63,7 +64,12 @@ export function LiveAudioPane({ client, sessionId, available, visible = true }: 
           if (!next.audioId) throw new Error("Runtime did not prepare an audio input");
           if (controller.signal.aborted || epoch !== generation.current) { void invoke("live.audio.release", { sessionId: sessionId!, audioId: next.audioId }).catch(() => {}); controller.signal.throwIfAborted(); throw new Error("Live session changed"); }
           audioId.current = next.audioId;
-          const result = await globalThis.ompStudioChrome!.attachLiveAudio!({ audioId: next.audioId, sessionId: sessionId! });
+          // Through the facade, and `?.` rather than `!`: a shell without live
+          // audio must produce a message the user can read, not a TypeError from
+          // dereferencing a member that was never wired.
+          const attach = shellSurface()?.attachLiveAudio;
+          if (!attach) throw new Error(zh ? "当前外壳不支持实时音频" : "Live audio is unavailable on this shell");
+          const result = await attach({ audioId: next.audioId, sessionId: sessionId! });
           if (!result.ok) throw new Error(result.message ?? "Microphone could not attach"); return next.audioId;
         },
       });
