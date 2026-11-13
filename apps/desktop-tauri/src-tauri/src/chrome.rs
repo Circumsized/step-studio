@@ -13,12 +13,13 @@
 //! link, a system notification, the operator avatar, and the perf reporters.
 //! Every entry below has a live call site in `apps/renderer/src`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
 
 /// Rejection payload, shaped like the rest of the shell's IPC errors.
 #[derive(Serialize, Debug)]
@@ -234,6 +235,77 @@ fn project_dir(workspace_id: &str) -> ChromeResult<PathBuf> {
     Ok(path)
 }
 
+/// Where this shell keeps its own logs: `<cwd>/.step-studio`.
+///
+/// Derived the same way the bridge derives it (`connection_config`), because two
+/// derivations of "where the log lives" is how a reveal button ends up opening a
+/// directory that has nothing in it. The bridge is the one that writes the file,
+/// so it is the one that decides.
+fn log_dir() -> PathBuf {
+    let cwd = std::env::var_os("STEP_STUDIO_CWD")
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_else(|| ".".to_string());
+    log_dir_from(Path::new(&cwd))
+}
+
+/// The same, from a cwd the caller names.
+///
+/// Split out so the path is testable without touching the process environment:
+/// `std::env::set_var` is `unsafe` and this workspace forbids `unsafe`. It is
+/// also the shape the bridge itself would use if it ever needed to ask.
+fn log_dir_from(cwd: &Path) -> PathBuf {
+    cwd.join(".step-studio")
+}
+
+/// Reveal the shell's log directory in the OS file manager.
+#[tauri::command]
+pub fn open_log_dir() -> ChromeResult<()> {
+    let dir = log_dir();
+    // Created rather than required: a first run has no log yet, and revealing a
+    // path that does not exist is a file manager error rather than an answer.
+    let _ = std::fs::create_dir_all(&dir);
+    let outcome = if cfg!(target_os = "macos") {
+        Command::new("open").arg(&dir).spawn()
+    } else if cfg!(target_os = "windows") {
+        Command::new("explorer").arg(&dir).spawn()
+    } else {
+        Command::new("xdg-open").arg(&dir).spawn()
+    };
+    outcome.map_err(|error| ChromeError::failed(format!("cannot reveal the log directory: {error}")))?;
+    Ok(())
+}
+
+/// Save a copy of the daemon's log where the user chooses.
+///
+/// A copy, not a move: the log is still being written, and the diagnostics page
+/// offers this more than once. The dialog picks the destination, and a cancelled
+/// dialog is a success with nothing written rather than a failure — the caller
+/// shows nothing either way.
+#[tauri::command]
+pub fn export_logs(app: tauri::AppHandle) -> ChromeResult<Value> {
+    let source = log_dir().join("daemon.log");
+    if !source.is_file() {
+        return Err(ChromeError::failed("no daemon log has been written yet"));
+    }
+    let Some(destination) = app
+        .dialog()
+        .file()
+        .set_file_name("step-studio-daemon.log")
+        .blocking_save_file()
+    else {
+        return Ok(json!({ "ok": true, "cancelled": true }));
+    };
+    // `FilePath` covers both a real path and, on Android, a content URI. A URI
+    // has no filesystem path to copy to, and treating it as a cancellation would
+    // be a silent wrong answer.
+    let Some(destination) = destination.as_path() else {
+        return Err(ChromeError::failed("cannot write to the chosen location"));
+    };
+    std::fs::copy(&source, destination)
+        .map_err(|error| ChromeError::failed(format!("cannot copy the log: {error}")))?;
+    Ok(json!({ "ok": true, "cancelled": false }))
+}
+
 /// A system notification with fixed text.
 #[tauri::command]
 pub fn notify(title: String, body: Option<String>) -> ChromeResult<()> {
@@ -374,5 +446,39 @@ mod project_tests {
                 "{candidate:?} refused with a code the renderer can read"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod log_tests {
+    use super::*;
+
+    #[test]
+    fn the_log_directory_is_the_one_the_bridge_writes_to() {
+        // Two derivations of "where the log lives" is how a reveal button ends up
+        // opening a directory with nothing in it. The bridge writes
+        // `<cwd>/.step-studio/daemon.log`, so this has to agree with it.
+        assert_eq!(
+            log_dir_from(Path::new("/tmp/a-project")),
+            PathBuf::from("/tmp/a-project/.step-studio")
+        );
+    }
+
+    #[test]
+    fn a_cwd_with_a_trailing_separator_does_not_double_it() {
+        // `Path::join` handles this, and a test is what stops somebody from
+        // building the path with `format!` instead.
+        assert_eq!(
+            log_dir_from(Path::new("/tmp/a-project/")),
+            PathBuf::from("/tmp/a-project/.step-studio")
+        );
+    }
+
+    #[test]
+    fn a_relative_cwd_stays_relative() {
+        assert_eq!(
+            log_dir_from(Path::new(".")),
+            PathBuf::from("./.step-studio")
+        );
     }
 }

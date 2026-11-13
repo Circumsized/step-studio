@@ -88,6 +88,8 @@ fn main() {
             chrome::load_avatar,
             chrome::clear_avatar,
             chrome::open_url,
+            chrome::open_log_dir,
+            chrome::export_logs,
             chrome::open_project_directory,
             chrome::open_project_in_editor,
             chrome::notify,

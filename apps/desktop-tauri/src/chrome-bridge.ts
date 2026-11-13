@@ -47,6 +47,12 @@ export interface TauriChromeBridge {
   clearAvatar(): Promise<void>;
   openProjectDirectory(workspaceId: string): Promise<void>;
   openProjectInEditor(workspaceId: string): Promise<{ mode: "editor" | "reveal" }>;
+  openLogDir(): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
+  exportLogs(): Promise<
+    | { readonly ok: true }
+    | { readonly ok: false; readonly cancelled: true }
+    | { readonly ok: false; readonly message: string }
+  >;
 }
 
 /**
@@ -81,6 +87,11 @@ export function createTauriChromeBridge(): TauriChromeBridge {
       tauriInvoke<void>("open_project_directory", { workspaceId }),
     openProjectInEditor: workspaceId =>
       tauriInvoke<{ mode: "editor" | "reveal" }>("open_project_in_editor", { workspaceId }),
+
+    // The log directory is `<cwd>/.step-studio`, derived the same way the bridge
+    // derives it — the bridge is the one that writes the file, so it decides.
+    openLogDir: () => tauriInvoke("open_log_dir"),
+    exportLogs: () => tauriInvoke("export_logs"),
 
     notify: payload =>
       tauriInvoke<void>(
