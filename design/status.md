@@ -712,6 +712,30 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.1 第五块：Windows surface 侧试修后回退，7 个错误比 10 处 cfg 连锁可读（2026-11-13）
+
+接着第一块做 surface 侧那两处 `try_clone`。做法与 adapter 侧相同：Windows 上明确拒绝并说明
+原因。改完编译是过了，但代价是 **10 处 cfg 连锁**——`serve_surface` 一拒绝，它用过的东西全部
+变成死代码，于是 `serde_json`/`write_frame`/`peer_uid`/`mpsc::Sender` 四个 import、`Surface`
+别名、`Daemon::to_surface` 字段，以及用到 `to_surface` 的 5 个位置，逐个都要加 `#[cfg(unix)]`；
+最后 `to_surface` 作为结构体字段被 cfg 掉，又在 5 个使用点报「no field」。
+
+**判断：回退。** 原来的状态是 7 个错误，全部位于 `serve_surface` 一个函数里的两行
+`try_clone` 加一个类型不匹配，位置精确、成因单一、方案已记。改完变成 10 处 cfg 分散在两个
+文件里，其中一半是「因为上面拒绝所以这里死了」的次生噪声。**一个门禁的红法也应该可读**——
+否则下一个人看到的是一堆分散的 cfg，而不是一个缺口。
+
+正确的 Windows 设计已经找到并记在第一块里：`PipeServer` 有 `set_read_timeout`，可以把唯一句柄
+放进 `Arc<Mutex<PipeServer>>`，泵以 50 ms 超时循环「加锁读 → 解锁 → 抽干写通道」，用读超时来
+交错两个方向。那要改泵的结构且**要真机验证**，是 M5.1 主体的一次正经提交，不是补丁。
+
+已 stash（`git stash list` 里那条），需要时能捞回来对比。
+
+**当前 Windows 门禁状态**：从 `peer-uid` 加入起一直红；本会话修掉三处真 bug（`peer-uid` 签名、
+`own_uid` 的 Unix 专有调用、adapter 的 unix-only import）加 adapter 侧的明确拒绝，现在剩
+**6 个错误 / 1 个汇总行，全部在 `bin/studio-host.rs` 的 `serve_surface` 一个函数里**。
+Linux 侧门禁全绿：150 测试、六 crate clippy 净、`cargo deny` 退出码 0、`npm run check` 全绿。
+
 ### M5.1 第四块：dhat 堆画像试做后撤回，附诊断证据（2026-11-13）
 
 用户第 5 步点名要 dhat 堆画像。**做了一套，然后删掉了**，理由是它测量的是空气。
