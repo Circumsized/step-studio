@@ -30,6 +30,7 @@ const RUST_COMMAND_MODULES = [
   "service_definitions.rs",
   "browser_observation.rs",
   "media.rs",
+  "prediction.rs",
 ];
 const rustSources = RUST_COMMAND_MODULES.map(name =>
   readFileSync(join(packageRoot, "src-tauri", "src", name), "utf8"),
@@ -70,27 +71,32 @@ describe("the chrome bridge's surface", () => {
       "appendMediaUpload",
       "attachBrowserObservation",
       "attachLiveAudio",
+      "attachPrediction",
       "beginMediaUpload",
       "chooseArtifactDirectory",
       "clearAvatar",
       "controlBrowserObservation",
       "detachBrowserObservation",
       "detachLiveAudio",
+      "detachPrediction",
       "exportArtifact",
       "exportLogs",
       "finishMediaUpload",
       "importArtifact",
+      "importPredictionHistory",
       "listServiceDefinitions",
       "loadAvatar",
       "notify",
       "onBrowserObservation",
       "onMenuCommand",
+      "onPrediction",
       "openLogDir",
       "openMicrophoneSettings",
       "openProjectDirectory",
       "openProjectInEditor",
       "openUrl",
       "platform",
+      "predictionInput",
       "readComputerCapture",
       "removeServiceDefinition",
       "reportPayloadHealth",
@@ -112,7 +118,7 @@ describe("the chrome bridge's surface", () => {
     // The three artifact members are deliberately *not* in this list. They were
     // when the shell ran no Host, but the shell now owns the artifact library
     // itself, so they are shell-level operations like any other.
-    for (const absent of ["getUpdateSnapshot", "attachPrediction"]) {
+    for (const absent of ["getUpdateSnapshot"]) {
       assert.equal(bridge[absent], undefined, `${absent} must not be exposed`);
     }
   });

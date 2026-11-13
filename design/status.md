@@ -712,6 +712,47 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.6 第 2 步第六批：预测通道 5 落地，32 个缺失成员全部清零（2026-11-13）
+
+新增 `apps/desktop-tauri/src-tauri/src/prediction.rs`，从 Electron 侧 `prediction.ts`
+移植。**这是第四座私有运行时通道，同一个模式第四次应验**：描述符 → socket → token →
+换行分隔 JSON 双向转发。零新依赖。
+
+本批独有的是历史导入，也是唯一带真实状态的部分：用户选的文件被复制到一个壳指定的名字
+（0600、`create_new` 所以两个导入不会撞同一个名字），运行时被告知那个名字，然后**无论成败
+都把文件删掉**。两条规则值得单独记：
+
+- **导入不重试**。超时resolve 的消息说「可能已部分完成，未重试」——因为它可能：运行时也许
+  在壳停止监听之前已经应用了半个文件，重试会把它翻倍。
+- **一个窗口一个导入、一个通道一个导入**。同一条 socket 上两个并发导入会交错 requestId，
+  然后互相 resolve。
+
+`predictionInput` 拒绝 `import`：历史导入必须走文件选择器，渲染层能直接发 `import` 就等于
+能指定机器上任意文件。
+
+至此 **32 个缺失成员全部落地**（原实测 32 - platform 本就由 detectPlatform 提供 = 31 个
+命令位 + 1 个只读属性，全部有着落）。第 1 步把渲染层从「按成员存在性分支」改成「按 capability
+位降级」，第 2 步把壳侧全部补齐，**55,092 行删除连锁的两侧前提都消失了**。
+
+#### 变异验证（六条逐条确认非空）
+
+| 变异 | 结果 |
+| --- | --- |
+| `is_input` 允许 `import` | FAILED ✓ |
+| 输入字段数检查删掉 | FAILED ✓（补了「ping 多带一个字段」的用例才钉住） |
+| `imported` 事件的 `count` 检查删掉 | FAILED ✓（同上，第一版测试能过） |
+| `imported` 事件的 `truncated` 布尔检查删掉 | FAILED ✓ |
+| 暂存文件写成 0644 | FAILED ✓ |
+| 暂存文件名不独占 | FAILED ✓ |
+
+三条第一版是空测试，都是同一个原因：**长度检查先拦住了用例，字段检查本身没被执行到。**
+「缺 count」的用例字段数就是 4，长度检查（要求 5）先失败，所以删掉 count 检查测试照绿。
+补了「字段数对但 count 是字符串」和「truncated 不是布尔」两个用例才对。
+
+另一条：第一版的 `control` 里有一道额外的 `import` 检查，与 `is_input` 的未知种类拒绝
+**完全冗余**——删掉它测试照样绿，因为分不出来。已删掉冗余的那道，测试改为直接钉
+`is_input` 的清单（把 `import` 加进清单会让它失败）。
+
 ### M5.6 第 2 步第五批：MediaApi 9 落地，同样不需要 flexaudio（2026-11-13）
 
 新增 `apps/desktop-tauri/src-tauri/src/media.rs`，从 Electron 侧 `media-upload.ts`、
@@ -945,9 +986,8 @@ artifacts 第一个撞上。
 `detectPlatform` 已经从 WebView 引擎推出同一个值，所以这一项是「本来就有」而不是新落地；
 从 32 个名字里划掉。
 
-**剩余 5 个**：全部是**预测通道**（`attachPrediction` / `predictionInput` /
-`detachPrediction` / `importPredictionHistory` / `onPrediction`），即第 32 个名字里唯一没有
-trait 归属的那一组。其余 27 个已全部落地。
+**剩余 0 个。** 32 个名字全部落地（第六批把最后 5 个预测通道成员接完）。其中 `platform`
+本就是 `detectPlatform` 从 WebView 引擎推出的只读属性，不占命令位。
 
 32 个名字的当前归属（滚动更新）：
 
@@ -957,7 +997,7 @@ trait 归属的那一组。其余 27 个已全部落地。
 | PlatformApi | 菜单 1、日志 2、平台 1 = 4 | 0 |
 | BrowserApi | 浏览器观测 4、计算机截图 1 = 5 | 0 |
 | MediaApi | 媒体上传 4、实时音频 3、麦克风权限 2 = 9 | 0 |
-| 预测通道（归属待定） | 0 | 5 |
+| 预测通道 | 5 | 0 |
 
 BrowserApi 5 个已全部落地，但**端到端仍被运行时的两个 operation 挡住**（见第四批记录）：
 壳侧 Ready，`browser.tabs.get` / `browser.observe.prepare` 全仓无实现。

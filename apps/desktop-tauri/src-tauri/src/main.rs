@@ -14,6 +14,7 @@ mod git;
 mod history;
 mod media;
 mod menu;
+mod prediction;
 mod pump;
 mod service_definitions;
 mod terminal;
@@ -121,6 +122,10 @@ fn main() {
             media::attach_live_audio,
             media::append_live_audio,
             media::detach_live_audio,
+            prediction::attach_prediction,
+            prediction::prediction_input,
+            prediction::detach_prediction,
+            prediction::import_prediction_history,
             media::request_microphone_access,
             media::open_microphone_settings_command,
             service_definitions::list_service_definitions,
@@ -253,6 +258,7 @@ fn main() {
                     media::dispose_uploads(&label);
                     media::dispose_audio(&label);
                     browser_observation::dispose_window(&label);
+                    prediction::dispose_channel(&label);
                 }
             });
             // Idle uploads are abandoned: a renderer that crashes mid-upload

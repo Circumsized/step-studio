@@ -43,6 +43,12 @@ const MENU_COMMAND_EVENT = "omp-studio:chrome:menu-command";
  */
 const BROWSER_EVENT_CHANNEL = "omp-studio:desktop:browser-event";
 
+/**
+ * The channel prediction events arrive on. Byte-identical to the Electron
+ * preload's (`prediction-shared.ts`).
+ */
+const PREDICTION_EVENT_CHANNEL = "omp-studio:desktop:prediction-event";
+
 /** Mirrors `ArtifactRecord` from `@omp-studio/studio-protocol`. */
 export interface ArtifactRecord {
   readonly artifactId: string;
@@ -55,6 +61,38 @@ export interface ArtifactRecord {
   readonly sessionId?: string;
   readonly sha256: string;
 }
+
+/** Mirrors `PredictionResult` in `apps/desktop/src/prediction-shared.ts`. */
+export type PredictionResult = {
+  readonly ok: boolean;
+  readonly cancelled?: boolean;
+  readonly message?: string;
+  readonly count?: number;
+  readonly truncated?: boolean;
+};
+
+/** Mirrors `PredictionAttach` in the same file. */
+export interface PredictionAttach {
+  readonly channelId: string;
+  readonly sessionId: string;
+  readonly expiresAt: number;
+}
+
+/** Mirrors `PredictionControl` in the same file. */
+export interface PredictionControl {
+  readonly channelId: string;
+  readonly input:
+    | { readonly kind: "steer"; readonly text: string }
+    | { readonly kind: "cancel" }
+    | { readonly kind: "release" }
+    | { readonly kind: "ping" };
+}
+
+/** Mirrors `PredictionEvent` from `@omp-studio/studio-protocol`. */
+export type PredictionEvent =
+  | { readonly kind: "closed"; readonly channelId: string }
+  | { readonly kind: "error"; readonly channelId: string; readonly message: string }
+  | { readonly kind: "imported"; readonly channelId: string; readonly requestId: string; readonly count: number; readonly truncated: boolean };
 
 /** Mirrors `MediaUploadResult` in `apps/desktop/src/media-upload-shared.ts`. */
 export type MediaUploadResult =
@@ -239,6 +277,17 @@ export interface TauriChromeBridge {
     sessionId: string;
   }): Promise<{ ok: true; token: string; name: string } | { ok: false; message: string }>;
   /**
+   * The prediction channel: a transport to a socket the runtime owns, the same
+   * shape as browser observation. `predictionInput` refuses `import` — a history
+   * import needs the file picker, which only `importPredictionHistory` has, so a
+   * renderer cannot name a file on the machine.
+   */
+  attachPrediction(input: PredictionAttach): Promise<PredictionResult>;
+  predictionInput(input: PredictionControl): Promise<PredictionResult>;
+  detachPrediction(input: { channelId: string }): Promise<PredictionResult>;
+  importPredictionHistory(input: { channelId: string }): Promise<PredictionResult>;
+  onPrediction(listener: (event: PredictionEvent) => void): () => void;
+  /**
    * Media upload: a chunked stream that lands in the artifact library. Four
    * members, and the ids the renderer sends chunks against come from `begin`, so
    * a renderer cannot finish or abort an upload it did not start.
@@ -374,6 +423,18 @@ export function createTauriChromeBridge(): TauriChromeBridge {
       }),
     removeServiceDefinition: ({ workspaceId, id, revision }) =>
       tauriInvoke("remove_service_definition", { workspaceId, id, revision }),
+    attachPrediction: input =>
+      tauriInvoke("attach_prediction", {
+        channelId: input.channelId,
+        sessionId: input.sessionId,
+        expiresAt: input.expiresAt,
+      }),
+    predictionInput: ({ channelId, input: action }) =>
+      tauriInvoke("prediction_input", { channelId, input: action }),
+    detachPrediction: ({ channelId }) => tauriInvoke("detach_prediction", { channelId }),
+    importPredictionHistory: ({ channelId }) =>
+      tauriInvoke("import_prediction_history", { channelId }),
+
     beginMediaUpload: input =>
       tauriInvoke("begin_media_upload", {
         kind: input.kind,
@@ -420,6 +481,18 @@ export function createTauriChromeBridge(): TauriChromeBridge {
       // closure captures whatever has resolved so far.
       let unsubscribe = () => {};
       void tauriListen<BrowserObservationEvent>(BROWSER_EVENT_CHANNEL, event => {
+        listener(event.payload);
+      }).then(unlisten => {
+        unsubscribe = unlisten;
+      });
+      return () => unsubscribe();
+    },
+
+    // Same shape as `onMenuCommand`: `listen` resolves with the unlisten
+    // function, and the contract's unsubscribe is synchronous.
+    onPrediction: listener => {
+      let unsubscribe = () => {};
+      void tauriListen<PredictionEvent>(PREDICTION_EVENT_CHANNEL, event => {
         listener(event.payload);
       }).then(unlisten => {
         unsubscribe = unlisten;
