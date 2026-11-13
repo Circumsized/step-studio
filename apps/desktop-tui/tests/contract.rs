@@ -69,8 +69,13 @@ fn a_usage_model_with_no_optional_fields_deserializes() {
 /// hand-wrote both payloads, so `read_agent` could have dropped or renamed a
 /// field and this test would still have passed while the Agent 状态 panel went
 /// empty at runtime. That is the exact drift the file exists to catch.
-fn fixture_store() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("tui-contract-{}", std::process::id()));
+fn fixture_store(tag: &str) -> std::path::PathBuf {
+    // Tagged, not just pid: two tests building a fixture store in parallel would
+    // otherwise share one directory and delete each other's files. This is the
+    // third time this session a pid-only fixture name has made a test
+    // order-dependent, so the tag is part of the signature rather than a
+    // convention.
+    let dir = std::env::temp_dir().join(format!("tui-contract-{}-{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let project = dir.join("-home-ubuntu-ws");
     std::fs::create_dir_all(&project).expect("make a store");
@@ -100,7 +105,7 @@ fn fixture_store() -> std::path::PathBuf {
 
 #[test]
 fn the_real_store_reader_feeds_the_agent_roster() {
-    let store = fixture_store();
+    let store = fixture_store("agents");
     let produced = step_studio_sessions::agents_in(&store);
     let roster: AgentStatus =
         serde_json::from_value(produced).expect("the real reader's roster parses");
@@ -119,7 +124,7 @@ fn the_real_store_reader_feeds_the_agent_roster() {
 
 #[test]
 fn the_real_store_reader_feeds_the_session_tree() {
-    let store = fixture_store();
+    let store = fixture_store("tree");
     let produced = step_studio_sessions::list_in(&store, Some(200), None, None);
     let tree: SessionTree =
         serde_json::from_value(produced).expect("the real reader's tree parses");

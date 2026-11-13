@@ -23,7 +23,7 @@ fn peak(values: &[u64]) -> u64 {
     values.iter().copied().max().unwrap_or(0)
 }
 
-pub fn render(frame: &mut Frame, model: &Usage) {
+pub fn render(frame: &mut Frame, model: &Usage, panel_offset: u16) {
     let chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(frame.area());
 
     frame.render_widget(
@@ -39,8 +39,20 @@ pub fn render(frame: &mut Frame, model: &Usage) {
     // are not there. It is shown rather than substituted for: the panel is real
     // data the user asked for.
     if let Some(panel) = &model.panel {
+        // Wrapped and scrolled, and truncated says so. The first version rendered
+        // the panel with neither, so a real `/usage` panel of thirty lines was
+        // cut off at the pane height and a heatmap row wider than the pane was
+        // clipped at the border — with no ellipsis, no scroll indicator and no
+        // error. The dashboard claimed to show the panel verbatim and silently
+        // showed part of it, which is worse than not showing it.
+        //
+        // The offset is the caller's to supply: this function stays pure, and a
+        // scroll position is state, not a rendering input.
         frame.render_widget(
-            Paragraph::new(panel.clone()).block(Block::default().borders(Borders::ALL)),
+            Paragraph::new(panel.clone())
+                .block(Block::default().borders(Borders::ALL))
+                .wrap(ratatui::widgets::Wrap { trim: false })
+                .scroll((panel_offset, 0)),
             chunks[1],
         );
         return;
@@ -154,7 +166,9 @@ mod tests {
 
     fn render_to_string(model: &Usage) -> String {
         let mut terminal = Terminal::new(TestBackend::new(60, 20)).expect("a terminal");
-        terminal.draw(|frame| render(frame, model)).expect("draw");
+        terminal
+            .draw(|frame| render(frame, model, 0))
+            .expect("draw");
         crate::dashboards::flatten(terminal.backend().buffer())
     }
 

@@ -58,7 +58,7 @@ fn render_agents(model: &AgentStatus) -> Buffer {
 fn render_usage(model: &Usage) -> Buffer {
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).expect("a terminal");
     terminal
-        .draw(|frame| dashboards::usage::render(frame, model))
+        .draw(|frame| dashboards::usage::render(frame, model, 0))
         .expect("draw");
     terminal.backend().buffer().clone()
 }
@@ -363,6 +363,66 @@ fn agent_status_empty() {
 #[test]
 fn usage_with_arrays_fixture() {
     golden("usage-arrays", &render_usage(&usage_with_arrays()));
+}
+
+#[test]
+fn usage_panel_taller_than_the_pane() {
+    // A real `/usage` panel is dozens of lines. The first version rendered it
+    // with neither wrap nor scroll, so everything past the pane height was
+    // dropped with no ellipsis and no scroll indicator — the dashboard claimed
+    // to show the panel verbatim and silently showed part of it.
+    // One line far wider than the pane, because that is the other half of the
+    // truncation: a heatmap row wider than 76 columns was clipped at the border
+    // with no ellipsis. Short lines alone would pass with wrapping removed, so
+    // the wide one is what pins it.
+    let mut lines: Vec<String> = (0..40).map(|i| format!("row {i} of the panel")).collect();
+    lines[3] = format!("wide {}", "x".repeat(200));
+    let model = Usage {
+        generated_at: "2026-11-13T00:00:00.000Z".to_string(),
+        days: Vec::new(),
+        models: Vec::new(),
+        by_model: Vec::new(),
+        hours: Vec::new(),
+        unavailable_reason: None,
+        panel: Some(lines.join("\n")),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).expect("a terminal");
+    terminal
+        .draw(|frame| dashboards::usage::render(frame, &model, 0))
+        .expect("draw");
+    let rendered = step_studio_tui::dashboards::flatten(terminal.backend().buffer());
+    // The first rows are visible, and the last one is not — the pane is 21 rows
+    // and the panel is 40.
+    assert!(rendered.contains("row 0 of the panel"), "the top is shown");
+    assert!(
+        !rendered.contains("row 39 of the panel"),
+        "and the bottom is cut off"
+    );
+    // Wrapped, not clipped. Asserted on the row count rather than on a
+    // substring: a clipped line still *starts* with the same characters, so
+    // "contains xxxxxx" passes either way — which is how the first version of
+    // this assertion came to prove nothing. 200 characters at ~76 columns per
+    // row must occupy three rows, and only wrapping puts them there.
+    let wide_rows = rendered.lines().filter(|line| line.contains("xxx")).count();
+    assert!(
+        wide_rows >= 3,
+        "the wide line spans {wide_rows} rows; wrapping is what puts it on more than one"
+    );
+
+    // Scrolled, the bottom arrives and the top leaves. Without the offset being
+    // honoured this is the assertion that fails.
+    terminal
+        .draw(|frame| dashboards::usage::render(frame, &model, 25))
+        .expect("draw");
+    let scrolled = step_studio_tui::dashboards::flatten(terminal.backend().buffer());
+    assert!(
+        scrolled.contains("row 39 of the panel"),
+        "scrolling reaches the bottom"
+    );
+    assert!(
+        !scrolled.contains("row 0 of the panel"),
+        "and the top leaves"
+    );
 }
 
 #[test]

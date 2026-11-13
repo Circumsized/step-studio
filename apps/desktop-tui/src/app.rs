@@ -31,6 +31,12 @@ pub struct App {
     /// indistinguishable from one that failed to render.
     error: Option<String>,
     selection: TableState,
+    /// How far the CLI's own `/usage` panel is scrolled.
+    ///
+    /// State rather than a rendering input, which is why the dashboard takes it
+    /// as an argument: a pure render function given a scroll position is no
+    /// longer pure, and the golden fixtures depend on it being pure.
+    panel_offset: u16,
     refreshed: Instant,
 }
 
@@ -62,6 +68,7 @@ impl App {
             session_tree: None,
             error: None,
             selection: TableState::default(),
+            panel_offset: 0,
             refreshed: Instant::now() - REFRESH,
         };
         app.refresh();
@@ -173,6 +180,37 @@ impl App {
         self.refresh();
     }
 
+    /// Down: select the next row where there are rows, scroll the panel where
+    /// there are none.
+    ///
+    /// The usage dashboard's CLI panel has no rows, so `j` there was a dead key
+    /// and a panel taller than the pane could not be reached at all.
+    pub fn move_down(&mut self) {
+        if self.dashboard == Dashboard::Usage
+            && self
+                .usage
+                .as_ref()
+                .is_some_and(|model| model.panel.is_some())
+        {
+            self.panel_offset = self.panel_offset.saturating_add(1);
+            return;
+        }
+        self.select_next();
+    }
+
+    pub fn move_up(&mut self) {
+        if self.dashboard == Dashboard::Usage
+            && self
+                .usage
+                .as_ref()
+                .is_some_and(|model| model.panel.is_some())
+        {
+            self.panel_offset = self.panel_offset.saturating_sub(1);
+            return;
+        }
+        self.select_previous();
+    }
+
     pub fn select_next(&mut self) {
         let rows = self.row_count();
         if rows == 0 {
@@ -228,7 +266,7 @@ impl App {
             }
             Dashboard::Usage => {
                 if let Some(model) = &self.usage {
-                    dashboards::usage::render(frame, model);
+                    dashboards::usage::render(frame, model, self.panel_offset);
                 } else {
                     self.draw_empty(frame, title);
                 }
