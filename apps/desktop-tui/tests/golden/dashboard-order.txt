@@ -1,0 +1,4 @@
+进程树 -> process.tree.get
+Agent 状态 -> session.agents.list
+用量 -> usage.get
+会话树 -> history.list

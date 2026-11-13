@@ -75,7 +75,6 @@ impl Dashboard {
 /// real terminal. Joining one symbol per cell therefore turns CJK text into
 /// `进 程 树`, and every comparison then fails on spacing rather than on content,
 /// which is how this helper came to exist.
-#[cfg(test)]
 pub fn flatten(buffer: &ratatui::buffer::Buffer) -> String {
     use unicode_width::UnicodeWidthChar;
     let mut text = String::new();

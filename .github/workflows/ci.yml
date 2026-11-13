@@ -87,8 +87,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: studio-crates
-      - run: cargo test -p step-studio-bridge -p step-studio-runtime -p step-studio-host
-      - run: cargo clippy -p step-studio-bridge -p step-studio-runtime -p step-studio-host --all-targets -- -D warnings
+      # `step-studio-sessions` and `step-studio-tui` are here rather than in
+      # `rust-shell`: neither links GTK, and both are on the TUI's critical path
+      # — the shared store reader and the dashboard renderers the golden fixtures
+      # pin.
+      - run: cargo test -p step-studio-bridge -p step-studio-runtime -p step-studio-host -p step-studio-sessions -p step-studio-tui
+      - run: cargo clippy -p step-studio-bridge -p step-studio-runtime -p step-studio-host -p step-studio-sessions -p step-studio-tui --all-targets -- -D warnings
 
   rust-shell:
     # The shell was excluded from `rust` because it links wry and needed the GTK
