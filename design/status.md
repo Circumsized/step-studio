@@ -609,6 +609,26 @@ M2.3 的「多面」卡在一件事上：daemon 的 adapter pump 把**每一帧*
 
 既有 `two_surfaces_both_receive_the_same_broadcast` 仍然成立：事件广播这条性质没变。
 
+### M6a 完成：四项全收（2026-11-13）
+
+M6a.1 spike / M6a.2 四仪表盘 / M6a.3 键位 + fixtures / M6a.4 评审 全部完成。
+
+- **M6a.1**：`hqtui` 不存在（三条独立证据），选型作废，落方案预置退路 ratatui 0.30.2；§9.4 留的 headless 渲染器问题有答案（`TestBackend` + `Buffer::with_lines` 就是 golden 门禁机制本身）。
+- **M6a.2**：`apps/desktop-tui` 落地并真机验证；§5.6「四仪表盘共用 daemon query 面」被证伪，据此抽 `crates/step-studio-sessions`。
+- **M6a.3**：17 组 golden fixtures（方案要 13 组）+ tuicr 键位补齐（`y` 复制到剪贴板，crossterm OSC 52，无新依赖）。
+- **M6a.4**：对抗评审 11 条全部处置。最严重的一条在新写的复用代码里：协议在终态回执前会发一封非终态 `accepted`（同一个 requestId），而路由在第一封就消费条目，于是每回合终态回执被广播给所有 surface——且原单测把这个 bug 当成了正确行为。其余含：`pending` 锁跨 `eprintln!` 持有、三条退出路径漏 `grace.detach()` 且其中一条死锁在 `writer.join()`、surface fd 上的第二个 writer 线程（违背自己注释声明的不变量）、writer 失败导致 surface 永久挂起、CLI 面板静默截断、`unavailableReason` 被丢弃、契约测试手写 JSON。
+
+**第 2 步（HostApi）的准确输入**：32 个缺失成员按 trait 分组后的归属——
+
+| Trait | 缺失成员 | 数量 | 方案指定的承接 |
+| --- | --- | --- | --- |
+| `HostApi` | 产物 3、服务定义 3、项目集成 2、Skillshare 1 | 9 | OpenDAL / gix / notify / redb / zstd |
+| `MediaApi` | 媒体上传 4、实时音频 3、麦克风权限 2 | 9 | `flexaudio`（三平台 loopback 统一）+ Tauri capabilities |
+| `BrowserApi` | 浏览器观测 5 | 5 | `agent-browser mcp` + `rmcp` + `chromiumoxide` 出 screencast 帧 |
+| `PlatformApi` | 菜单 1、日志 2、平台 1 | 4 | `muda` / `tauri-plugin-log` / `tauri-plugin-dialog` |
+
+第 1 步已把这些成员的**调用侧**全部收编进 facade，所以第 2 步是纯实现侧工作，渲染层不再需要跟着改——这正是第 1 步的目的。
+
 ### M5.6 方向定案：删 Electron、拆掉 `ompStudioChrome` 上帝接口、渲染层改依赖 read model + capability（2026-11-13）
 
 项目负责人裁定：**Electron 彻底删除，不在 `chrome.rs` 里补那 32 个方法，把 `ompStudioChrome` 这个上帝接口拆掉。**
