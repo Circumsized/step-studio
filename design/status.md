@@ -712,7 +712,73 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
-### M5.6 第 2 步第一批：32 个缺失成员落地 7 个，剩 25 个（2026-11-13）
+### M5.6 第 2 步第二批：产物 3 落地，连带把 artifacts 三个 bridge query 接通（2026-11-13）
+
+新增 `apps/desktop-tauri/src-tauri/src/artifacts.rs`：内容寻址 payload + JSON catalog，
+从 Electron 侧 `packages/studio-host/src/artifact-library.ts` 移植。**记录形状逐字段一致**，
+因为渲染层会校验（`validateArtifactRecord`）；存储布局是本壳自己的
+（`.step-studio/artifact-library/v1`），两个壳不会误读彼此的 catalog。
+
+三个 chrome 成员（`chooseArtifactDirectory` / `importArtifact` / `exportArtifact`）加上
+渲染层本来就在调、而 Tauri 侧从未接通的三个 bridge query（`artifacts.list` /
+`artifacts.storage.get` / `artifacts.delete`）。后者不是第 2 步的输入，但只做前者的话
+产物面板还是空的——那三个成员写的库没有人读。
+
+#### 新测试抓出来的一个真 bug：`spread` 把 `kind` 覆盖成 `""`
+
+`pump::resolve_operation` 对 SHELL_LOCAL 一律走 `spread(input, "")`，而 `spread` 无条件
+`insert("kind", "")`——**调用方传来的 `kind` 被抹掉**。用户在产物面板选了「图片」过滤，
+壳返回全部种类，日志里没有任何痕迹。git 那几个 query 没有 `kind` 字段所以一直是无害的，
+artifacts 第一个撞上。
+
+修在成因上：artifacts 三个名字在 SHELL_LOCAL 判断**之前**分支，原样透传 input。
+写在 pump.rs 的注释里，因为这两半在不同模块——注入是 pump 的，读取是库的，任何一边
+单独测试都抓不到这个漂移。
+
+顺带说明第一版测试是**照着 bug 写的**：它断言 `kind == Some("")`，因为当时 spread 就是
+那么干的。断言匹配了实现而不是契约，这种测试比没有更坏。
+
+#### 过程中两个自死锁，第二次犯在同一个模式上
+
+1. Skillshare 的 `StateDirGuard` 持锁度过整个测试，而 `shell_state_dir()` 要锁同一把
+   `Mutex`——不可重入。已拆成两把。
+2. `artifacts::set_directory` 持锁后在末尾调 `self.state()`，而 `state()` 也要锁同一把。
+   **同一个错误，第二个模块**。拆出 `state_locked()`。
+
+两次的症状完全一样：`cargo test` 挂住，没有任何输出。所以这条值得记成模式：
+**在这个代码库里，任何持锁函数都不要在锁内调用另一个会取同一把锁的公有方法。**
+`artifacts.rs` 里为此写了注释，指向 Skillshare 那次。
+
+#### 一条守护自己失效的教训
+
+`apps/desktop-tauri/test/chrome-bridge.test.ts` 的跨语言反漂移守护，从
+`7c4bad6`（export_logs / open_log_dir）起就是**红的**：它用
+`/tauriInvoke<[^>]*>\(\s*"(\w+)"/g` 提取命令名，而后来新增的调用都省略了类型参数
+（TypeScript 能推导），正则于是**一个都匹配不到**。`export_logs`、`open_log_dir`、
+`reveal_skillshare_token` 三个命令对它隐身两个提交。
+
+`npm run check -- --fast` 不含 desktop-tauri 的 node:test，所以门禁是绿的。
+已把正则改成类型参数可选，并同步更新了「暴露面恰好是壳级子集」与「Host 背后的方法
+保持缺席」两条断言（`importArtifact` 从后者移除——壳现在自己拥有产物库）。
+
+**教训不是「正则写错了」，是「匹配不到的守护比没有守护更坏」**：它报绿，而实际上什么都没查。
+
+#### 变异验证
+
+新增测试逐条做变异，确认非空：
+
+| 变异 | 结果 |
+| --- | --- |
+| 空 `kind` 当作真过滤 | FAILED ✓ |
+| catalog 损坏时读成空库 | FAILED ✓ |
+| payload 变了仍放行（不校验 size） | FAILED ✓ |
+| `resolve` 忽略每条目 root_id，一律用当前 root | FAILED ✓（第一版测试**通过**，已加强为两次迁移） |
+| 去掉 artifacts 的透传分支，让 spread 抹掉 kind | FAILED ✓ |
+
+第一版的「迁移后旧产物仍可读」只迁移一次，幸存条目还在默认 root 里，所以
+「忽略 root_id」的变异它能过。加强成两次迁移后才钉住。
+
+### M5.6 第 2 步第一批：32 个缺失成员落地 7 个（2026-11-13）
 
 按负责人落地顺序补齐壳侧成员。第 1 步已把渲染层的调用全部收编进 facade，所以这一批
 **渲染层零改动**，只加壳侧实现 + `chrome-bridge.ts` 的同名方法。

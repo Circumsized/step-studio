@@ -23,6 +23,9 @@ step-studio-host = { path = "../../../crates/studio-host" }
 # drift would be silent.
 step-studio-sessions = { path = "../../../crates/step-studio-sessions" }
 tauri-plugin-dialog = "2.7.3"
+# `artifactId` is a canonical UUID v4. Already in the lock as a transitive
+# dependency, so promoting it adds no package to the tree.
+uuid = { version = "1", features = ["v4"] }
 
 [build-dependencies]
 tauri-build = "2"

@@ -29,9 +29,19 @@ function rustCommands(): Set<string> {
   return new Set(names);
 }
 
-/** Every `tauriInvoke<...>("name"` the bridge issues. */
+/**
+ * Every `tauriInvoke("name"` the bridge issues, with or without a type argument.
+ *
+ * The type argument is optional and the later commands all omit it — TypeScript
+ * infers it from the command's return type. The first version of this pattern
+ * required `<...>`, so it silently stopped matching the moment someone wrote the
+ * shorter form, and the drift guard went blind on exactly the commands added
+ * after it. `export_logs`, `open_log_dir` and `reveal_skillshare_token` were all
+ * invisible to it for two commits. A guard that stops matching is worse than no
+ * guard: it reports green while checking nothing.
+ */
 function invokedCommands(): Set<string> {
-  const names = [...bridgeSource.matchAll(/tauriInvoke<[^>]*>\(\s*"(\w+)"/g)].map(m => m[1] ?? "");
+  const names = [...bridgeSource.matchAll(/tauriInvoke(?:<[^>]*>)?\(\s*"(\w+)"/g)].map(m => m[1] ?? "");
   assert.ok(names.length > 0, "no tauriInvoke calls found in chrome-bridge.ts");
   return new Set(names);
 }
@@ -40,13 +50,22 @@ describe("the chrome bridge's surface", () => {
   test("it exposes exactly the shell-level subset", () => {
     const keys = Object.keys(createTauriChromeBridge()).sort();
     assert.deepEqual(keys, [
+      "chooseArtifactDirectory",
       "clearAvatar",
+      "exportArtifact",
+      "exportLogs",
+      "importArtifact",
       "loadAvatar",
       "notify",
+      "onMenuCommand",
+      "openLogDir",
+      "openProjectDirectory",
+      "openProjectInEditor",
       "openUrl",
       "platform",
       "reportPayloadHealth",
       "reportPerformanceSample",
+      "revealSkillshareToken",
       "saveAvatar",
       "setConversationViewState",
       "setTheme",
@@ -57,7 +76,11 @@ describe("the chrome bridge's surface", () => {
     const bridge = createTauriChromeBridge() as unknown as Record<string, unknown>;
     // The renderer reads their absence as "unavailable" and degrades, which is
     // the honest state for a shell that runs no Host.
-    for (const absent of ["beginMediaUpload", "importArtifact", "getUpdateSnapshot", "attachPrediction", "requestMicrophoneAccess"]) {
+    //
+    // The three artifact members are deliberately *not* in this list. They were
+    // when the shell ran no Host, but the shell now owns the artifact library
+    // itself, so they are shell-level operations like any other.
+    for (const absent of ["beginMediaUpload", "getUpdateSnapshot", "attachPrediction", "requestMicrophoneAccess", "listServiceDefinitions", "attachBrowserObservation"]) {
       assert.equal(bridge[absent], undefined, `${absent} must not be exposed`);
     }
   });

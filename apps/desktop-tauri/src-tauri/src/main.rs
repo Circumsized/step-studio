@@ -5,6 +5,7 @@
 //! attached at construction time, before the renderer bundle runs. That is why
 //! `app.windows` is empty in the conf.
 
+mod artifacts;
 mod bridge;
 mod chrome;
 mod diagnostics;
@@ -106,6 +107,9 @@ fn main() {
             chrome::export_logs,
             chrome::open_project_directory,
             chrome::open_project_in_editor,
+            chrome::choose_artifact_directory,
+            chrome::import_artifact,
+            chrome::export_artifact,
             chrome::notify,
             chrome::set_theme,
             chrome::set_conversation_view_state,

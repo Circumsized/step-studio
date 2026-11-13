@@ -30,14 +30,14 @@ pub struct ChromeError {
 }
 
 impl ChromeError {
-    fn invalid(message: impl Into<String>) -> Self {
+    pub(crate) fn invalid(message: impl Into<String>) -> Self {
         Self {
             code: "INVALID_ARGUMENT".to_string(),
             message: message.into(),
         }
     }
 
-    fn failed(message: impl Into<String>) -> Self {
+    pub(crate) fn failed(message: impl Into<String>) -> Self {
         Self {
             code: "CHROME_FAILED".to_string(),
             message: message.into(),
@@ -45,7 +45,7 @@ impl ChromeError {
     }
 }
 
-type ChromeResult<T> = Result<T, ChromeError>;
+pub(crate) type ChromeResult<T> = Result<T, ChromeError>;
 
 /// `<app_data>/step-studio`, the shell's own state directory.
 ///
@@ -246,7 +246,7 @@ fn project_dir(workspace_id: &str) -> ChromeResult<PathBuf> {
 /// derivations of "where the state lives" is how a reveal button ends up opening
 /// a directory with nothing in it — and how a secret gets written to one place
 /// and read from another.
-fn shell_state_dir() -> PathBuf {
+pub(crate) fn shell_state_dir() -> PathBuf {
     // A test may have installed a directory. Checked first so a test never has
     // to touch the process environment: `std::env::set_var` is `unsafe`, and this
     // workspace forbids `unsafe` outright.
@@ -334,6 +334,111 @@ pub fn export_logs(app: tauri::AppHandle) -> ChromeResult<Value> {
     };
     std::fs::copy(&source, destination)
         .map_err(|error| ChromeError::failed(format!("cannot copy the log: {error}")))?;
+    Ok(json!({ "ok": true, "cancelled": false }))
+}
+
+/// Pick where the artifact library lives.
+///
+/// The library is moved, not pointed at a second one: `set_directory` keeps the
+/// old root in the catalog, so artifacts already stored stay resolvable. That is
+/// why choosing a directory is a shell command at all — the dialog is the only
+/// part needing the OS, and the state it returns is the renderer's read model.
+#[tauri::command]
+pub fn choose_artifact_directory() -> ChromeResult<Value> {
+    let Some(handle) = crate::app_handle() else {
+        return Err(ChromeError::failed(
+            "the artifact location picker is not available: no app handle",
+        ));
+    };
+    let picked = tauri_plugin_dialog::DialogExt::dialog(handle)
+        .file()
+        .set_title("选择产物存储位置")
+        .blocking_pick_folder();
+    // A content URI (Android) has no filesystem path, so there is nothing to
+    // adopt. Treating it as a cancellation would be a silent wrong answer.
+    let Some(directory) = picked.as_ref().and_then(|folder| folder.as_path()) else {
+        return Ok(json!({ "ok": true, "cancelled": true }));
+    };
+    let storage = crate::artifacts::library()
+        .set_directory(&directory.to_string_lossy())
+        // A refusal still has to reach the user: the renderer shows `message`
+        // verbatim, so this says what to do about it rather than what failed.
+        .map_err(|error| ChromeError::failed(error.message))?;
+    Ok(json!({ "ok": true, "cancelled": false, "storage": storage }))
+}
+
+/// Import a file into the artifact library.
+///
+/// The file picker is filtered by the artifact kind, because a `.png` chosen for
+/// an audio artifact is a mis-click and storing it would put a row in the library
+/// that no player can open.
+#[tauri::command]
+pub fn import_artifact(input: Value) -> ChromeResult<Value> {
+    let kind = input.get("kind").and_then(Value::as_str).unwrap_or("");
+    if !crate::artifacts::ARTIFACT_KINDS.contains(&kind) {
+        return Err(ChromeError::invalid("that is not an artifact kind"));
+    }
+    let Some(handle) = crate::app_handle() else {
+        return Err(ChromeError::failed(
+            "the file picker is not available: no app handle",
+        ));
+    };
+    let picked = tauri_plugin_dialog::DialogExt::dialog(handle)
+        .file()
+        .set_title("选择要导入的文件")
+        .add_filter(kind, &[kind])
+        .blocking_pick_file();
+    let Some(file) = picked.as_ref().and_then(|file| file.as_path()) else {
+        return Ok(json!({ "ok": true, "cancelled": true }));
+    };
+    let name = file
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let artifact = crate::artifacts::library()
+        .register(
+            &json!({
+                "kind": kind,
+                "name": name,
+                "mimeType": crate::artifacts::mime_for(&name),
+                "workspaceId": input.get("workspaceId").cloned().unwrap_or(Value::Null),
+                "sessionId": input.get("sessionId").cloned().unwrap_or(Value::Null),
+            }),
+            file,
+        )
+        .map_err(|error| ChromeError::failed(error.message))?;
+    Ok(json!({ "ok": true, "cancelled": false, "artifact": artifact }))
+}
+
+/// Copy one artifact out to a place the user chooses.
+///
+/// Reads the payload through `resolve`, which checks the file still matches the
+/// catalog's size before handing over a path — a payload that changed underneath
+/// is refused rather than exported.
+#[tauri::command]
+pub fn export_artifact(input: Value) -> ChromeResult<Value> {
+    let artifact_id = input.get("artifactId").and_then(Value::as_str).unwrap_or("");
+    if !crate::artifacts::is_artifact_id(artifact_id) {
+        return Err(ChromeError::invalid("that is not an artifact id"));
+    }
+    let (record, source) = crate::artifacts::library()
+        .resolve(artifact_id)
+        .map_err(|error| ChromeError::failed(error.message))?;
+    let name = record.get("name").and_then(Value::as_str).unwrap_or("artifact");
+    let Some(handle) = crate::app_handle() else {
+        return Err(ChromeError::failed(
+            "the save dialog is not available: no app handle",
+        ));
+    };
+    let picked = tauri_plugin_dialog::DialogExt::dialog(handle)
+        .file()
+        .set_file_name(name)
+        .blocking_save_file();
+    let Some(destination) = picked.as_ref().and_then(|file| file.as_path()) else {
+        return Ok(json!({ "ok": true, "cancelled": true }));
+    };
+    std::fs::copy(&source, destination)
+        .map_err(|error| ChromeError::failed(format!("cannot write the file: {error}")))?;
     Ok(json!({ "ok": true, "cancelled": false }))
 }
 
@@ -475,12 +580,51 @@ fn is_uuid(value: &str) -> bool {
 /// the pump, and a secret's expiry is the one place this module needs a clock.
 /// `SystemTime::now` cannot fail backwards, so the `unwrap_or` is the
 /// unreachable arm rather than a swallowed error.
-fn now_millis() -> i64 {
+pub(crate) fn now_millis() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| elapsed.as_millis() as i64)
         .unwrap_or(0)
+}
+
+/// `now_millis` as RFC 3339 UTC with millisecond precision.
+///
+/// Inlined rather than pulled from `chrono`: the artifact catalog's `createdAt`
+/// is the only consumer, and one timestamp format is not worth a dependency tree.
+/// The algorithm is Howard Hinnant's `civil_from_days`, run backwards.
+pub(crate) fn now_iso_millis() -> String {
+    let millis = now_millis();
+    let (year, month, day, hour, minute, second) = civil_from_unix_millis(millis);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{:03}Z",
+        millis.rem_euclid(1000)
+    )
+}
+
+/// Days since the epoch, to a calendar date and a time of day.
+///
+/// Handles dates before 1970 (`div_euclid`/`rem_euclid` rather than `/` and `%`),
+/// which a clock skew can produce and a truncating division would render as a
+/// year in the far future.
+pub(crate) fn civil_from_unix_millis(millis: i64) -> (i64, u32, u32, u32, u32, u32) {
+    let days = millis.div_euclid(86_400_000);
+    let seconds_of_day = millis.rem_euclid(86_400_000);
+    let hour = (seconds_of_day / 3_600_000) as u32;
+    let minute = ((seconds_of_day / 60_000) % 60) as u32;
+    let second = ((seconds_of_day / 1000) % 60) as u32;
+
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let day_of_era = z.rem_euclid(146_097);
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36524 - day_of_era / 146_096) / 365;
+    let year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let mp = (5 * day_of_year + 2) / 153;
+    let day = (day_of_year - (153 * mp + 2) / 5 + 1) as u32;
+    let month = (mp + if mp < 10 { 3 } else { -9 }) as u32;
+    (year + i64::from(month <= 2), month, day, hour, minute, second)
 }
 
 /// A system notification with fixed text.

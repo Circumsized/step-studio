@@ -99,6 +99,13 @@ const SHELL_LOCAL: &[(&str, &str)] = &[
     // them: no adapter round trip for information it already has.
     ("environment.get", "limited"),
     ("diagnostics.get", "limited"),
+    // The artifact library is the shell's own store: a catalog plus
+    // content-addressed payloads under `.step-studio`. `limited` because the
+    // write side is a dialog-driven import, not a general create — the renderer
+    // reaches that through the three `chrome` members, not through here.
+    ("artifacts.list", "limited"),
+    ("artifacts.storage.get", "limited"),
+    ("artifacts.delete", "limited"),
 ];
 
 const RENAMED: &[(&str, &str)] = &[
@@ -172,6 +179,18 @@ pub fn resolve_operation(name: &str, input: &Value) -> Option<(Value, Dispatch)>
     }
     if let Some((_, renamed)) = RENAMED.iter().find(|(from, _)| *from == name) {
         return Some((spread(input, renamed), Dispatch::Control));
+    }
+    // Before `SHELL_LOCAL`, because the artifact library reads `kind` as a real
+    // filter and `spread` would overwrite it with `""`. A user who picked
+    // "image" in the artifact pane would get every kind back, with nothing in the
+    // log saying a filter was dropped — the same class of bug the git arm had,
+    // in the other direction: there the input was hand-picked and fields went
+    // missing, here a field is present and gets clobbered.
+    if matches!(
+        name,
+        "artifacts.list" | "artifacts.storage.get" | "artifacts.delete"
+    ) {
+        return Some((input.clone(), Dispatch::Local));
     }
     if SHELL_LOCAL.iter().any(|(id, _)| *id == name) {
         return Some((spread(input, ""), Dispatch::Local));
@@ -585,6 +604,65 @@ fn pump(
                         }
                     }
                     Dispatch::Local => {
+                        // The artifact library is the one shell-local answer that
+                        // can fail, and the chain below is infallible by shape:
+                        // every other arm returns a read model, including the ones
+                        // that describe a failure inside it. So artifacts are
+                        // answered before the chain, with the protocol's own
+                        // failure receipt — a `failed` here reaches the renderer as
+                        // a rejection it already knows how to show, where a Value
+                        // with an error field inside would be rendered as an empty
+                        // library.
+                        if matches!(
+                            job.command_name.as_str(),
+                            "artifacts.list" | "artifacts.storage.get" | "artifacts.delete"
+                        ) {
+                            let outcome = match job.command_name.as_str() {
+                                "artifacts.list" => crate::artifacts::library().list(&job.operation),
+                                "artifacts.storage.get" => crate::artifacts::library().state(),
+                                _ => {
+                                    let artifact_id = job
+                                        .operation
+                                        .get("artifactId")
+                                        .and_then(Value::as_str)
+                                        .unwrap_or("");
+                                    crate::artifacts::library()
+                                        .remove(artifact_id)
+                                        .map(|()| json!({ "ok": true }))
+                                }
+                            };
+                            match outcome {
+                                Ok(answer) => {
+                                    emit(sink, &mut stream, |stream| {
+                                        stream.receipt(
+                                            &job.request_id,
+                                            &job.command_name,
+                                            "completed",
+                                            json!({ "result": answer }),
+                                        )
+                                    });
+                                    let _ = job.reply.send(match job.want {
+                                        Want::Ack => Ok(ack),
+                                        Want::Result => Ok(answer),
+                                    });
+                                }
+                                Err(error) => {
+                                    emit(sink, &mut stream, |stream| {
+                                        stream.receipt(
+                                            &job.request_id,
+                                            &job.command_name,
+                                            "failed",
+                                            json!({ "error": { "code": error.code, "message": error.message } }),
+                                        )
+                                    });
+                                    // A String, not an `IpcError`: this
+                                    // channel's error type is a message, and
+                                    // the receipt above already carried the code.
+                                    let _ = job.reply.send(Err(error.message));
+                                }
+                            }
+                            continue;
+                        }
                         // Shell-local answers, all for the same reason: each is
                         // something the shell already knows, so asking the adapter
                         // for it would be a round trip to learn it. The manifest
@@ -936,6 +1014,49 @@ mod tests {
             assert!(claimed.contains(&id), "{id} is resolvable but not claimed");
         }
         assert!(!claimed.contains(&"github.pr.list"), "a refused name must not be claimed");
+    }
+
+    #[test]
+    fn the_artifact_queries_resolve_locally_and_carry_their_filters_through() {
+        // The artifact library is the shell's own store, so these are answered
+        // without an adapter round trip. What this pins beyond the dispatch is
+        // that the filters survive: `resolve_operation` spreads the input, and a
+        // hand-picked subset would silently drop `kind`, `cursor` or
+        // `artifactId` — the list would come back unfiltered or the delete would
+        // refuse for a missing id, with nothing in the log saying so.
+        for name in ["artifacts.list", "artifacts.storage.get", "artifacts.delete"] {
+            let (_, dispatch) = resolve_operation(name, &json!({})).expect("resolves");
+            assert_eq!(dispatch, Dispatch::Local, "{name} is the shell's to answer");
+        }
+        let (operation, _) = resolve_operation(
+            "artifacts.list",
+            &json!({ "workspaceId": "ws-1", "kind": "image", "cursor": "c", "limit": 25 }),
+        )
+        .expect("resolves");
+        assert_eq!(operation.get("workspaceId").and_then(Value::as_str), Some("ws-1"));
+        assert_eq!(operation.get("kind").and_then(Value::as_str), Some("image"));
+        assert_eq!(operation.get("cursor").and_then(Value::as_str), Some("c"));
+        assert_eq!(operation.get("limit").and_then(Value::as_u64), Some(25));
+
+        let (operation, _) =
+            resolve_operation("artifacts.delete", &json!({ "artifactId": "3f2504e0-4f89-11d3-9a0c-0305e82c3301" }))
+                .expect("resolves");
+        assert_eq!(
+            operation.get("artifactId").and_then(Value::as_str),
+            Some("3f2504e0-4f89-11d3-9a0c-0305e82c3301"),
+            "the id survives, or the delete is refused for a field that was sent"
+        );
+
+        // And with no `kind` sent, none is invented. This is the other half of
+        // the same field: the first version of this test asserted `Some("")`,
+        // because `spread` injected one — which is the bug, and the assertion
+        // was written to match the bug rather than the contract.
+        let (operation, _) = resolve_operation("artifacts.list", &json!({})).expect("resolves");
+        assert_eq!(
+            operation.get("kind"),
+            None,
+            "no kind is sent, so no kind is invented"
+        );
     }
 
     #[test]

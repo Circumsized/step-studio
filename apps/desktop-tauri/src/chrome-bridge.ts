@@ -7,11 +7,18 @@
  * only address the operations declared here.
  *
  * Only the shell-level subset is present. The auto-updater half and the
- * Host-backed methods (artifacts, media upload, prediction, browser
- * observation, service definitions) are absent on purpose: the first is
- * packaging rather than a product surface, the second needs a Host this shell
- * does not run. The renderer treats every one of them as optional and draws
- * its honest unavailable state, exactly as it does when the preload is missing.
+ * Host-backed methods (media upload, prediction, browser observation, service
+ * definitions) are absent on purpose: the first is packaging rather than a
+ * product surface, the second needs a Host this shell does not run. The
+ * renderer treats every one of them as optional and draws its honest
+ * unavailable state, exactly as it does when the preload is missing.
+ *
+ * The three artifact members are the exception, and they are here because the
+ * shell owns the artifact library itself: a catalog plus content-addressed
+ * payloads under `.step-studio/artifact-library/v1`, ported from the Electron
+ * host's `ArtifactLibrary`. Reading and deleting reach it through the bridge's
+ * `artifacts.list` / `artifacts.storage.get` / `artifacts.delete`; these three
+ * are the parts that need an OS dialog.
  *
  * `platform` is derived from the renderer's own user agent rather than a
  * command, because it is a synchronous readonly field and the WebView engine
@@ -28,6 +35,38 @@ import { listen as tauriListen } from "@tauri-apps/api/event";
  * `src-tauri/src/menu.rs`; a drift there is a menu that appears to do nothing.
  */
 const MENU_COMMAND_EVENT = "omp-studio:chrome:menu-command";
+
+/** Mirrors `ArtifactFileResult` in `apps/desktop/src/chrome-artifacts-shared.ts`. */
+export type ArtifactFileResult =
+  | {
+      readonly ok: true;
+      readonly cancelled: boolean;
+      readonly artifact?: {
+        readonly artifactId: string;
+        readonly kind: string;
+        readonly name: string;
+        readonly mimeType: string;
+        readonly bytes: number;
+        readonly createdAt: string;
+        readonly workspaceId?: string;
+        readonly sessionId?: string;
+        readonly sha256: string;
+      };
+      readonly storage?: {
+        readonly locationName: string;
+        readonly writable: boolean;
+        readonly total: number;
+        readonly totalBytes: number;
+      };
+    }
+  | { readonly ok: false; readonly message: string };
+
+/** Mirrors `ArtifactImportInput` in the same file. */
+export interface ArtifactImportInput {
+  readonly kind: string;
+  readonly sessionId?: string;
+  readonly workspaceId?: string;
+}
 
 /** Mirrors `ChromeAvatarBytes` in `apps/desktop/src/chrome-profile-shared.ts`. */
 export interface AvatarBytes {
@@ -65,6 +104,14 @@ export interface TauriChromeBridge {
     secretId: string;
     sessionId: string;
   }): Promise<{ ok: true; token: string; name: string } | { ok: false; message: string }>;
+  /**
+   * The artifact library. Each answers with the Electron preload's shape
+   * (`ArtifactFileResult` in `apps/desktop/src/chrome-artifacts-shared.ts`), so
+   * the renderer's handling is identical on both shells.
+   */
+  chooseArtifactDirectory(): Promise<ArtifactFileResult>;
+  importArtifact(input: ArtifactImportInput): Promise<ArtifactFileResult>;
+  exportArtifact(input: { artifactId: string }): Promise<ArtifactFileResult>;
   exportLogs(): Promise<
     | { readonly ok: true }
     | { readonly ok: false; readonly cancelled: true }
@@ -108,6 +155,16 @@ export function createTauriChromeBridge(): TauriChromeBridge {
     // The log directory is `<cwd>/.step-studio`, derived the same way the bridge
     // derives it — the bridge is the one that writes the file, so it decides.
     openLogDir: () => tauriInvoke("open_log_dir"),
+    chooseArtifactDirectory: () => tauriInvoke("choose_artifact_directory"),
+    // Spread field by field, as the other argument-taking commands do: an
+    // `interface` has no index signature, so it is not an `InvokeArgs`.
+    importArtifact: input =>
+      tauriInvoke("import_artifact", {
+        kind: input.kind,
+        ...(input.sessionId === undefined ? {} : { sessionId: input.sessionId }),
+        ...(input.workspaceId === undefined ? {} : { workspaceId: input.workspaceId }),
+      }),
+    exportArtifact: input => tauriInvoke("export_artifact", input),
     exportLogs: () => tauriInvoke("export_logs"),
 
     // The shell builds a native menu and emits the allowlisted id; this only

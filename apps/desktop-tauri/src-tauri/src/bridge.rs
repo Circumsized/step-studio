@@ -60,7 +60,7 @@ impl IpcError {
         }
     }
 
-    fn raw(message: String) -> Self {
+    pub(crate) fn raw(message: String) -> Self {
         Self {
             code: "DESKTOP_BRIDGE_ERROR".to_string(),
             message,
