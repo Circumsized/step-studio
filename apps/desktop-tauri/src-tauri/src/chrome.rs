@@ -21,7 +21,7 @@ use serde_json::{json, Value};
 use tauri::Manager;
 
 /// Rejection payload, shaped like the rest of the shell's IPC errors.
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct ChromeError {
     pub code: String,
     pub message: String,
@@ -168,6 +168,72 @@ pub fn open_url(url: String) -> ChromeResult<()> {
     Ok(())
 }
 
+/// Reveal a project's directory in the OS file manager.
+///
+/// The `workspaceId` is the project's absolute path — that is what the session
+/// store's `cwd` carries and what a file tree matches against. It is validated
+/// as an existing directory rather than trusted: this string arrives from the
+/// renderer, and handing an arbitrary one to `xdg-open` would run whatever the
+/// renderer asked for.
+#[tauri::command]
+pub fn open_project_directory(workspace_id: String) -> ChromeResult<()> {
+    let path = project_dir(&workspace_id)?;
+    // The path is passed as one argv element, never through a shell: a project
+    // directory can contain anything, and `sh -c` would interpret it.
+    let outcome = if cfg!(target_os = "macos") {
+        Command::new("open").arg(path).spawn()
+    } else if cfg!(target_os = "windows") {
+        Command::new("explorer").arg(path).spawn()
+    } else {
+        Command::new("xdg-open").arg(path).spawn()
+    };
+    outcome
+        .map_err(|error| ChromeError::failed(format!("cannot reveal the directory: {error}")))?;
+    Ok(())
+}
+
+/// Open a project's directory in the system's default editor.
+///
+/// Same path, same validation. Reported as unavailable rather than attempted
+/// where the platform has no such notion — `xdg-open` opens a *viewer*, which on
+/// most desktops is the file manager again, and calling that "open in editor"
+/// would be a lie the user discovers by clicking.
+#[tauri::command]
+pub fn open_project_in_editor(workspace_id: String) -> ChromeResult<Value> {
+    let path = project_dir(&workspace_id)?;
+    // macOS names the editor; Windows and Linux have no portable one, so they
+    // reveal instead and say which happened. The renderer shows the returned
+    // `mode`, so a caller can tell "opened in an editor" from "revealed".
+    let (mode, outcome) = if cfg!(target_os = "macos") {
+        ("editor", Command::new("open").args(["-t"]).arg(path).spawn())
+    } else if cfg!(target_os = "windows") {
+        ("reveal", Command::new("explorer").arg(path).spawn())
+    } else {
+        ("reveal", Command::new("xdg-open").arg(path).spawn())
+    };
+    outcome.map_err(|error| ChromeError::failed(format!("cannot open the project: {error}")))?;
+    Ok(json!({ "mode": mode }))
+}
+
+/// Validate a `workspaceId` as a directory this machine actually has.
+///
+/// Separate from the commands that use it so the check is testable without
+/// spawning `xdg-open`: a test that really opened a file manager would be a test
+/// that leaves a window behind. It is also the one place the trust boundary is
+/// enforced — both commands go through here, so neither can be reached without
+/// it.
+fn project_dir(workspace_id: &str) -> ChromeResult<PathBuf> {
+    // The `workspaceId` is the project's absolute path, which is what the session
+    // store's `cwd` carries and what a file tree matches against. It arrives from
+    // the renderer, so it is checked rather than trusted: an arbitrary string
+    // handed to `xdg-open` would run whatever the renderer asked for.
+    let path = PathBuf::from(workspace_id);
+    if !path.is_dir() {
+        return Err(ChromeError::invalid("not a directory on this machine"));
+    }
+    Ok(path)
+}
+
 /// A system notification with fixed text.
 #[tauri::command]
 pub fn notify(title: String, body: Option<String>) -> ChromeResult<()> {
@@ -268,4 +334,45 @@ pub fn report_performance_sample(sample: Value) -> ChromeResult<bool> {
         false => eprintln!("[chrome] perf sample role={role} {}", figures.join(" ")),
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod project_tests {
+    use super::*;
+
+    #[test]
+    fn a_real_directory_is_accepted() {
+        // The repository itself, which every run of this test has.
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(2)
+            .expect("the repo root")
+            .to_path_buf();
+        assert!(project_dir(&root.to_string_lossy()).is_ok());
+    }
+
+    #[test]
+    fn a_path_that_is_not_a_directory_is_refused() {
+        // The trust boundary: this string arrives from the renderer and is handed
+        // to `xdg-open`. A file, a missing path and a bare word are all refused
+        // rather than passed through.
+        for candidate in [
+            "/etc/hostname",
+            "/a/path/that/does/not/exist",
+            "",
+            "xdg-open --help",
+            "-t",
+        ] {
+            let outcome = project_dir(candidate);
+            assert!(
+                outcome.is_err(),
+                "{candidate:?} must be refused, not handed to the OS opener"
+            );
+            let error = outcome.expect_err("refused");
+            assert!(
+                !error.code.is_empty(),
+                "{candidate:?} refused with a code the renderer can read"
+            );
+        }
+    }
 }

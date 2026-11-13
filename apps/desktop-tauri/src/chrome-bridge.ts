@@ -45,6 +45,8 @@ export interface TauriChromeBridge {
   saveAvatar(input: AvatarBytes): Promise<{ ok: true }>;
   loadAvatar(): Promise<AvatarBytes | null>;
   clearAvatar(): Promise<void>;
+  openProjectDirectory(workspaceId: string): Promise<void>;
+  openProjectInEditor(workspaceId: string): Promise<{ mode: "editor" | "reveal" }>;
 }
 
 /**
@@ -71,6 +73,14 @@ export function createTauriChromeBridge(): TauriChromeBridge {
     platform: detectPlatform(navigator.userAgent),
 
     openUrl: payload => tauriInvoke<void>("open_url", { url: payload.url }),
+
+    // The `workspaceId` is the project's absolute path, and the shell validates
+    // it as an existing directory before handing it to the OS opener — this
+    // string arrives from the renderer, so it is not trusted on the way out.
+    openProjectDirectory: workspaceId =>
+      tauriInvoke<void>("open_project_directory", { workspaceId }),
+    openProjectInEditor: workspaceId =>
+      tauriInvoke<{ mode: "editor" | "reveal" }>("open_project_in_editor", { workspaceId }),
 
     notify: payload =>
       tauriInvoke<void>(

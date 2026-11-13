@@ -88,6 +88,8 @@ fn main() {
             chrome::load_avatar,
             chrome::clear_avatar,
             chrome::open_url,
+            chrome::open_project_directory,
+            chrome::open_project_in_editor,
             chrome::notify,
             chrome::set_theme,
             chrome::set_conversation_view_state,
