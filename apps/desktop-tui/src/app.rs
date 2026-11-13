@@ -37,6 +37,13 @@ pub struct App {
     /// as an argument: a pure render function given a scroll position is no
     /// longer pure, and the golden fixtures depend on it being pure.
     panel_offset: u16,
+    /// A one-shot confirmation for the status line, as `y`'s copy produces.
+    ///
+    /// Separate from `error` because the two say different things and the reader
+    /// acts differently: an error means the data above is stale, a notice means
+    /// an action was taken. Folding them into one field would make a successful
+    /// copy look like a failure.
+    notice: Option<String>,
     refreshed: Instant,
 }
 
@@ -69,6 +76,7 @@ impl App {
             error: None,
             selection: TableState::default(),
             panel_offset: 0,
+            notice: None,
             refreshed: Instant::now() - REFRESH,
         };
         app.refresh();
@@ -211,6 +219,50 @@ impl App {
         self.select_previous();
     }
 
+    /// `y`: copy the visible rows to the clipboard, as tuicr does.
+    ///
+    /// The one tuicr binding this TUI was missing. crossterm carries
+    /// `CopyToClipboard` (OSC 52), so there is no new dependency and no
+    /// clipboard library — the terminal does the storing, which is also why it
+    /// works over SSH where an X11 or Wayland selection would not.
+    ///
+    /// Returns what was copied, so the caller can say so in the status line.
+    /// Nothing is copied for the usage dashboard: its content is the CLI's own
+    /// panel, and copying a truncated view of it would be worse than copying
+    /// nothing.
+    pub fn copy_selection(&mut self) -> Option<String> {
+        let text = self.selection_text()?;
+        // OSC 52 asks the terminal to hold the text. A terminal that ignores it
+        // is a terminal where the copy silently did nothing, which is why the
+        // status line reports what was written rather than claiming success.
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::clipboard::CopyToClipboard::to_clipboard_from(text.clone())
+        );
+        Some(text)
+    }
+
+    /// What `y` would copy for the active dashboard.
+    ///
+    /// Dispatches to a free function per dashboard rather than reading the
+    /// models through `&self`, because `App` holds a `BridgeSession` and there is
+    /// no way to build one without a socket — which would make the selection
+    /// logic untestable. The free functions take the model they need and nothing
+    /// else.
+    pub fn selection_text(&self) -> Option<String> {
+        match self.dashboard {
+            Dashboard::ProcessTree => self.process_tree.as_ref().and_then(process_rows),
+            Dashboard::AgentStatus => self.agent_status.as_ref().and_then(agent_rows),
+            Dashboard::Usage => None,
+            Dashboard::SessionTree => self.session_tree.as_ref().and_then(session_rows),
+        }
+    }
+
+    /// Put a one-shot confirmation on the status line.
+    pub fn set_status(&mut self, message: String) {
+        self.notice = Some(message);
+    }
+
     pub fn select_next(&mut self) {
         let rows = self.row_count();
         if rows == 0 {
@@ -294,23 +346,30 @@ impl App {
         use ratatui::layout::Rect;
         use ratatui::style::{Color, Modifier, Style};
         use ratatui::widgets::Paragraph;
-        let Some(reason) = &self.error else {
-            return;
+        // An error outranks a notice: "the data above is stale" is the more
+        // important of the two things this line can say.
+        let (text, style) = match &self.error {
+            Some(reason) => (
+                format!("⚠ {reason}（上方为上一次成功的数据）"),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            None => match &self.notice {
+                Some(notice) => (
+                    notice.clone(),
+                    Style::default().fg(Color::Black).bg(Color::Green),
+                ),
+                None => return,
+            },
         };
         let area = frame.area();
         if area.height == 0 || area.width == 0 {
             return;
         }
         let line = Rect::new(area.x, area.y + area.height - 1, area.width, 1);
-        frame.render_widget(
-            Paragraph::new(format!("⚠ {reason}（上方为上一次成功的数据）")).style(
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            line,
-        );
+        frame.render_widget(Paragraph::new(text).style(style), line);
     }
 
     /// An honest empty, with the reason when there is one.
@@ -353,5 +412,124 @@ fn none_or_error(error: serde_json::Error, nothing_showing: bool) -> Option<Stri
         Some(format!("数据形状不符：{error}"))
     } else {
         None
+    }
+}
+
+/// Tab-separated process rows. No paths, and no rss where there is no rss.
+fn process_rows(tree: &ProcessTree) -> Option<String> {
+    let rows: Vec<String> = tree
+        .processes
+        .iter()
+        .map(|process| {
+            // A dash, not a zero: zero is a measurement, and the CLI's rss is
+            // absent rather than nil.
+            let rss = process
+                .rss_bytes
+                .map_or_else(|| "-".to_string(), |bytes| bytes.to_string());
+            format!("{}\t{}\t{}", process.pid, process.role.label(), rss)
+        })
+        .collect();
+    non_empty(rows)
+}
+
+fn agent_rows(model: &AgentStatus) -> Option<String> {
+    let rows: Vec<String> = model
+        .agents
+        .iter()
+        .map(|agent| {
+            format!(
+                "{}\t{}\t{}",
+                agent.display_name, agent.status, agent.updated_at
+            )
+        })
+        .collect();
+    non_empty(rows)
+}
+
+fn session_rows(model: &SessionTree) -> Option<String> {
+    let rows: Vec<String> = model
+        .entries
+        .iter()
+        .map(|entry| {
+            // "(untitled)" rather than an empty field, for the same reason the
+            // dashboard shows a placeholder: an empty cell looks like a fault.
+            let title = entry
+                .title
+                .as_deref()
+                .filter(|title| !title.is_empty())
+                .unwrap_or("(untitled)");
+            format!(
+                "{}\t{}\t{}",
+                title, entry.message_count, entry.last_active_at
+            )
+        })
+        .collect();
+    non_empty(rows)
+}
+
+/// `None` for an empty list, so a copy of nothing is not a copy of an empty
+/// string — which is indistinguishable from a failed copy.
+fn non_empty(rows: Vec<String>) -> Option<String> {
+    if rows.is_empty() {
+        return None;
+    }
+    Some(rows.join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{ProcessRecord, ProcessTree, Role};
+
+    fn tree() -> ProcessTree {
+        ProcessTree {
+            generated_at: "2026-11-13T00:00:00.000Z".to_string(),
+            self_pid: 10,
+            processes: vec![
+                ProcessRecord {
+                    pid: 10,
+                    parent_pid: None,
+                    role: Role::Daemon,
+                    rss_bytes: Some(1024),
+                },
+                ProcessRecord {
+                    pid: 11,
+                    parent_pid: Some(10),
+                    role: Role::Adapter,
+                    rss_bytes: None,
+                },
+            ],
+            total_rss_bytes: 1024,
+            complete: true,
+        }
+    }
+
+    #[test]
+    fn y_copies_the_rows_the_dashboard_is_showing() {
+        // tuicr's copy binding, which was the one binding this TUI was missing.
+        assert_eq!(
+            process_rows(&tree()).expect("something to copy"),
+            "10\tdaemon\t1024\n11\tadapter\t-"
+        );
+    }
+
+    #[test]
+    fn a_row_with_no_measurement_copies_as_a_dash_not_a_zero() {
+        // Zero is a measurement. The CLI's rss is absent, and copying 0 would
+        // claim something the store never said.
+        assert!(process_rows(&tree())
+            .expect("copies")
+            .contains("11\tadapter\t-"));
+    }
+
+    #[test]
+    fn an_empty_dashboard_copies_nothing_rather_than_an_empty_string() {
+        // An empty string in the clipboard is indistinguishable from a failed
+        // copy, and the status line would report a row count of zero.
+        let bare = ProcessTree {
+            processes: Vec::new(),
+            ..tree()
+        };
+        assert!(process_rows(&bare).is_none());
     }
 }

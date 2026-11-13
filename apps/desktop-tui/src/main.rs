@@ -115,6 +115,14 @@ fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, endpoint: &str) -> Res
             KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
             KeyCode::Tab => app.next_dashboard(),
             KeyCode::BackTab => app.previous_dashboard(),
+            KeyCode::Char('y') => {
+                // tuicr's copy binding. What lands in the status line is what was
+                // written to the terminal, not a claim that it worked.
+                match app.copy_selection() {
+                    Some(copied) => app.set_status(format!("已复制 {} 行", copied.lines().count())),
+                    None => app.set_status("没有可复制的内容".to_string()),
+                }
+            }
             KeyCode::Down | KeyCode::Char('j') => app.move_down(),
             KeyCode::Up | KeyCode::Char('k') => app.move_up(),
             _ => {}
