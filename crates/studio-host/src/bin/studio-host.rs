@@ -649,7 +649,10 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
             Ok(stream) => stream,
             Err(error) => {
                 eprintln!("step-studio-host: {error}");
-                daemon.let_go(surface);
+                // No writer thread exists yet, so there is nothing to join — but
+                // the grace clock is already attached, and leaving it so would
+                // keep the daemon alive forever with no surface.
+                daemon.release_surface(surface);
                 return;
             }
         };
@@ -667,7 +670,10 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         Ok(stream) => stream,
         Err(error) => {
             eprintln!("step-studio-host: {error}");
-            daemon.let_go(surface);
+            // The writer thread is running, and dropping both senders is what
+            // ends it: this one goes out of scope, and `release_surface` drops
+            // the slot's.
+            daemon.release_surface(surface);
             return;
         }
     };
@@ -680,8 +686,15 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         slot.as_ref().map(AdapterHandle::view)
     };
     let Some(handle) = handle else {
+        // Order, and it is the difference between returning and hanging. The
+        // writer ends when its channel reports closed, and that needs *both*
+        // senders gone — the one in the slot and this function's local one. The
+        // previous order joined first and dropped second, so `recv()` never
+        // returned `Err` and the join waited forever on a thread that could not
+        // finish.
+        drop(sender);
+        daemon.release_surface(surface);
         let _ = writer.join();
-        daemon.let_go(surface);
         return;
     };
 
@@ -831,13 +844,8 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     // the join below waiting for a close this function is the only one that can
     // cause.
     drop(sender);
-    daemon.let_go(surface);
+    daemon.release_surface(surface);
     let _ = writer.join();
-    daemon
-        .grace
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .detach(daemon.started.elapsed());
 }
 
 /// Close a surface's socket in both directions.
@@ -857,13 +865,30 @@ fn close_socket(stream: &transport::Stream) {
 fn close_socket(_stream: &transport::Stream) {}
 
 impl Daemon {
-    /// Give up the relay and wake whoever is waiting for it.
-    fn let_go(&self, surface: u64) {
+    /// Undo everything a surface's attach set up.
+    ///
+    /// One call rather than two, because the two halves were previously separate
+    /// and three of the four exit paths did only one of them: the surface's slot
+    /// went, the grace clock's attachment stayed. A daemon whose grace clock
+    /// still counts a departed surface never drains — it holds the endpoint and
+    /// the adapter indefinitely with nobody attached.
+    fn release_surface(&self, surface: u64) {
+        self.forget_routes(surface);
         {
             let mut surfaces = self.to_surface.lock().unwrap_or_else(|p| p.into_inner());
             surfaces.retain(|(_, _, held)| *held != surface);
         }
-        // And the requests it will never get an answer to.
+        self.grace
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .detach(self.started.elapsed());
+    }
+
+    /// Give up the relay and wake whoever is waiting for it.
+    fn forget_routes(&self, surface: u64) {
+        // The requests it will never get an answer to. Keeping them would grow
+        // the map once per surface that ever attached, for as long as the daemon
+        // lives.
         self.pending
             .lock()
             .unwrap_or_else(|p| p.into_inner())
