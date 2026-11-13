@@ -451,10 +451,10 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 
 ### 9.4 表面 D：HQTUI TUI（产品级）
 
-- 选型：`ports/rust` crate `hqtui` 0.2.0（约 1.82 万行零依赖）fork 自管 + vendored path；TS 包需 Bun/Node 或 88 MB 编译产物，不采用。
-- 能力面：真彩色 + 自动降级；Braille 2×4 像素/格 + block/ASCII 模式 + 渐变 + alpha；CSS Grid 风格约束布局；约 30 组件；30fps（SSH 降 15）+ 差分渲染；SGR 鼠标 + Tab 焦点 + OSC 52；headless 渲染器**待 M6a.1 spike 确认**（v4.2 误列为既有能力，IC-9 已改）；13 组 golden fixtures 作对拍门禁。
+- 选型：~~`ports/rust` crate `hqtui` 0.2.0（约 1.82 万行零依赖）fork 自管 + vendored path~~ **（M6a.1 spike 2026-11-13 查实：该上游不存在，选型作废）**。三条证据：crates.io API 对 `hqtui`/`hq-tui`/`hqtui-tui`/`qtui` 全 404 且名字搜索 `total: 0`；本仓无 `ports/`、vendor 13 个 crate 无匹配、全树无同名文件；全网检索无此名项目。**落退路：ratatui 0.30.2**（crates.io 在架，`rust_version` 1.88.0 与下文记录一致）。TS 包需 Bun/Node 或 88 MB 编译产物，不采用——此结论不受影响。
+- 能力面：真彩色 + 自动降级；Braille 2×4 像素/格 + block/ASCII 模式 + 渐变 + alpha；CSS Grid 风格约束布局；约 30 组件；30fps（SSH 降 15）+ 差分渲染；SGR 鼠标 + Tab 焦点 + OSC 52；headless 渲染器**待 M6a.1 spike 确认**（v4.2 误列为既有能力，IC-9 已改）；**门禁机制已在退路上实证**（见 `status.md` M6a.1）：`TestBackend` 渲染进内存 `Buffer`，配 `Buffer::with_lines` 与整块 `assert_eq!` 即零额外机制成立；实测改一格期望值测试由过转败。13 组 golden fixtures 按此机制建。
 - 形态：进程树监控 + Agent 状态监控 + 用量 + 会话树四仪表盘，键位对标 tuicr。
-- 风险：0.2.0、无生产先例、单人维护、未上 crates.io；fork 终身维护估 1-2 人日/月（C-3 禁上游 PR）；失败退 ratatui 0.30.2（MSRV 1.88 已记）。
+- 风险：~~0.2.0、无生产先例、单人维护、未上 crates.io；fork 终身维护估 1-2 人日/月（C-3 禁上游 PR）~~ 随选型作废一并作废。**退路自身代价（实测）**：workspace MSRV 需由 1.85 抬至 1.88（依赖真正落树时再抬，现在抬是白付代价）；依赖树 131 包；只画两组件的 release 二进制 705 KB。**退路相对原选型的能力缺口**：Braille 2×4 像素/格 + block/ASCII 模式 + 渐变 + alpha 全无（进程树要像素密度需手写，这是最大缺口）；Tab 焦点框架无；CSS Grid 风格约束布局换成 ratatui 自己的 `Layout`/`Constraint`；30fps/15fps 两档需在事件循环自加 `Duration` 限速（ratatui 只差分不调速）。已有：差分渲染内置（`ratatui-core` `buffers.rs` 只传变化格子）、OSC 52（crossterm 0.29 `clipboard.rs`）、SGR 鼠标。
 
 ### 9.5 功能模块等价矩阵（按承载面分）
 

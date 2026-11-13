@@ -539,6 +539,40 @@ D-1 的判据本就是个实证问题，直接查 `~/.stepcode`：
 （同时驱动 desktop 与 web 两条 transport）。这两个包要等 Electron 删除（M5.6）之后才能
 动——不是技术阻塞，是顺序依赖。
 
+### M6a.1 spike：`hqtui` 不存在，选型作废；退路 ratatui 的 headless 渲染器已实证可用（2026-11-13）
+
+方案 §9.4 把表面 D 押在 `ports/rust` crate `hqtui` 0.2.0 上（「约 1.82 万行零依赖」fork 自管 + vendored path）。**查证结论：那个上游不存在，这一条选型无法执行。**
+
+三条独立证据，都指向同一结论：
+- crates.io API 直接查：`hqtui` / `hq-tui` / `hqtui-tui` / `qtui` 全部 HTTP 404，按名字搜索 `q=hqtui` 返回 `total: 0`。
+- 仓内与 vendor 都没有：`ports/` 目录不存在于本仓，`omp-patch/vendor/oh-my-pi/crates/` 下 13 个 crate 无一匹配，全树 `find -iname "*hqtui*"` 为空。
+- 全网检索（step-search）无任何以 `hqtui` 为名的项目，结果全是 ratatui / tui-rs 的中文教程。
+
+方案自己记了它的风险（「0.2.0、无生产先例、单人维护、未上 crates.io」），也预置了退路。**取退路：ratatui 0.30.2。** 这不是新决策，是执行方案里已经写好的那一行。
+
+退路已核实成立：crates.io 上存在，`max_version` 正是 0.30.2，`rust_version` 1.88.0——方案记的「MSRV 1.88 已录」数字准确，下载量 7065 万。
+
+**§9.4 留的那个 spike 问题（「headless 渲染器待 M6a.1 spike 确认」，v4.2 误列为既有能力、IC-9 已改）现在有答案：退路上有，而且就是门禁机制本身。**
+
+`ratatui::backend::TestBackend` 渲染进内存 `Buffer`，不需要终端。配合 `Buffer::with_lines([...])` 与整块 `assert_eq!`，方案要的「13 组 golden fixtures 作对拍门禁」**零额外机制即可成立**。实证（`/tmp/tui-spike`，仓库外一次性验证，未入树）：
+
+- 40×6 画面：`Block` 标题框 + `List` 两行，无终端渲染出正确字符面；
+- golden 测试通过；把期望里一格从 `daemon  1` 改成 `daemon  2` → **FAILED**，改回 → **ok**。门禁真的抓一格漂移，不是空断言。
+
+其余 §9.4 声称的能力，逐条对退路核实：
+
+| §9.4 对 hqtui 的能力声称 | ratatui 0.30.2 + crossterm 0.29 |
+| --- | --- |
+| 差分渲染 | **有**，且是内置：`ratatui-core-0.1.2/src/terminal/buffers.rs:78` 注释即「compares the current buffer with the previous buffer and passes only the changed cells」 |
+| OSC 52 | **有**：crossterm 0.29 `clipboard.rs` 的 `CopyToClipboard`（base64 + osc） |
+| SGR 鼠标 + Tab 焦点 | 鼠标有（crossterm 事件）；Tab 焦点框架没有，要自己写 |
+| CSS Grid 风格约束布局 | 有自己的约束布局（`Layout`/`Constraint`），不是 CSS Grid |
+| Braille 2×4 像素/格 + block/ASCII 模式 + 渐变 + alpha | **没有**。进程树要像素密度得手写，这是退路相对 §9.4 声称面最大的缺口 |
+| 约 30 组件 | `all-widgets` 下约 25-30，量级相当 |
+| 30fps（SSH 降 15） | 没有帧率控制：ratatui 只负责差分，不调速。30/15 两档要在事件循环里加 `Duration` 限速 |
+
+代价（实测，非估算）：workspace `rust-version` 必须从 **1.85 抬到 1.88**（0.30.0 要 1.86，同样高于 1.85）——抬到 1.88 是两者中较高的那个，一步到位；依赖树 131 个包（ratatui + crossterm 及其传递依赖）；一个只画两个组件的 release 二进制 705 KB。MSRV 这一步**等依赖真正落进 workspace 时再抬**，现在抬是白付代价。
+
 ### M5.2 第一块：ed25519 签名清单（2026-11-13 完成）
 
 `crates/studio-host/src/signing.rs`，对应 §12.4「ed25519 清单 + 公钥 bake + 版本签入防降级」。
