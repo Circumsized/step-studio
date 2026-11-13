@@ -20,12 +20,21 @@ import { createTauriChromeBridge, detectPlatform } from "../src/chrome-bridge.js
 // resolution `command-table.test.ts` uses for the Rust side.
 const packageRoot = join(import.meta.dirname, "..", "..");
 const bridgeSource = readFileSync(join(packageRoot, "src", "chrome-bridge.ts"), "utf8");
-const rustSource = readFileSync(join(packageRoot, "src-tauri", "src", "chrome.rs"), "utf8");
+// Every module that declares chrome commands, not just `chrome.rs`: the artifact
+// and service-definition members live in their own files, and reading one file
+// would have reported them as unbacked invocations — a false alarm loud enough to
+// be believed.
+const RUST_COMMAND_MODULES = ["chrome.rs", "artifacts.rs", "service_definitions.rs"];
+const rustSources = RUST_COMMAND_MODULES.map(name =>
+  readFileSync(join(packageRoot, "src-tauri", "src", name), "utf8"),
+);
 
-/** Every `#[tauri::command] pub fn NAME` the chrome module declares. */
+/** Every `#[tauri::command] pub fn NAME` those modules declare. */
 function rustCommands(): Set<string> {
-  const names = [...rustSource.matchAll(/#\[tauri::command\]\s*\npub fn (\w+)/g)].map(m => m[1] ?? "");
-  assert.ok(names.length > 0, "no #[tauri::command] found in chrome.rs");
+  const names = rustSources.flatMap(source =>
+    [...source.matchAll(/#\[tauri::command\]\s*\npub fn (\w+)/g)].map(m => m[1] ?? ""),
+  );
+  assert.ok(names.length > 0, "no #[tauri::command] found in the shell's command modules");
   return new Set(names);
 }
 
@@ -55,6 +64,7 @@ describe("the chrome bridge's surface", () => {
       "exportArtifact",
       "exportLogs",
       "importArtifact",
+      "listServiceDefinitions",
       "loadAvatar",
       "notify",
       "onMenuCommand",
@@ -63,10 +73,12 @@ describe("the chrome bridge's surface", () => {
       "openProjectInEditor",
       "openUrl",
       "platform",
+      "removeServiceDefinition",
       "reportPayloadHealth",
       "reportPerformanceSample",
       "revealSkillshareToken",
       "saveAvatar",
+      "saveServiceDefinition",
       "setConversationViewState",
       "setTheme",
     ]);
@@ -80,7 +92,7 @@ describe("the chrome bridge's surface", () => {
     // The three artifact members are deliberately *not* in this list. They were
     // when the shell ran no Host, but the shell now owns the artifact library
     // itself, so they are shell-level operations like any other.
-    for (const absent of ["beginMediaUpload", "getUpdateSnapshot", "attachPrediction", "requestMicrophoneAccess", "listServiceDefinitions", "attachBrowserObservation"]) {
+    for (const absent of ["beginMediaUpload", "getUpdateSnapshot", "attachPrediction", "requestMicrophoneAccess", "attachBrowserObservation"]) {
       assert.equal(bridge[absent], undefined, `${absent} must not be exposed`);
     }
   });

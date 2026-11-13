@@ -51,7 +51,7 @@ pub(crate) type ChromeResult<T> = Result<T, ChromeError>;
 ///
 /// Mirrors what the Electron host keeps under `%APPDATA%\omp-studio`; the name
 /// is the only thing that changed.
-fn state_dir(app: &tauri::AppHandle) -> ChromeResult<PathBuf> {
+pub(crate) fn state_dir(app: &tauri::AppHandle) -> ChromeResult<PathBuf> {
     let dir = app
         .path()
         .app_data_dir()

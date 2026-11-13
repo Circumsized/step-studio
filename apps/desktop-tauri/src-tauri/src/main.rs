@@ -13,6 +13,7 @@ mod git;
 mod history;
 mod menu;
 mod pump;
+mod service_definitions;
 mod terminal;
 
 use std::sync::atomic::AtomicU64;
@@ -107,6 +108,9 @@ fn main() {
             chrome::export_logs,
             chrome::open_project_directory,
             chrome::open_project_in_editor,
+            service_definitions::list_service_definitions,
+            service_definitions::save_service_definition,
+            service_definitions::remove_service_definition,
             chrome::choose_artifact_directory,
             chrome::import_artifact,
             chrome::export_artifact,

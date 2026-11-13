@@ -920,7 +920,21 @@ mod diff_tests {
         let name = format!("scratch-diff-test-{}.txt", std::process::id());
         let path = root.join(&name);
         std::fs::write(&path, "ponytail diff line\n").ok()?;
-        Command::new("git").arg("add").arg("-N").arg(&name).current_dir(&root).output().ok()?;
+        // `-f`, because `.gitignore` lists this name: three of them were
+        // committed as empty tracked files once, and the ignore rule is what
+        // stops that. Without `-f` git refuses the intent-to-add, exits non-zero
+        // — and `output()` succeeding only says the process ran — so the file is
+        // written but never recorded, and every diff assertion below sees an
+        // empty patch. The failure is silent in exactly the place the test is
+        // meant to be loud.
+        Command::new("git")
+            .arg("add")
+            .arg("-N")
+            .arg("-f")
+            .arg(&name)
+            .current_dir(&root)
+            .output()
+            .ok()?;
         Some((path, name))
     }
 

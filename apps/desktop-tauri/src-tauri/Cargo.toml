@@ -26,6 +26,19 @@ tauri-plugin-dialog = "2.7.3"
 # `artifactId` is a canonical UUID v4. Already in the lock as a transitive
 # dependency, so promoting it adds no package to the tree.
 uuid = { version = "1", features = ["v4"] }
+# The OS keystore, holding the data-encryption key that protects the service
+# definition store. The Linux backend is the synchronous `dbus-secret-service`
+# crate, not the async zbus stack.
+keyring = { version = "3", features = ["sync-secret-service"] }
+# AES-256-GCM over that key. A service spec's `env` block is where its API token
+# lives, so the file has to be confidential rather than merely unreadable.
+aes-gcm = "0.10"
+# The readiness `log` pattern is compiled at save time, so a typo is refused
+# while the user is still looking at the form rather than at service start.
+# Already in this crate's closure, so it adds no package.
+regex = "1"
+# The OS randomness source, for the data-encryption key and each GCM nonce.
+getrandom = "0.3"
 
 [build-dependencies]
 tauri-build = "2"

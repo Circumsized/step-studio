@@ -712,6 +712,61 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.6 第 2 步第三批：服务定义 3 落地，OS keystore + AES-256-GCM（2026-11-13）
+
+新增 `apps/desktop-tauri/src-tauri/src/service_definitions.rs`，从 Electron 侧
+`apps/desktop/src/service-definitions.ts` 移植，连它的 `SecretCodec` 接缝一起搬——
+store 从不决定字节怎么保护，只决定它们必须被保护。这条接缝也是模块能在没有 OS
+keystore 的机器上被完整测试的原因。
+
+**为什么是加密而不是一个私有文件**：`StudioServiceSpec` 带 `env`，那里放着服务的
+API token。0600 挡得住同机器上另一个非特权用户，挡不住备份、同步的家目录、磁盘镜像。
+Electron 用 `safeStorage` 正是为此。
+
+构造是标准那一套：OS keystore 里存一把随机 256-bit DEK，AES-256-GCM 加密整个文件，
+每次写用新 nonce。两条规则因此成立，都在代码里强制：
+
+- **keystore 够不到时绝不绕过**。另生成一把新钥会让盘上每条定义都解不开，而且看起来
+  是成功的。调用方被告知 locked，文件原样不动，用户授权后刷新即可恢复。
+- **nonce 随密文存放**。GCM 的安全性取决于一把钥下 nonce 不重复，而跨进程重启保存的
+  计数器终会重复。
+
+依赖代价实测（不是估的）：`keyring` v3 的 `sync-secret-service` 走同步的
+`dbus-secret-service`，**不是** 异步 zbus 栈，全树只多 14 个包（aead aes aes-gcm
+cipher ctr dbus-secret-service ghash inout keyring opaque-debug polyval rand_core
+universal-hash zeroize_derive），不需要系统 libdbus。`regex` 与 `getrandom` 本就在
+壳的依赖闭包里，直接提为直接依赖，零新增包。
+
+**本机实测 keystore 不可用**：libsecret 装了，但没有 Secret Service 在跑，
+`keyring` 报 `org.freedesktop.secrets was not provided by any .service files`。
+所以本机上 `available()` 为 false，三个成员诚实回答 unavailable——这正是 capability
+manifest 设计的降级路径，也让它第一次有了真实验证环境。测试因此不断言结局，只断言
+不变量：`available()` 与 `data_key()` 永不相互矛盾（否则会出现「告诉调用方有 keystore、
+写的时候却另生成一把钥」的静默失数据）。
+
+#### 过程中自己造成并修掉的一个退化
+
+给 `.gitignore` 加 `scratch-diff-test-*.txt`（上一批提交里的仓库清理）之后，
+`git.rs` 的 diff 测试挂了：它对被忽略的文件执行 `git add -N`，git 拒绝并退出非零，
+而 `output()` 成功只说明进程跑起来了——于是文件写了、intent-to-add 没记上，
+`git diff` 返回空 patch。已加 `-f`。**这是那个清理提交欠的账，测试替我讨回来了**：
+一个只看结论的门禁会以为它是别的原因坏的。
+
+#### 变异验证（四条安全相关测试逐条确认非空）
+
+| 变异 | 结果 |
+| --- | --- |
+| `available()` 无视 keystore 的答复，恒真 | FAILED ✓ |
+| 取不到钥时另生成一把而不是拒绝 | FAILED ✓ |
+| 没有 keystore 时 `write()` 仍写（明文） | FAILED ✓（第一版测试能过，见下） |
+| 存储文件写成 0644 | FAILED ✓ |
+
+第三行值得记：第一版「没有 keystore 就不可用」的测试**能过那个变异**，因为
+`save()` 先在 `read()` 就返回了，根本到不了 `write()` 的那道闸——「什么都没写」这个
+断言因此是白送的。补了一条直接打 `write()` 的断言才对。那道闸不是重复：它守的是
+read 与 write 之间 keystore 消失的那个窗口，而那个窗口里回退成明文正是整个模块要防
+的事。**没被测试打到的守卫，和没有守卫只差没人知道。**
+
 ### M5.6 第 2 步第二批：产物 3 落地，连带把 artifacts 三个 bridge query 接通（2026-11-13）
 
 新增 `apps/desktop-tauri/src-tauri/src/artifacts.rs`：内容寻址 payload + JSON catalog，

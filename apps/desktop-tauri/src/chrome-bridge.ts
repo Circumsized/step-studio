@@ -36,6 +36,39 @@ import { listen as tauriListen } from "@tauri-apps/api/event";
  */
 const MENU_COMMAND_EVENT = "omp-studio:chrome:menu-command";
 
+/** Mirrors `ServiceDefinitionResult` in `apps/desktop/src/chrome-services-shared.ts`. */
+export type ServiceDefinitionResult =
+  | { readonly ok: true; readonly definitions: readonly ServiceDefinition[] }
+  | { readonly ok: false; readonly message: string };
+
+/** Mirrors `ServiceDefinition` in `apps/desktop/src/service-definitions.ts`. */
+export interface ServiceDefinition {
+  readonly id: string;
+  readonly revision: number;
+  readonly workspaceId: string;
+  readonly updatedAt: string;
+  readonly spec: {
+    readonly name: string;
+    readonly command: string;
+    readonly cwd?: string | undefined;
+    readonly env?: Record<string, string> | undefined;
+    readonly pty?: boolean | undefined;
+    readonly ready?:
+      | { readonly log?: string | undefined; readonly port?: number | undefined; readonly host?: string | undefined; readonly timeoutMs: number }
+      | undefined;
+    readonly restart?: "no" | "on-failure" | "always" | undefined;
+    readonly mode?: "session" | "persist" | "detached" | undefined;
+  };
+}
+
+/** Mirrors `ServiceDefinitionsInput` in the same file. */
+export interface ServiceDefinitionsInput {
+  readonly workspaceId: string;
+  readonly id?: string;
+  readonly revision?: number;
+  readonly spec?: ServiceDefinition["spec"];
+}
+
 /** Mirrors `ArtifactFileResult` in `apps/desktop/src/chrome-artifacts-shared.ts`. */
 export type ArtifactFileResult =
   | {
@@ -104,6 +137,17 @@ export interface TauriChromeBridge {
     secretId: string;
     sessionId: string;
   }): Promise<{ ok: true; token: string; name: string } | { ok: false; message: string }>;
+  /**
+   * Saved service configurations. Each answers with the Electron preload's shape
+   * (`ServiceDefinitionResult` in `apps/desktop/src/chrome-services-shared.ts`),
+   * so the renderer's handling is identical on both shells. `ok: false` carries a
+   * message that already says what to do — the shell distinguished "no keystore
+   * here" from "the keystore is locked" from "the store will not open" on purpose,
+   * because only the middle one is fixed by the user granting access.
+   */
+  listServiceDefinitions(input: ServiceDefinitionsInput): Promise<ServiceDefinitionResult>;
+  saveServiceDefinition(input: ServiceDefinitionsInput): Promise<ServiceDefinitionResult>;
+  removeServiceDefinition(input: ServiceDefinitionsInput): Promise<ServiceDefinitionResult>;
   /**
    * The artifact library. Each answers with the Electron preload's shape
    * (`ArtifactFileResult` in `apps/desktop/src/chrome-artifacts-shared.ts`), so
@@ -178,6 +222,21 @@ export function createTauriChromeBridge(): TauriChromeBridge {
         secretId: input.secretId,
         sessionId: input.sessionId,
       }),
+    // Spread field by field: a `readonly` interface has no index signature, so it
+    // is not an `InvokeArgs`. Only the keys the caller actually set are sent,
+    // because the shell refuses an unexpected one — `{...input, spec: undefined}`
+    // would be "unknown field" on a remove.
+    listServiceDefinitions: ({ workspaceId }) =>
+      tauriInvoke("list_service_definitions", { workspaceId }),
+    saveServiceDefinition: input =>
+      tauriInvoke("save_service_definition", {
+        workspaceId: input.workspaceId,
+        ...(input.id === undefined ? {} : { id: input.id }),
+        ...(input.revision === undefined ? {} : { revision: input.revision }),
+        ...(input.spec === undefined ? {} : { spec: input.spec }),
+      }),
+    removeServiceDefinition: ({ workspaceId, id, revision }) =>
+      tauriInvoke("remove_service_definition", { workspaceId, id, revision }),
 
     onMenuCommand: listener => {
       let unsubscribe = () => {};
