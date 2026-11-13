@@ -32,7 +32,7 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::chrome::ChromeResult;
+use crate::chrome::{ChromeError, ChromeResult};
 
 /// The protocol's ceiling on saved configurations, not this shell's.
 const MAX_ROWS: usize = 200;
@@ -715,31 +715,99 @@ fn validate_spec(raw: &Value) -> Result<(), String> {
 
 /// The store this shell owns, under `<state>/service-definitions.enc`.
 pub fn store() -> ServiceDefinitionStore {
+    ServiceDefinitionStore::new(store_path(), Arc::new(OsKeystoreCodec))
+}
+
+/// Serialises the tests that install `STORE_PATH_OVERRIDE`.
+///
+/// `cfg(test)`: nothing outside the tests touches it, and an unused static in a
+/// release build is an error under `-D warnings`.
+#[cfg(test)]
+static STORE_PATH_SERIALISE: Mutex<()> = Mutex::new(());
+
+/// Where the encrypted store lives.
+pub fn store_path() -> PathBuf {
+    // A test may have installed a directory. Same rule as `STATE_DIR_OVERRIDE` in
+    // `chrome.rs`: checked first so a test never has to touch the process
+    // environment, because `std::env::set_var` is `unsafe` and this workspace
+    // forbids it.
+    if let Some(dir) = STORE_PATH_OVERRIDE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+    {
+        return dir.join("service-definitions.enc");
+    }
+    store_path_from_app()
+}
+
+/// The production path, with no test override applied.
+fn store_path_from_app() -> PathBuf {
     let directory = crate::app_handle()
         .and_then(|handle| crate::chrome::state_dir(handle).ok())
         .unwrap_or_else(crate::chrome::shell_state_dir);
-    ServiceDefinitionStore::new(
-        directory.join("service-definitions.enc"),
-        Arc::new(OsKeystoreCodec),
-    )
+    directory.join("service-definitions.enc")
+}
+
+/// Where a test says the store lives. `None` in production.
+static STORE_PATH_OVERRIDE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// What the store's on-disk format is, for `migrate::classify`.
+///
+/// A version sidecar beside the encrypted blob, so the ciphertext itself is never
+/// rewritten to add a version — rewriting it would mean decrypting and
+/// re-encrypting under a key that may not be reachable, which is the one operation
+/// whose failure cannot be recovered from.
+fn recorded_format_version() -> Option<u64> {
+    let sidecar = store_path().with_extension("enc.version");
+    std::fs::read_to_string(sidecar).ok().and_then(|text| text.trim().parse().ok())
+}
+
+/// Whether the store's format is one this build understands.
+///
+/// M5.5 的第三种纪律是「schema 无版本号则拒绝启动并提示」。这里做成**拒绝该能力**
+/// 而不是拒绝启动：一个打不开的应用没法让用户去修它的配置文件，而壳的其余部分与
+/// 凭据存储无关。方案要的是「不静默读错」，这条给的是同一保证的更弱形式——不可用 +
+/// 理由，而不是空白。
+pub fn format_verdict() -> step_studio_host::migrate::Outcome {
+    step_studio_host::migrate::classify(recorded_format_version())
 }
 
 /// List one workspace's saved configurations.
 #[tauri::command]
 pub fn list_service_definitions(input: Value) -> ChromeResult<Value> {
+    refuse_unreadable_format()?;
     respond(Action::List, &input)
 }
 
 /// Insert or update one, guarded by the revision the caller last read.
 #[tauri::command]
 pub fn save_service_definition(input: Value) -> ChromeResult<Value> {
+    refuse_unreadable_format()?;
     respond(Action::Save, &input)
 }
 
 /// Delete one, guarded by its revision.
 #[tauri::command]
 pub fn remove_service_definition(input: Value) -> ChromeResult<Value> {
+    refuse_unreadable_format()?;
     respond(Action::Remove, &input)
+}
+
+/// The one guard all three share.
+///
+/// `Unversioned` and `TooNew` both mean the same thing to a caller: this build
+/// must not read the file, because it would misread it. Answering with a message
+/// rather than a read is what keeps a format bump from becoming silent corruption.
+fn refuse_unreadable_format() -> ChromeResult<()> {
+    let verdict = format_verdict();
+    if verdict.is_usable() {
+        return Ok(());
+    }
+    Err(ChromeError::failed(format!(
+        "saved configurations are in a format this build does not read ({});          they are left untouched",
+        verdict.reason()
+    )))
 }
 
 /// Answer one of the three IPC calls with the Electron handler's shape.
@@ -1081,6 +1149,94 @@ mod tests {
                 "no keystore means no key is invented"
             );
         }
+    }
+
+    /// Point `store_path()` at a directory of its own.
+    ///
+    /// The same two-lock split the Skillshare tests use: the path override is held
+    /// only for the install and the restore, and a *separate* mutex serialises the
+    /// tests. One lock for both deadlocks — `store_path()` locks it, and holding it
+    /// across the call means the test locks against itself.
+    fn with_store_path<T>(tag: &str, body: impl FnOnce(&Path) -> T) -> T {
+        let dir = std::env::temp_dir().join(format!("svcdef-path-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("make a store directory");
+        let _serialise = STORE_PATH_SERIALISE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *STORE_PATH_OVERRIDE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(dir.clone());
+        let outcome = body(&dir);
+        *STORE_PATH_OVERRIDE
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        let _ = std::fs::remove_dir_all(&dir);
+        outcome
+    }
+
+    /// Writes the format sidecar the way a future build would.
+    fn write_format_version(dir: &Path, version: u64) {
+        std::fs::write(dir.join("service-definitions.enc.version"), version.to_string())
+            .expect("write the sidecar");
+    }
+
+    #[test]
+    fn a_store_with_no_format_version_is_refused_rather_than_read() {
+        // M5.5 的第三种纪律。无版本号的 schema 不是旧的，是认不出来的——猜就会读错。
+        // 这里做成拒绝该能力而不是拒绝启动：打不开的应用没法让用户去修配置文件，
+        // 而壳的其余部分与凭据存储无关。方案要的是「不静默读错」，这条给同一保证。
+        with_store_path("unversioned", |_| {
+            let verdict = format_verdict();
+            assert_eq!(verdict, step_studio_host::migrate::Outcome::Unversioned);
+            assert!(!verdict.is_usable(), "an unversioned store must not be read");
+            assert!(
+                verdict.reason().contains("no format version"),
+                "and the reason says which: {}",
+                verdict.reason()
+            );
+        });
+    }
+
+    #[test]
+    fn a_store_from_a_newer_format_is_refused() {
+        with_store_path("toonew", |dir| {
+            write_format_version(dir, step_studio_host::migrate::CURRENT_FORMAT_VERSION + 1);
+            let verdict = format_verdict();
+            assert!(!verdict.is_usable(), "a newer format must not be read as this one");
+            assert!(verdict.reason().contains("newer"));
+        });
+    }
+
+    #[test]
+    fn a_store_at_the_current_format_is_read() {
+        with_store_path("current", |dir| {
+            write_format_version(dir, step_studio_host::migrate::CURRENT_FORMAT_VERSION);
+            let verdict = format_verdict();
+            assert!(verdict.is_usable(), "the current format is readable");
+            assert_eq!(verdict, step_studio_host::migrate::Outcome::Current);
+        });
+    }
+
+    #[test]
+    fn the_three_commands_refuse_an_unreadable_format_before_touching_the_store() {
+        // The guard runs first, so an unreadable store is never opened. Without it
+        // the read would happen and either fail confusingly or — worse — succeed on
+        // a file this build misparses.
+        with_store_path("refuse", |_| {
+            for command in [
+                list_service_definitions(json!({ "workspaceId": "ws-1" })),
+                save_service_definition(json!({ "workspaceId": "ws-1", "spec": { "name": "web", "command": "x" } })),
+                remove_service_definition(json!({ "workspaceId": "ws-1", "id": "3f2504e0-4f89-11d3-9a0c-0305e82c3301", "revision": 1 })),
+            ] {
+                let error = command.expect_err("an unreadable format must be refused");
+                assert!(
+                    error.message.contains("format"),
+                    "the message names the reason: {}",
+                    error.message
+                );
+            }
+        });
     }
 
     #[test]
