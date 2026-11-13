@@ -14,7 +14,19 @@ mod pump;
 mod terminal;
 
 use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
+
+/// The app handle, kept so a background thread can reach the OS dialog.
+///
+/// The pump answers `workspace.pick`, and it runs on its own thread: passing a
+/// handle down to it would thread one more field through the whole bridge for a
+/// single command. Tauri state is the other option, but the pump holds no
+/// `Manager`, so it would need one anyway.
+static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
+
+pub fn app_handle() -> Option<&'static tauri::AppHandle> {
+    APP_HANDLE.get()
+}
 
 use serde_json::Value;
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -65,6 +77,7 @@ fn main() {
     let window: Arc<Mutex<Option<tauri::WebviewWindow>>> = Arc::new(Mutex::new(None));
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             bridge::bootstrap,
             bridge::query,
@@ -88,6 +101,7 @@ fn main() {
         // `move`: the closure hands the window handle to the pump, which
         // outlives this function.
         .setup(move |app| {
+            let _ = APP_HANDLE.set(app.handle().clone());
             let self_check = std::env::var_os("STEP_STUDIO_SELF_CHECK").is_some();
             // The window is where events go. It lives in the shared inner state
             // rather than in the sink closure, so a reconnect gets the same

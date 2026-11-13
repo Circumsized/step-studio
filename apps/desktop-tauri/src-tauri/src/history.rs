@@ -521,6 +521,47 @@ pub fn open(workspace_id: &str) -> Value {
     model
 }
 
+/// Open the OS directory picker and adopt whatever it returns.
+///
+/// Cancellation is an error rather than an empty list, matching the reference
+/// implementation (the Electron Host's workspace adapter, which throws
+/// `WorkspacePickCancelledError`). The renderer keys off the failure: an empty
+/// list would look like success with nothing selected, and the create-project
+/// flow would report "the chosen folder was not registered as a project" for a
+/// user who simply closed the dialog.
+///
+/// Blocking is correct here: the pump is a background thread, and the dialog
+/// plugin documents this variant as the one for non-main-thread callers. The
+/// pump stalls for the length of the dialog, which is what a picker is for.
+///
+/// `name` is accepted and ignored. The shell has no workspace registry to
+/// persist a display-name override in, so the row is named after the directory
+/// the way `open` names one. Carrying the create-project flow's typed name
+/// needs that registry first.
+// ponytail: no display-name override; add when a persisted workspace registry lands
+pub fn pick(name: Option<&str>) -> Result<Value, (String, String)> {
+    let _ = name;
+    let Some(handle) = crate::app_handle() else {
+        return Err((
+            "CAPABILITY_UNAVAILABLE".to_string(),
+            "workspace.pick is not available: no app handle".to_string(),
+        ));
+    };
+    let picked = tauri_plugin_dialog::DialogExt::dialog(handle)
+        .file()
+        .set_title("选择项目文件夹")
+        .blocking_pick_folder();
+    // A content URI (Android) has no filesystem path, so there is nothing to
+    // adopt; treating it as a cancellation would be a silent wrong answer.
+    let Some(path) = picked.as_ref().and_then(|folder| folder.as_path()) else {
+        return Err((
+            "UNAVAILABLE".to_string(),
+            "directory picker cancelled".to_string(),
+        ));
+    };
+    Ok(open(&path.to_string_lossy()))
+}
+
 #[cfg(test)]
 mod workspace_tests {
     use super::*;
@@ -558,6 +599,24 @@ mod workspace_tests {
             }),
             "a project with no history is still openable"
         );
+    }
+
+    #[test]
+    fn a_pick_that_cannot_open_is_an_error_not_an_empty_list() {
+        // The contract this pins: the renderer tells "the user closed the
+        // picker" apart from "there are no projects" by the receipt's status,
+        // so a pick that cannot run must fail. Returning `{"workspaces":[]}`
+        // instead would look like success with nothing selected, and the
+        // create-project flow would report the chosen folder as unregistered
+        // for a user who only pressed Escape.
+        //
+        // A test binary has no app handle, which is the same shape: the dialog
+        // is unreachable, so this is the unreachable arm rather than the cancel
+        // arm. Both must be `Err`.
+        let outcome = pick(None);
+        let (code, message) = outcome.expect_err("an unreachable picker is not a successful pick");
+        assert!(!code.is_empty(), "the code is what the renderer matches on");
+        assert!(!message.is_empty(), "and the message is what it shows");
     }
 }
 

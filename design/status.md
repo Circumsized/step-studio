@@ -649,9 +649,19 @@ checklist 1.4 从「空」翻「齐」——M1.7 正是把它从「齐」改判�
 
 同批落地 `workspace.open`：把项目标为激活并返回列表。**没有 history 的项目也能开**——用户刚打开的目录本来就不在 store 里，拒绝它会让「新建项目后第一次打开」这条路径直接断掉，而那正是这条命令存在的理由。
 
-`workspace.pick` **未做**：它要开系统目录选择器，需要原生对话框（Tauri 的 dialog 插件）。壳现在没有那个依赖，为一个尚未有人调用的入口引一个插件不值得——渲染层的 `pick` 入口在有 `executionTarget` 时走的是 `openDirectory()`，不走这条。
+### M2.3 会话目录第二块：`workspace.pick` 落地（2026-11-13）
 
-**仍未移植**：`workspace.pick`，以及 `session-archive-reader` 的 cursor 分页与冷归档。
+上一轮记「渲染层的 `pick` 入口在有 `executionTarget` 时走的是 `openDirectory()`，不走这条」，据此判定引一个 dialog 插件不值得。**这条推断是错的**，追代码追错的：`ExecutionTargetPicker.tsx:95` 的效果钩子第一行就是 `!target.id` 提前返回——`openDirectory()` 只在**远端** target 时动作，本机 target（`id === null`）下 `App.tsx:7137` 的 `if (executionTarget.id)` 不成立，直接落到 `client.command("workspace.pick")`。也就是说这条命令是本机选项目的**唯一**路径，不是「尚未有人调用」。
+
+落地内容：`tauri-plugin-dialog` 2.8.4（连带 `tauri-plugin-fs`），`main.rs` 用 `OnceLock` 存 AppHandle（泵跑在自己线程上，为一条命令把 handle 穿透整个 bridge 不划算），`history::pick()` 开原生目录选择器后委托给已有的 `open()`——注册、置 active、返回 read model 全是 `open` 现成的，pick 只补「选哪个目录」这一段。
+
+取消是**失败回执**而不是空列表，与参考实现一致（Electron 侧的 `WorkspacePickCancelledError`，code `UNAVAILABLE`）：渲染层靠 receipt 的 status 区分「用户关了选择器」和「没有项目」，返回 `{"workspaces":[]}` 会让新建项目流程把「按了 Escape」报成「所选文件夹未注册为项目」。为此这条命令在泵里有自己的 arm——共享本地 arm 只会发 `completed`。
+
+`name` 入参接受但忽略：壳没有 workspace registry 可持久化显示名，行名照 `open` 的办法取目录名。带上新建项目流程里用户键入的名字需要先有那个 registry。
+
+同批把 CI 的 Rust 门禁补上 `rust-shell` job：这条 crate 一直不在 CI 里（注释写的是「links winit，为零测试覆盖要装 X 库」），而它现在有 89 个测试，且路由表正是「名字悄悄漂错派发 arm」的重灾区——M2.5 的 P0 就是九个 shell-local 查询躺在 `ADAPTER_NATIVE` 里。补的是 GTK/WebKit 依赖 + `cargo test` + `cargo clippy -D warnings`。
+
+**仍未移植**：`session-archive-reader` 的 cursor 分页与冷归档（为几万会话的开发者 profile 准备，这里一个都不满足）。
 
 ### M2.4 删除连锁：隐藏消费者实证，本轮不执行（2026-11-12）
 

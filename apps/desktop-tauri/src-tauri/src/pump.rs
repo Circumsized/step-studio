@@ -91,6 +91,10 @@ const SHELL_LOCAL: &[(&str, &str)] = &[
     // RPC list, so the store is the source.
     ("session.agents.list", "limited"),
     ("workspace.open", "limited"),
+    // The OS directory picker, then whatever `open` does with the result. It is
+    // local for the same reason `workspace.open` is: the shell owns the dialog
+    // and the project list, so the round trip would only carry a path back.
+    ("workspace.pick", "limited"),
     // Both are facts about this machine and this shell, so the shell answers
     // them: no adapter round trip for information it already has.
     ("environment.get", "limited"),
@@ -542,6 +546,44 @@ fn pump(
                     "acceptedAt": iso_utc(now_millis()),
                 });
                 match job.dispatch {
+                    Dispatch::Local if job.command_name == "workspace.pick" => {
+                        // The one local command that fails by user action, so it
+                        // gets an arm of its own: the shared local arm below has
+                        // no way to say anything but "completed", and a picker
+                        // the user closed is not a picker that completed.
+                        match crate::history::pick(
+                            job.operation.get("name").and_then(Value::as_str),
+                        ) {
+                            Ok(model) => {
+                                emit(sink, &mut stream, |stream| {
+                                    stream.receipt(
+                                        &job.request_id,
+                                        &job.command_name,
+                                        "completed",
+                                        json!({ "result": model }),
+                                    )
+                                });
+                                // The caller asked for the result, so it gets the
+                                // result. See the local arm below for why the ack
+                                // is the wrong thing to send here.
+                                let _ = job.reply.send(match job.want {
+                                    Want::Ack => Ok(ack),
+                                    Want::Result => Ok(model),
+                                });
+                            }
+                            Err((code, message)) => {
+                                emit(sink, &mut stream, |stream| {
+                                    stream.receipt(
+                                        &job.request_id,
+                                        &job.command_name,
+                                        "failed",
+                                        json!({ "error": { "code": code, "message": message } }),
+                                    )
+                                });
+                                let _ = job.reply.send(Err(format!("desktop bridge: {message}")));
+                            }
+                        }
+                    }
                     Dispatch::Local => {
                         // Shell-local answers, all for the same reason: each is
                         // something the shell already knows, so asking the adapter
@@ -1224,6 +1266,7 @@ mod routing_tests {
             "home.get",
             "session.agents.list",
             "workspace.open",
+            "workspace.pick",
             "environment.get",
             "diagnostics.get",
             "git.repository.get",
