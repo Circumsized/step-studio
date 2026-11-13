@@ -7,7 +7,7 @@ import { createRuntimeArchive, verifySignedArtifact, RUNTIME_ARTIFACT_LAYOUT, pa
 import { STUDIO_PROTOCOL_VERSION } from "@omp-studio/studio-protocol";
 import { resolveTargetArch } from "./windows-architecture.mjs";
 import { MAC_TARGET_PLATFORM, legacyIndexName, packagedAppAssetPath, packagedFirstInstallPath, releaseOutputDirectory, releaseTargetsDarwin, runtimeArchiveAssetName } from "./release-assets.mjs";
-import { compareRuntimeVersions } from "../apps/desktop/dist/src/runtime-install.js";
+import { compareRuntimeVersions } from "../packages/runtime-installer/dist/src/index.js";
 
 export async function releaseKeys(root) {
   const table = JSON.parse(await readFile(join(root, "packaging/keys/trusted-keys.json"), "utf8"));

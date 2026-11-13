@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { selectOption } from "../test/selectOption";
 import { useState } from "react";
 import type { ClientBootstrap, StudioClient } from "@omp-studio/client-contract";
-import type { RemoteApi, RemoteInventory } from "../../../desktop/src/remote/shared";
+import type { RemoteApi, RemoteInventory } from "@omp-studio/platform";
 import { RemoteScopeNotice } from "./RemoteScopeNotice";
 import { ExecutionTargets, useExecutionTarget, useTargetMemory } from "./ExecutionTargets";
 import { ExecutionTargetPicker } from "./ExecutionTargetPicker";

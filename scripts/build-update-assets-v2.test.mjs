@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { buildUpdateAssetsV2, buildMigrationIndex } from "./build-update-assets-v2.mjs";
 import { verifyUpdateAssets } from "./verify-update-assets-v2.mjs";
 import { verifyUpdateManifest } from "@omp-studio/runtime-installer";
-import { parseUpdateIndex } from "../apps/desktop/dist/src/update-index.js";
+import { parseUpdateIndex } from "../packages/runtime-installer/dist/src/index.js";
 
 const { privateKey: signingKey, publicKey } = generateKeyPairSync("ed25519");
 const keyId = "test", keys = { test: publicKey.export({ type: "spki", format: "pem" }) };

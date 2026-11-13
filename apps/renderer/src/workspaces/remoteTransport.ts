@@ -1,6 +1,6 @@
 import type { ClientTransport } from "@omp-studio/client-contract";
 import { eventMatchesScope } from "@omp-studio/client";
-import type { RemoteApi } from "../../../desktop/src/remote/shared";
+import type { RemoteApi } from "@omp-studio/platform";
 
 export interface RemoteTransportState {
   available: boolean;

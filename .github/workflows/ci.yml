@@ -154,58 +154,9 @@ jobs:
       # announcement — have no other way to be compiled at all.
       - run: cargo clippy -p step-studio-bridge -p step-studio-runtime -p step-studio-host --target x86_64-pc-windows-msvc --all-targets -- -D warnings
 
-  macos-package:
-    name: macOS test package (arm64)
-    if: github.event_name == 'workflow_dispatch' && inputs.scope == 'macos-package'
-    runs-on: macos-15
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.4.4"
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: omp-patch/vendor/oh-my-pi -> target
-          shared-key: platform
-          key: natives-darwin-arm64
-          cache-on-failure: "true"
-      - run: npm ci
-      - run: npm run omp:overlay:apply
-      # A throwaway identity is used only for this manually requested package.
-      - run: npm run omp:keys
-      - run: npm run omp:build:host
-      - name: Pack and audit the app
-        run: |
-          keys="$HOME/Library/Application Support/omp-studio/keys"
-          export OMP_RUNTIME_TRUSTED_PUBLIC_KEY="$keys/trusted-public.pem"
-          export OMP_RUNTIME_SIGNING_KEY_ID="$(tr -d '[:space:]' < "$keys/key-id.txt")"
-          npm run pack:mac -- --skip-host --skip-build
-      - name: Packaged Electron acceptance
-        timeout-minutes: 10
-        env:
-          OMP_E2E_PACKAGED_EXE: ${{ github.workspace }}/outputs/installer-mac/mac-arm64/OMP Studio.app/Contents/MacOS/OMP Studio
-          OMP_E2E_OUTPUT_DIR: ${{ github.workspace }}/outputs/macos-gui-e2e
-        run: |
-          npm install --no-save --package-lock=false playwright@1.62.1
-          node scripts/full-gui-e2e.mjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: macos-gui-evidence
-          path: outputs/macos-gui-e2e/
-          retention-days: 7
-      - uses: actions/upload-artifact@v4
-        with:
-          name: omp-studio-macos-arm64-adhoc
-          path: |
-            outputs/installer-mac/*.dmg
-            outputs/installer-mac/*.zip
-          retention-days: 7
-          if-no-files-found: error
+  # `macos-package` was removed with the Electron shell: it packed a .app with
+  # electron-builder, ad-hoc signed it, and ran `full-gui-e2e.mjs` against it. The
+  # Tauri shell's macOS package is M5.3's to write, against `cargo tauri build`.
+  # Its GUI evidence pipeline went with it: it drove the packaged Electron app by
+  # importing `electron` and reading `apps/desktop/dist` paths. A Tauri equivalent
+  # is M5.3/M5.4's to write.

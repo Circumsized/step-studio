@@ -20,7 +20,7 @@ declare global {
    * in a desktop transport + `StudioClientImpl` itself.
    */
   var ompStudio: OmpStudioDesktopApi | undefined;
-  var ompStudioRemote: import("../../desktop/src/remote/shared").RemoteApi | undefined;
+  var ompStudioRemote: import("@omp-studio/platform").RemoteApi | undefined;
 
   /**
    * Window-chrome helpers (not the Host transport). Theme sync talks to the

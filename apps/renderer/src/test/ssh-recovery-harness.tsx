@@ -4,7 +4,7 @@ import { useState } from "react";
 import { StudioClientImpl } from "@omp-studio/client";
 import type { ClientTransport } from "@omp-studio/client-contract";
 import { createContractFixtureApi } from "@omp-studio/testkit";
-import type { RemoteApi, RemoteConnectionStatus, RemoteInventory } from "../../../desktop/src/remote/shared";
+import type { RemoteApi, RemoteConnectionStatus, RemoteInventory } from "@omp-studio/platform";
 import { ExecutionTargets, useExecutionTarget } from "../workspaces/ExecutionTargets";
 import { ExecutionTargetPicker } from "../workspaces/ExecutionTargetPicker";
 import { RemoteScopeNotice } from "../workspaces/RemoteScopeNotice";

@@ -24,6 +24,7 @@
     "@lezer/highlight": "^1.2.3",
     "@omp-studio/client": "0.1.17",
     "@omp-studio/client-contract": "0.1.17",
+    "@omp-studio/platform": "0.1.17",
     "@omp-studio/studio-protocol": "0.1.17",
     "@omp-studio/transport-desktop": "0.1.17",
     "@tanstack/react-virtual": "^3.14.10",

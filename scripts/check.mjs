@@ -324,18 +324,10 @@ if (plan.renderer && !suites.some(step => step.name === "test:renderer")) {
 if (suites.length && !buildFailed) await pool(suites, failures);
 
 if (plan.production) {
+  // The renderer bundle only. The two Electron steps that used to sit beside it
+  // (the SSH remote host and the sandboxed preload) went with `apps/desktop`.
   const steps = [
     { name: "bundle:renderer", command: process.execPath, args: [viteBin, "build"], cwd: join(root, "apps", "renderer") },
-    {
-      name: "bundle:remote-host",
-      command: process.execPath,
-      args: [join(root, "scripts", "bundle-remote-host.mjs")],
-    },
-    {
-      name: "bundle:preload",
-      command: process.execPath,
-      args: ["--test", join(root, "scripts", "preload-bundle.test.mjs")],
-    },
   ];
   await pool(steps, failures);
 }

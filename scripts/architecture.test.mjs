@@ -22,9 +22,12 @@ const ALLOWED_INTERNAL_DEPS = {
   "studio-protocol": [],
   "client-contract": ["studio-protocol"],
   client: ["client-contract", "studio-protocol"],
+  // The renderer is not in this table (see the note above), but `platform` is, and
+  // the remote contract it now owns is the one type surface the renderer pulls
+  // from a workspace package rather than through `client-contract`.
+  "platform": ["client-contract"],
   "transport-desktop": ["client-contract", "client"],
   "transport-web": ["client-contract"],
-  platform: [],
   "platform-win32": ["platform"],
   "platform-darwin": ["platform"],
   "runtime-installer": ["studio-protocol"],
@@ -128,21 +131,26 @@ test("packages keep the declared one-way layering", () => {
   assert.deepEqual(violations, [], "layering violation");
 });
 
-test("only the desktop app depends on electron", () => {
+// The rule used to be "only `apps/desktop` depends on electron". That app was
+// deleted with the Electron shell, so the rule becomes unconditional: nothing in
+// this workspace imports electron at all. Same invariant, one less special case —
+// and a special case is exactly what let a leak hide behind "but I'm the allowed
+// one".
+test("nothing depends on electron", () => {
   const violations = [];
   for (const unit of units) {
-    if (unit.declared.includes("electron") && unit.relativeDir !== "apps/desktop") {
+    if (unit.declared.includes("electron")) {
       violations.push(`${unit.key} declares electron`);
     }
     for (const file of sourceFiles(join(unit.dir, "src"))) {
       for (const specifier of importsOf(file)) {
-        if (specifier === "electron" && unit.relativeDir !== "apps/desktop") {
+        if (specifier === "electron") {
           violations.push(`${name(file)} imports electron`);
         }
       }
     }
   }
-  assert.deepEqual(violations, [], "electron leaked outside apps/desktop");
+  assert.deepEqual(violations, [], "electron leaked back in");
 });
 
 test("only the renderer depends on react", () => {

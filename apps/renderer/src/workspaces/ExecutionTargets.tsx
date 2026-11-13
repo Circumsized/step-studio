@@ -2,7 +2,7 @@ import { modelConfigHasUnsavedChanges } from "../ModelConfigPage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { StudioClientImpl } from "@omp-studio/client";
 import type { StudioClient } from "@omp-studio/client-contract";
-import type { RemoteApi, RemoteInventory, RemoteConnectionProfile, RemoteCredentials } from "../../../desktop/src/remote/shared";
+import type { RemoteApi, RemoteInventory, RemoteConnectionProfile, RemoteCredentials } from "@omp-studio/platform";
 import { SshPasswordDialog } from "./SshPasswordDialog";
 import { SshPreparationDialog } from "./SshPreparationDialog";
 import { createRemoteTransport, type RemoteTransportState } from "./remoteTransport";

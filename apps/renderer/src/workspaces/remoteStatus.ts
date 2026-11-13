@@ -1,4 +1,4 @@
-import type { RemoteConnectionStatus } from "../../../desktop/src/remote/shared";
+import type { RemoteConnectionStatus } from "@omp-studio/platform";
 
 export function remoteStatusLabel(status?: RemoteConnectionStatus): string {
   if (status?.operation) return "安装中";

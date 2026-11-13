@@ -27,16 +27,9 @@ export const CORE_NODE_SUITES = [
   // Which model catalog the composer sees: the Runtime's, or the config file's.
   "packages/host-client-api/dist/test/runtime-models.test.js",
   "packages/host-client-api/dist/test/session-delete-command.test.js",
-  "apps/desktop/dist/test/runtime-session.test.js",
   // Runtime resolution and the trust gate: which runtime earns a controller,
   // and which executable actually gets spawned.
-  "apps/desktop/dist/test/desktop-composition.test.js",
-  "apps/desktop/dist/test/runtime-multi-session.test.js",
-  "apps/desktop/dist/test/session-commands.test.js",
   // Local file writes, Electron boundaries, installation and update recovery.
-  "apps/desktop/dist/test/workspace-files.test.js",
-  "apps/desktop/dist/test/security.test.js",
-  "apps/desktop/dist/test/update-v2.test.js",
   // The Tauri shell's IPC sender: command mapping, the single shared event
   // listener, and the rejection re-wrap that keeps Electron's error shape.
   "apps/desktop-tauri/dist/test/tauri-sender.test.js",

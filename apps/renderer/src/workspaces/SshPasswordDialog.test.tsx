@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
-import type { RemoteConnectionProfile } from "../../../desktop/src/remote/shared";
+import type { RemoteConnectionProfile } from "@omp-studio/platform";
 import { SshPasswordDialog } from "./SshPasswordDialog";
 
 // jsdom has no modal dialog implementation; the component only needs open/close.

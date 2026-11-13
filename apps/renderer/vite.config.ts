@@ -3,7 +3,10 @@ import { graphicVendorPlugin } from "./graphic-vendor-plugin";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
-// Must stay in lockstep with apps/desktop/src/security.ts RENDERER_CSP.
+// The CSP used to have to match apps/desktop/src/security.ts, because two shells
+// served the same bundle. That shell is gone, so this is now the only definition
+// and there is nothing to keep in lockstep with. Nothing asserts it against a
+// second copy -- if a second shell appears, that assertion is what it needs first.
 // file:// loads do not reliably get webRequest CSP headers, so the packaged
 // index.html carries the policy as a meta tag. `frame-ancestors` is enforced
 // by the desktop response header because browsers ignore it in meta CSP; the

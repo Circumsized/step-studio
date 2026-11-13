@@ -24,17 +24,15 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/desktop-tauri",
+    "apps/desktop-tui"
   ],
   "scripts": {
-    "preview": "node scripts/preview.mjs",
     "models:catalog:generate": "node scripts/model-catalog.mjs",
     "models:catalog:check": "node scripts/model-catalog.mjs --check",
-    "build": "npm run build:packages && npm run build -w @omp-studio/renderer && npm run build -w @omp-studio/desktop && node scripts/bundle-remote-host.mjs",
-    "build:remote": "npm run build:packages && npm run build -w @omp-studio/desktop && node scripts/bundle-remote-host.mjs",
+    "build": "npm run build:packages && npm run build -w @omp-studio/renderer",
     "typecheck": "node scripts/check.mjs --fast",
     "test": "npm run build && npm run test:built",
-    "conversation:e2e:manual": "node scripts/real-conversation-e2e.mjs",
     "perf:streaming": "node scripts/streaming-perf-gate.mjs",
     "check": "node scripts/check.mjs",
     "check:fast": "node scripts/check.mjs --fast",
@@ -62,7 +60,7 @@
     "test:built": "npm run test:built --workspaces --if-present",
     "build:packages": "npm run build -w @omp-studio/studio-protocol && npm run build -w @omp-studio/client-contract && npm run build -w @omp-studio/platform && npm run build -w @omp-studio/runtime-installer && npm run build -w @omp-studio/transport-desktop && npm run build -w @omp-studio/transport-web && npm run build -w @omp-studio/client && npm run build -w @omp-studio/platform-win32 && npm run build -w @omp-studio/platform-darwin && npm run build -w @omp-studio/studio-host && npm run build -w @omp-studio/host-client-api && npm run build -w @omp-studio/testkit",
     "test:core": "node scripts/test-core.mjs",
-    "test:tooling": "npm run build:packages && npm run build -w @omp-studio/desktop && node --test scripts/*.test.mjs"
+    "test:tooling": "npm run build:packages && node --test scripts/*.test.mjs"
   },
   "engines": {
     "node": ">=22"
