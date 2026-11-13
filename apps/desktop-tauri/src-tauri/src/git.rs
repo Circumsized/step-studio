@@ -947,9 +947,14 @@ mod diff_tests {
 
     #[test]
     fn a_path_that_is_not_changed_is_empty_rather_than_an_error() {
-        // `design/status.md` is committed and the tree is clean, so there is
-        // nothing to show — which is not a failure.
-        let model = diff_get("ws-1", "design/status.md", "working");
+        // The fixture is a path the repository has never heard of, and that is
+        // deliberate. It used to be a real committed file with the comment "the
+        // tree is clean" — which made the test fail for anyone who had that file
+        // open, because a working tree mid-edit is the normal state of a working
+        // tree. `git diff` answers an unknown path with an empty patch and a
+        // zero exit, which is the same "no changes is not an error" behaviour
+        // without the premise nobody can hold.
+        let model = diff_get("ws-1", "a/path/that/does/not/exist.rs", "working");
         assert_eq!(model.get("patch").and_then(Value::as_str), Some(""));
         assert_eq!(model.get("binary").and_then(Value::as_bool), Some(false));
         assert!(model.get("unavailableReason").is_none(), "no changes is not an error");

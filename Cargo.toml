@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "apps/desktop-tauri/src-tauri",
+  "apps/desktop-tui",
   "crates/studio-bridge",
   "crates/step-studio-runtime",
   "crates/peer-uid",
@@ -12,7 +13,10 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+# 1.88, not lower, because the TUI surface is ratatui 0.30.2 and that is its
+# own floor (0.30.0 needs 1.86, so neither fits the previous 1.85). Recorded in
+# the plan's §9.4 fallback line.
+rust-version = "1.88"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -27,3 +31,7 @@ hmac = "0.12"
 sha2 = "0.10"
 base64 = "0.22"
 step-studio-bridge = { path = "crates/studio-bridge" }
+# The TUI surface's renderer and terminal. See §9.4: this is the registered
+# fallback, taken because `hqtui` turned out not to exist (M6a.1 spike).
+ratatui = "0.30.2"
+crossterm = "0.29"

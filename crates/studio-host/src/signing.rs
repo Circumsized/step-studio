@@ -140,7 +140,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 fn hex_decode(text: &str) -> Result<Vec<u8>, Rejection> {
-    if text.len() % 2 != 0 {
+    if !text.len().is_multiple_of(2) {
         return Err(Rejection::Malformed("odd-length hex".to_string()));
     }
     (0..text.len())

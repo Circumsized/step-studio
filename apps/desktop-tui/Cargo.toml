@@ -1,0 +1,23 @@
+[package]
+name = "step-studio-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+ratatui.workspace = true
+crossterm.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Width-aware reconstruction of a rendered buffer, for the golden fixtures.
+# ratatui clears the cells a wide grapheme covers, so a naive symbol-per-cell
+# join turns CJK text into "进 程 树" and every comparison fails on spacing
+# rather than on content. Already in the tree — ratatui itself uses it.
+unicode-width = "0.2"
+step-studio-bridge.workspace = true
+# For `lifecycle::default_endpoint`: the TUI attaches to the same daemon the
+# shell does, and deriving that path a second time is how the two drift apart.
+step-studio-host = { path = "../../crates/studio-host" }

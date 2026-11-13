@@ -539,6 +539,36 @@ D-1 的判据本就是个实证问题，直接查 `~/.stepcode`：
 （同时驱动 desktop 与 web 两条 transport）。这两个包要等 Electron 删除（M5.6）之后才能
 动——不是技术阻塞，是顺序依赖。
 
+### M6a.2 第一块：TUI crate 落地，进程树仪表盘真机验证；另两块被 §5.6 的前提错误卡住（2026-11-13）
+
+§9.4 的选型作废后落退路 ratatui 0.30.2（见上面 M6a.1 spike）。本块把 TUI surface 建出来。
+
+**结构与既有件复用**：`apps/desktop-tui`（lib + 薄 bin）。lib 而不是只有 bin，是为了让集成测试能反序列化 daemon 的真实产出——集成测试进不了 binary crate，而手写样本恰恰是藏契约漂移的东西。endpoint 用 `step_studio_host::lifecycle::default_endpoint()`，不自己推第二遍。连接用 `BridgeSession::connect`（`node` 为空 = 纯客户端，和 daemon 的集成测试同一条路），所以 TUI 是 daemon 的**第二个 surface**，不持有任何子进程——这正是 M2.3 复用之后才成立的事。
+
+**read model 用类型化 struct 而不是 `Value`**：M2.5 的 P0 就是九个查询因形状变化产出 `result: null`（不是 error），于是 `.catch` 不触发、面板静默清空。类型化让漂移变成编译期或测试期失败。`tests/contract.rs` 直接调 `step_studio_host::process::read_model()` 拿 daemon 真产出反序列化——这是唯一能让契约漂移挂掉测试的办法。
+
+**进程树仪表盘真机验证通过**：起真 daemon（fake-step 适配器），用 pty 驱动 TUI（pty 必须设 `TIOCSWINSZ`，否则 ratatui 拿到 0×0 区域、一个字符都不画——这个坑值得记），渲染出：
+
+```
+│2390770 daemon  3.8 MB │
+│2390775 adapter 3.6 MB │
+│2390777 cli     47.8 MB │
+```
+
+三个角色、真实 pid 与 RSS，深度按树算不按可执行文件名算。Tab 切仪表盘也通了。
+
+**踩到并修掉的真 bug**：usage 仪表盘的「最忙时段」gauge 原本和「按模型」共用同一个 area，后渲染的胜出——于是 gauge 静默**替换**了按模型 breakdown。修成三个独立 area，测试钉住（把 gauge 改回 `body[1]`，`the_arrays_are_charted_when_they_exist` 立刻失败）。
+
+**CJK 宽度是测试侧的坑，不是渲染侧的**：ratatui 把宽字符写进一个 cell，然后把它覆盖的后续 cell `reset()` 成空格（真实终端里被字符遮住，渲染是对的）。所以「一个 cell 一个 symbol」拼出来的文本会把 `进程树` 变成 `进 程 树`，每个 golden 比较都败在空格上而不是内容上。`dashboards::flatten()` 按显示宽度跳过被覆盖的 cell；pty 抓包时同理，`进程树` 在原始字节流里不是连续字符串。
+
+**§5.6 的前提是错的，这卡住另外两块**。§5.6 写「四仪表盘共用 daemon query 面」，真机一跑发现：`session.agents.list` 和 `history.list` **根本不在 daemon 的查询面上**——它们在 Tauri 壳里是 shell-local（`pump.rs` 的 `SHELL_LOCAL` 表），daemon 转给适配器，适配器没有这个能力，回 `result: null`。TUI 切到这两个仪表盘时看到的是 `invalid type: null, expected struct AgentStatus`。
+
+这一次错误是**响的**，正是类型化 read model 买来的：换成 `Value` + `.get()`，就是 M2.5 那个静默空面板。
+
+修法明确且只有一条：store 读取逻辑抽成共享 crate（`apps/desktop-tauri/src-tauri/src/history.rs` 里读 store 的部分约 450 行：`list`/`read_session`/`store_dir`/`project_path`/`projects`/`agents`/`read_agent`/`snippet`），壳与 TUI 都调它。两份实现必然漂移，所以不能各写一份。这一块未做。
+
+**MSRV 已抬到 1.88**（ratatui 0.30.2 的地板；0.30.0 要 1.86，同样高于原 1.85）。依赖树 131 包。
+
 ### M2.3 多面第二块：回执按 requestId 路由，不再广播给所有 surface（2026-11-13）
 
 M2.3 的「多面」卡在一件事上：daemon 的 adapter pump 把**每一帧**扇给所有附着的 surface。于是两个 surface 会互相收到对方的回执与回合——渲染层会把别人的回合画进自己的对话流。
