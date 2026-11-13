@@ -8,8 +8,10 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+ed25519-dalek = { version = "3.0.0", features = ["pkcs8", "pem"] }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 step-studio-bridge.workspace = true
 step-studio-peer-uid = { path = "../peer-uid" }
 
