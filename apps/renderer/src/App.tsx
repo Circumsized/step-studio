@@ -81,6 +81,7 @@ import { FileRowMenu, MenuItem, type FileMenuAction, type FileMenuController, ty
 import { I18nProvider, useI18n, type TranslationParams } from "./i18n";
 import { SHORTCUTS, formatShortcut, isPrimaryModifier } from "./keyboard/shortcuts";
 import { PLATFORM, nativeMenuOwnsShortcuts } from "./platform";
+import { shellCapabilities, shellDegradedReason, shellSurface } from "./chrome";
 import { fileManagerName } from "./platformCopy";
 import { HomePage, SecondaryPage } from "./HomePage";
 import { HistoryPage } from "./HistoryPage";
@@ -8352,10 +8353,15 @@ function AppShell({ state, client, onRoute, selectedHistoryId, onSelectThread, o
   // 预览模式只是显示层：桌面 shell 操作仍走真实 API。若已注册过真实
   // workspace，就允许在预览态下对当前真实项目执行；没有真实 workspace
   // 时保持禁用并给出原因，绝不使用 preview fixture 里的演示路径。
+  // A capability bit, not a member check. The old form asked whether the two
+  // methods existed and answered "仅桌面端可用" when they did not — which is the
+  // same answer for "no shell at all", "an older shell", and "a shell on a
+  // machine where this is not wired", and the component simply did not render.
+  // The bit says which of those it is, and the reason string says so in words.
   const projectShellUnavailable = realActiveWorkspace === undefined
     ? "请先打开本地项目"
-    : (globalThis.ompStudioChrome?.openProjectInEditor === undefined || globalThis.ompStudioChrome?.openProjectDirectory === undefined)
-      ? "仅桌面端可用"
+    : !shellCapabilities().projectIntegration
+      ? shellDegradedReason("projectIntegration")
       : undefined;
 
   const runProjectShellAction = async (kind: "editor" | "directory", action: () => Promise<ProjectShellActionResult>) => {
@@ -8387,8 +8393,12 @@ function AppShell({ state, client, onRoute, selectedHistoryId, onSelectThread, o
 
   const openProjectDirectory = () => {
     const workspace = realActiveWorkspace;
-    const openDirectory = globalThis.ompStudioChrome?.openProjectDirectory;
-    if (workspace === undefined || openDirectory === undefined) return;
+    // The capability is already checked where the button is enabled, so this is
+    // a guard rather than a second decision: reaching here without the
+    // capability would be a bug, and silently doing nothing is how it would hide.
+    if (workspace === undefined || !shellCapabilities().projectIntegration) return;
+    const openDirectory = shellSurface()?.openProjectDirectory;
+    if (openDirectory === undefined) return;
     void runProjectShellAction("directory", async () => {
       await openDirectory(workspace.workspaceId);
       return { status: "opened" };
