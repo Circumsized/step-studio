@@ -539,14 +539,22 @@ pub fn attach(app: tauri::AppHandle, window: String, input: Value) -> ChromeResu
                     while let Some(index) = pending.iter().position(|byte| *byte == b'\n') {
                         let line: Vec<u8> = pending.drain(..=index).collect();
                         let line = &line[..line.len() - 1];
+                        // Every one of these is `break`, not `return`: the
+                        // cleanup after the loop drops the connection and emits
+                        // `closed`, and a `return` here jumps over both. The first
+                        // version used `return`, so one event kind a newer runtime
+                        // added left the `Connection` in the table with a live fd
+                        // for the process lifetime — and the renderer kept showing
+                        // a live observation while every `control` answered "not
+                        // connected", because no `closed` ever reached it.
                         let Ok(text) = std::str::from_utf8(line) else {
-                            return;
+                            break;
                         };
                         let Ok(event) = serde_json::from_str::<Value>(text) else {
-                            return;
+                            break;
                         };
                         if validate_event(&event).is_err() {
-                            return;
+                            break;
                         }
                         if event.get("observationId").and_then(Value::as_str)
                             != Some(observation_id.as_str())
@@ -555,7 +563,7 @@ pub fn attach(app: tauri::AppHandle, window: String, input: Value) -> ChromeResu
                                 .and_then(Value::as_str)
                                 .is_some_and(|id| id != tab_id.as_str())
                         {
-                            return;
+                            break;
                         }
                         let mut flow = shared_flow
                             .lock()

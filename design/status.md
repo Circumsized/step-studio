@@ -712,6 +712,65 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.7 对抗评审：16 条 finding，5 条已修，其余分类记账（2026-11-13）
+
+对 M5 这轮新写的六个模块做对抗评审（独立 reviewer，只读）。16 条 finding，按严重度排序后处置。
+
+**已修（5 条，其中 2 条是我引入的数据丢失）**
+
+1. **`artifacts.rs` 不可读 catalog 被当成首次运行**（High）。原来是 `Err(_) => return Ok(Catalog::empty(..))`，
+   于是 `chmod 000`、AV/备份锁、macOS TCC 拒绝全都读成「还没存过东西」，然后 `save` 用一个**新的空
+   catalog rename 覆盖掉旧的**。每条记录消失、其他 root 里的 payload 全部变孤儿、UI 报 `total: 1`。
+   改成只有 `NotFound` 是首次运行。
+2. **`service_definitions.rs` 同一形状，payload 更糟**（High）。不可读的 store 读成空数组，下一次
+   `save` 用空数组覆盖——**每个 `env` 里的 API token 一起没**，而这个模块存在的理由就是保护它们。
+   Windows 上备份工具或 AV 持有文件是真实场景。
+3. **`media.rs` 分块字节被静默改写**（Medium-High）。原来是
+   `filter_map(as_u64).map(|b| b as u8)`：`[137,80,78,71,300,300]` 变成 `[137,80,78,71,44,44]`，
+   而 hasher 和字节数看到的都是改写后的值，**摘要照样对得上**——一个静默损坏的产物，下游没有任何
+   办法发现。改成逐元素校验 `0..=255`，否则整块拒绝。
+4. **`browser_observation.rs` / `prediction.rs`  reader 线程的 `return` 跳过了清理**（Medium-High）。
+   坏 UTF-8、坏 JSON、`validate_event` 失败、observationId 不匹配，四条路径全部 `return`，于是
+   `detach_socket` 和 `closed` 事件都被跳过。场景：新版运行时多发了一种 event kind → 线程退出 →
+   `Connection` 带着活 fd 留在表里直到进程结束（close-to-tray 意味着 `Destroyed` 根本不触发），
+   而渲染层还在显示一个活着的观测，同时每次 `control` 都回答「not connected」。改成 `break`，
+   让循环后的清理跑到。
+5. **`platform.rs` 唤醒锁的释放路径是死代码**（Medium）。`inhibit_sleep` 第一句是 `if !inhibit
+   { return; }`，于是释放整段不可达；每次 hold spawn 一个 `systemd-inhibit --mode=block
+   sleep 100000` 并把 `Child` 丢掉——既不释放也无人 reap。十个 turn 就是十个抑制剂加十个僵尸，
+   而模块文档写着「turn 结束就释放」，在每个平台上都是假的。改成持有 `Child`，**kill 它就是释放**。
+
+顺带修了 #6 的另一半：`session.send_command` 失败时 `continue` 而不释放持有，于是一次 socket
+抖动让机器永远不再睡；以及 `fetch_sub` 在 0 上回绕成 `u64::MAX`（同样永远不睡）。
+
+**三条回归测试，都先写成空的再修对**（本会话第 7、8、9 个空测试）：
+- 「不可读 catalog」第一版用**目录**代替不可读文件——`symlink_metadata` 对目录是**成功**的，
+  走的是 `is_file` 那个分支，所以把 `Err(_)`  bug 放回去测试照绿。改成真的 `chmod 000`
+  制造 EACCES 才对。
+- 「不可读 store」同理。
+- 「字节强转」第一版的变异没编译过，重写后才钉住。
+
+变异验证三条全部 FAILED ✓（把 bug 放回去，测试红）。
+
+**未修的 11 条，分类记账**
+
+| 类别 | 条目 | 为什么现在不修 |
+| --- | --- | --- |
+| 需要真机 / 跨平台 | #5 的 Windows/macOS 唤醒锁（`SetThreadExecutionState` / `IOPMAssertion`） | 两行平台调用，但要真机验证 |
+| 主线程阻塞 | #9：`import_prediction_history` 的 `blocking_pick_file` + 90 s `recv_timeout`、`attach_audio` 的 2 s 握手、`append_audio` 的 2 s 写超时、`register` 最大 2 GB 的拷贝+哈希，全在 IPC 主线程上 | 要改成 `async_runtime::spawn_blocking` 或独立线程，是结构性改动 |
+| 孤儿文件 | #7：`save` 在 payload 已 rename 之后失败（库满 5 万条），payload 留在盘上没有 catalog 条目 | 需要一个 reaper，或把 catalog 写入挪到拷贝之前 |
+| 归属校验 | #8：`prediction::control` / `import_history` 不校验 channelId 是这个窗口拥有的那个（`browser_observation` 查了，prediction 没有） | 一行 `is_some_and(|c| c == channel_id)`，但要连带改测试 |
+| TOCTOU | #10：capture payload 查完 size 再读，中间可被换成 8 GB | 需要本地写权限，且读后要加二次上限 |
+| 潜在 | #11：`commit` 不校验 filename 是 basename——今天唯一调用方传的是 UUID+扩展名，但一个传 `<uuid>../../x` 的调用方会让 `load()` 拒绝整个库 | 不变量在写侧没有强制 |
+|  durability | #12：三个模块的 temp 文件都没 fsync 就 rename | 崩溃/掉电时 rename 可能持久化而内容没有 |
+| 跨卷 | #13：`finish_upload` 用新的 `active_directory()` 推 target，而 `partial` 是 `begin` 时那个 root 上建的；中间 `set_directory` 换卷则 EXDEV | 需要把 root 存进 upload |
+| 僵尸 | #14：`Command::new("open").spawn()` 不 wait | 与 #5 同一类 |
+| 未接线 | #15：首次隐藏的气泡在 install 时触发而不是隐藏时（壳里没有东西响应 hide）；#16：`is_streaming()` 恒 false，退出确认永不出现 | 两个都是已知 stub，代码里有注释 |
+
+**一个诚实记录**：最终门禁跑出过一次 161/162，之后 8 次 `cargo test` 加 12 次直接跑二进制全绿，
+没能复现。失败发生在源码来回切换的重建窗口里，最可能是陈旧二进制，但**没有证据**，记下来而不是
+断言它没问题。
+
 ### M5.2 第二块：升级标记——daemon 立即排空的另一半，以及一个没人规划的崩溃（2026-11-13）
 
 §12.4 的热替换序列第一段（「通知 daemon 立即排空，升级场景宽限期强制 0」）落地：

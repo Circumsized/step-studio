@@ -227,10 +227,21 @@ pub fn append_upload(window: String, raw: Value) -> ChromeResult<Value> {
     }
     let upload_id = object.get("uploadId").and_then(Value::as_str).unwrap_or("");
     let sequence = object.get("sequence").and_then(Value::as_u64);
-    let bytes = object
-        .get("bytes")
-        .and_then(Value::as_array)
-        .map(|list| list.iter().filter_map(Value::as_u64).map(|byte| byte as u8).collect::<Vec<u8>>());
+    // Read the chunk as bytes, or refuse it. The first version used
+    // `filter_map(Value::as_u64).map(|b| b as u8)`, which *rewrote* malformed
+    // input instead of rejecting it: `[137,80,78,71,300,300]` became
+    // `[137,80,78,71,44,44]`, and because the hasher and the byte count both saw
+    // the coerced values, the digest still matched — a silently damaged artifact
+    // with nothing downstream able to detect it. This module's whole job is to
+    // refuse malformed bytes before they travel.
+    let bytes = object.get("bytes").and_then(Value::as_array).and_then(|list| {
+        let mut out = Vec::with_capacity(list.len());
+        for value in list {
+            let byte = value.as_u64().filter(|byte| *byte <= u8::MAX as u64)?;
+            out.push(byte as u8);
+        }
+        Some(out)
+    });
 
     let mut guard = uploads();
     let Some(table) = guard.as_mut() else {
@@ -577,10 +588,21 @@ pub fn append_audio(window: String, raw: Value) -> ChromeResult<Value> {
     }
     let audio_id = object.get("audioId").and_then(Value::as_str).unwrap_or("");
     let sequence = object.get("sequence").and_then(Value::as_u64);
-    let bytes = object
-        .get("bytes")
-        .and_then(Value::as_array)
-        .map(|list| list.iter().filter_map(Value::as_u64).map(|byte| byte as u8).collect::<Vec<u8>>());
+    // Read the chunk as bytes, or refuse it. The first version used
+    // `filter_map(Value::as_u64).map(|b| b as u8)`, which *rewrote* malformed
+    // input instead of rejecting it: `[137,80,78,71,300,300]` became
+    // `[137,80,78,71,44,44]`, and because the hasher and the byte count both saw
+    // the coerced values, the digest still matched — a silently damaged artifact
+    // with nothing downstream able to detect it. This module's whole job is to
+    // refuse malformed bytes before they travel.
+    let bytes = object.get("bytes").and_then(Value::as_array).and_then(|list| {
+        let mut out = Vec::with_capacity(list.len());
+        for value in list {
+            let byte = value.as_u64().filter(|byte| *byte <= u8::MAX as u64)?;
+            out.push(byte as u8);
+        }
+        Some(out)
+    });
 
     let mut guard = audio();
     let Some(table) = guard.as_mut() else {
@@ -878,6 +900,46 @@ mod tests {
         // refusal a refusal rather than a teardown.
         assert_eq!(chunk("order", &upload_id, 1, b"y").get("ok").and_then(Value::as_bool), Some(true));
         abort_upload(window("order"), json!({ "uploadId": upload_id })).expect("answered");
+    }
+
+    #[test]
+    fn a_chunk_that_is_not_bytes_is_refused_rather_than_rewritten() {
+        // The bug this pins: the first version read the chunk as
+        // `filter_map(Value::as_u64).map(|b| b as u8)`, which *rewrote* malformed
+        // input instead of rejecting it. `[137,80,78,71,300,300]` became
+        // `[137,80,78,71,44,44]`, and because the hasher and the byte count both saw
+        // the coerced values, the digest still matched — a silently damaged artifact
+        // with nothing downstream able to detect it.
+        dispose_uploads(&window("coerce"));
+        let upload_id = start("coerce", "image", "shot.png", "image/png");
+        for bad in [
+            // Out of range: `300 as u8` is 44.
+            json!([137, 80, 78, 71, 300, 300]),
+            // Not a number at all: dropped by the old `filter_map`.
+            json!([1, 2, "x", 3]),
+            // Negative.
+            json!([1, -1]),
+            // Not an array.
+            json!("bytes"),
+        ] {
+            let outcome = append_upload(
+                window("coerce"),
+                json!({ "uploadId": upload_id, "sequence": 0, "bytes": bad }),
+            )
+            .expect("answered");
+            assert_eq!(
+                outcome.get("ok").and_then(Value::as_bool),
+                Some(false),
+                "a chunk that is not bytes must be refused: {bad}"
+            );
+        }
+        // And the upload is still usable, which is what makes it a refusal rather
+        // than a teardown.
+        assert_eq!(
+            chunk("coerce", &upload_id, 0, b"ok").get("ok").and_then(Value::as_bool),
+            Some(true)
+        );
+        abort_upload(window("coerce"), json!({ "uploadId": upload_id })).expect("answered");
     }
 
     #[test]

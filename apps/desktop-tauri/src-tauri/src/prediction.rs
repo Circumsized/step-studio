@@ -266,17 +266,21 @@ pub fn attach(app: tauri::AppHandle, window: String, input: Value) -> ChromeResu
                     while let Some(index) = pending.iter().position(|byte| *byte == b'\n') {
                         let line: Vec<u8> = pending.drain(..=index).collect();
                         let line = &line[..line.len() - 1];
+                        // `break`, not `return`: the cleanup after the loop
+                        // drops the channel and emits `closed`, and a `return`
+                        // here jumps over both. See the same fix in
+                        // `browser_observation`.
                         let Ok(text) = std::str::from_utf8(line) else {
-                            return;
+                            break;
                         };
                         let Ok(event) = serde_json::from_str::<Value>(text) else {
-                            return;
+                            break;
                         };
                         if !is_event(&event) {
-                            return;
+                            break;
                         }
                         if event.get("channelId").and_then(Value::as_str) != Some(owned_id.as_str()) {
-                            return;
+                            break;
                         }
                         // An import's answer resolves the promise the importer is
                         // holding, and is not forwarded: it is a reply, not an

@@ -23,6 +23,7 @@
 //! proxy can see why a model call failed.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Mutex;
 
 use serde_json::{json, Value};
 
@@ -32,6 +33,10 @@ static POWER_HELD: AtomicBool = AtomicBool::new(false);
 /// How many turns are holding it. A count, not a flag: two concurrent turns must
 /// not let the first one's end release the second's hold.
 static POWER_DEPTH: AtomicU64 = AtomicU64::new(0);
+
+/// The inhibitor, if one is running. Held so releasing it is possible — see
+/// [`take_wake_lock`].
+static WAKE_LOCK: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
 /// Report whether another instance of this shell is already running.
 ///
@@ -80,15 +85,23 @@ pub fn power_held() -> bool {
     POWER_HELD.load(Ordering::Relaxed)
 }
 
-/// The depth after one release.
+/// The depth after one release, and whether that was the last hold.
 ///
 /// Pure, and split out for the reason the counting deserves a function at all:
 /// the live counter is a process-global static that the pump's own tests move, so
 /// a test asserting absolute values on it is order-dependent — the fifth shared
 /// fixture this session that made a test flaky. The arithmetic is what carries the
 /// invariant, so the arithmetic is what gets tested.
-fn depth_after_release(current: u64) -> u64 {
-    current.saturating_sub(1)
+///
+/// `previous == 0` is reported rather than clamped away: it means a release with
+/// nothing held, and the caller has to *not* decrement again. The first version
+/// returned `0` for it, which the caller read as "that was the last hold" and so
+/// cleared the flag and released the lock on a depth that was already zero.
+fn depth_after_release(current: u64) -> (u64, bool) {
+    if current == 0 {
+        return (0, false);
+    }
+    (current - 1, current == 1)
 }
 
 /// Take one power hold.
@@ -98,57 +111,87 @@ fn depth_after_release(current: u64) -> u64 {
 pub fn hold_power() {
     POWER_DEPTH.fetch_add(1, Ordering::SeqCst);
     POWER_HELD.store(true, Ordering::SeqCst);
-    #[cfg(target_os = "linux")]
-    inhibit_sleep(true);
-    #[cfg(target_os = "windows")]
-    inhibit_sleep(true);
-    #[cfg(target_os = "macos")]
-    inhibit_sleep(true);
+    // Only the first hold takes the lock: a second concurrent turn does not need a
+    // second inhibitor, and two would mean the first one's release still leaves the
+    // machine awake.
+    let mut slot = WAKE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if slot.is_none() {
+        *slot = take_wake_lock();
+    }
 }
 
 /// Release one power hold, and the machine's wake lock when the last one goes.
 pub fn release_power() {
-    // `fetch_sub`, not `try_update`: `try_update` is stable since 1.95 and this
-    // workspace's MSRV is 1.88 (ratatui 0.30.2's floor). `fetch_sub` returns the
-    // *previous* value, which is what the arithmetic below wants anyway.
+    // `fetch_sub` returns the *previous* value, which is what the arithmetic wants.
+    // Not `try_update`: that is stable since 1.95 and this workspace's MSRV is 1.88
+    // (ratatui 0.30.2's floor).
     let previous = POWER_DEPTH.fetch_sub(1, Ordering::SeqCst);
-    if depth_after_release(previous) == 0 {
+    let (depth, was_last) = depth_after_release(previous);
+    if previous == 0 {
+        // A release with nothing held. Undo the decrement rather than let it wrap:
+        // `fetch_sub` on zero gives `u64::MAX`, which holds the machine awake with
+        // no way back.
+        POWER_DEPTH.store(0, Ordering::SeqCst);
+        return;
+    }
+    if was_last {
+        POWER_DEPTH.store(depth, Ordering::SeqCst);
         POWER_HELD.store(false, Ordering::SeqCst);
-        inhibit_sleep(false);
+        // Killing the inhibitor *is* the release, and `wait` reaps the child.
+        let mut slot = WAKE_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(mut child) = slot.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
     }
 }
 
-/// Hold or release the OS wake lock.
+/// Take the OS wake lock, and return the handle that releases it.
 ///
-/// `systemd-inhibit` on Linux, `SetThreadExecutionState` on Windows,
-/// `IOPMAssertion` on macOS. All three are the platform's own mechanism, and none
-/// of them needs a crate: the Linux one is a D-Bus call that `systemd-inhibit`
-/// already wraps, and the Windows one is a single `winapi` call this crate tree
-/// already links through `windows-sys`.
+/// The handle is the point. The first version returned nothing and `inhibit_sleep`
+/// began with `if !inhibit { return; }`, which made the whole release path dead
+/// code: every hold spawned a `systemd-inhibit --mode=block sleep 100000` and
+/// dropped the `Child`, so the inhibitor was never released and the child was
+/// never reaped. Ten turns meant ten inhibitors and ten zombies, and the module
+/// doc's "released when the turn ends" was false on every platform.
+///
+/// Keeping the child is what makes release possible: killing it is the release.
+/// That is also why the lifetime is bounded — 100000 seconds is 27.7 hours, and a
+/// hold that outlives its process would keep the machine awake after a crash.
 ///
 /// `ponytail:` the Linux path shells out to `systemd-inhibit`, which costs a
 /// process per turn. Swap for a direct `org.freedesktop.login1.Manage.Inhibit`
 /// D-Bus call if that ever shows up in a profile; it has not.
-fn inhibit_sleep(inhibit: bool) {
-    if !inhibit {
-        return;
-    }
+fn take_wake_lock() -> Option<std::process::Child> {
     #[cfg(target_os = "linux")]
     {
         // `sleep` is what a turn needs blocked; `idle` is deliberately not, so a
         // user who steps away still gets their screen off.
-        let _ = std::process::Command::new("systemd-inhibit")
-            .args(["--what=sleep", "--who=Step Studio", "--why=a turn is streaming", "--mode=block", "sleep", "100000"])
+        std::process::Command::new("systemd-inhibit")
+            .args([
+                "--what=sleep",
+                "--who=Step Studio",
+                "--why=a turn is streaming",
+                "--mode=block",
+                "sleep",
+                "100000",
+            ])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
-            .spawn();
+            .spawn()
+            .ok()
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = inhibit;
-        // Windows and macOS both need their platform call; recorded rather than
-        // stubbed, because a no-op here is a laptop that sleeps mid-turn.
+        // Windows and macOS both need their platform call (`SetThreadExecutionState`
+        // / `IOPMAssertion`). Recorded rather than stubbed, because a no-op here is
+        // a laptop that sleeps mid-turn.
         eprintln!("[platform] the wake lock is not implemented on this target");
+        None
     }
 }
 
@@ -185,18 +228,25 @@ mod tests {
     #[test]
     fn the_first_turn_ending_does_not_release_the_second_hold() {
         // Two holds, one release: the depth is 1, so the machine stays awake.
-        let after = depth_after_release(2);
+        let (after, was_last) = depth_after_release(2);
         assert_eq!(after, 1, "one of two turns ended, one is still running");
-        assert!(after > 0, "and the hold is not released");
-        assert_eq!(depth_after_release(after), 0, "the second one releases it");
+        assert!(!was_last, "and the hold is not released");
+        let (after, was_last) = depth_after_release(after);
+        assert_eq!(after, 0);
+        assert!(was_last, "the second one releases it");
     }
 
     #[test]
     fn releasing_more_than_was_held_does_not_go_negative() {
-        // A count, not a flag: a release with nothing held is a no-op rather than
-        // a wrap to u64::MAX, which would hold the machine awake forever.
-        assert_eq!(depth_after_release(0), 0);
-        assert_eq!(depth_after_release(1), 0);
+        // A count, not a flag. `fetch_sub` on zero gives `u64::MAX`, which holds
+        // the machine awake with no way back — so the caller has to be told this
+        // was a release with nothing held, and undo it.
+        let (depth, was_last) = depth_after_release(0);
+        assert_eq!(depth, 0, "the depth stays at zero");
+        assert!(!was_last, "and the lock is not released");
+        let (depth, was_last) = depth_after_release(1);
+        assert_eq!(depth, 0);
+        assert!(was_last);
     }
 
     // There is deliberately no test that calls `hold_power` and asserts on

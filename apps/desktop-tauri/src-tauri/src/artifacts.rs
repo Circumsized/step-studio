@@ -191,7 +191,14 @@ impl Library {
         // followed, the same rule the Skillshare secrets apply.
         let metadata = match std::fs::symlink_metadata(&path) {
             Ok(metadata) => metadata,
-            Err(_) => {
+            // Only `NotFound` is a first run. Every other error — a permission
+            // denial, an AV or backup lock, a TCC refusal on macOS — means the
+            // catalog is *there and we cannot read it*, and the difference is the
+            // whole library: the first version of this matched `Err(_)`, so a
+            // `chmod 000` catalog read as "nothing stored yet" and `save` renamed a
+            // fresh empty catalog over it. Every record gone, every payload in
+            // other roots orphaned, and the UI reporting `total: 1`.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 // First run: make the default payload root now, so the
                 // writability probe in `state` has somewhere to write — and
                 // *canonicalise* it, because the state directory is derived from
@@ -203,6 +210,11 @@ impl Library {
                 let _ = std::fs::create_dir_all(&root);
                 let root = std::fs::canonicalize(&root).unwrap_or(root);
                 return Ok(Catalog::empty(&root));
+            }
+            Err(error) => {
+                return Err(ChromeError::failed(format!(
+                    "the artifact catalog cannot be read: {error}"
+                )));
             }
         };
         if !metadata.is_file() || metadata.len() > CATALOG_MAX_BYTES {
@@ -877,6 +889,44 @@ mod tests {
             assert!(outcome.is_err(), "{name} must be refused");
         }
         let _ = std::fs::remove_file(&file);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_unreadable_catalog_is_an_error_rather_than_a_first_run() {
+        // The bug this pins: the first version matched `Err(_)` as "nothing stored
+        // yet", so a catalog the process could not open - a permission denial, an
+        // AV or backup lock, a TCC refusal on macOS - read as an empty library, and
+        // the next `save` renamed a fresh empty catalog over it. Every record gone,
+        // every payload in other roots orphaned, and the UI reporting `total: 1`.
+        //
+        // The unreadable case is produced for real: the library directory is made
+        // non-traversable, so `symlink_metadata` fails with EACCES rather than
+        // succeeding the way it does on a directory or a dangling symlink. A
+        // directory at the catalog path is *not* a substitute - that one makes
+        // `symlink_metadata` succeed and the `is_file` check refuse, which is a
+        // different branch. The first version of this test used a directory and so
+        // passed with the `Err(_)` bug still in place.
+        let (dir, library) = library("unreadable");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            // `open` only stores the path; the directory appears on the first
+            // write. Created here so there is something to lock.
+            std::fs::create_dir_all(&library.directory).expect("make the library directory");
+            let locked = std::fs::metadata(&library.directory).expect("metadata");
+            let original = locked.permissions().mode();
+            std::fs::set_permissions(&library.directory, std::fs::Permissions::from_mode(0o000))
+                .expect("lock the library directory");
+            let outcome = library.list(&json!({}));
+            // Restored before any assertion, so a failure still cleans up.
+            std::fs::set_permissions(&library.directory, std::fs::Permissions::from_mode(original))
+                .expect("restore the library directory");
+            assert!(
+                outcome.is_err(),
+                "a catalog that cannot be opened is an error, not an empty library: {outcome:?}"
+            );
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

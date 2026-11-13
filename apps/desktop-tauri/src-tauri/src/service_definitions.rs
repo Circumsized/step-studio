@@ -237,8 +237,20 @@ impl ServiceDefinitionStore {
         }
         let bytes = match std::fs::read(&self.file) {
             Ok(bytes) => bytes,
-            // Nothing stored yet is the normal first run.
-            Err(_) => return Ok(Vec::new()),
+            // Only `NotFound` is a first run. Anything else means the store is
+            // there and unreadable — and the difference is every saved
+            // configuration, API tokens in each `env` block included. The first
+            // version matched `Err(_)`, so a locked file (a backup tool or AV
+            // holding it on Windows) read as "nothing stored" and the next `save`
+            // renamed an empty array over it.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Vec::new());
+            }
+            Err(error) => {
+                return Err(StoreError::Failed(format!(
+                    "the configuration store cannot be read: {error}"
+                )));
+            }
         };
         if bytes.len() as u64 > MAX_FILE_BYTES {
             return Err(StoreError::Failed(
@@ -888,6 +900,34 @@ mod tests {
         assert!(
             matches!(store.write(&[]), Err(StoreError::Unavailable)),
             "the write path refuses without a keystore, on its own"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_unreadable_store_is_an_error_rather_than_an_empty_one() {
+        // The bug this pins: the first version matched `Err(_)` as "nothing stored
+        // yet", so a store the process could not open — a backup tool or AV holding
+        // it on Windows is the realistic case — read as an empty list, and the next
+        // `save` renamed an empty array **over** it. Every saved configuration gone,
+        // API tokens in each `env` block included: the exact asset this module
+        // exists to protect.
+        //
+        // A directory at the store's path is the same "present but not usable"
+        // answer a permission denial gives, and it is what a test can produce
+        // without root.
+        let dir = std::env::temp_dir().join(format!("svcdef-unreadable-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("make a store directory");
+        std::fs::create_dir_all(dir.join("service-definitions.enc")).expect("make a directory at the store path");
+        let store = ServiceDefinitionStore::new(
+            dir.join("service-definitions.enc"),
+            Arc::new(FixedKeyCodec([7u8; 32])),
+        );
+        let outcome = store.list("ws-1");
+        assert!(
+            matches!(outcome, Err(StoreError::Failed(_))),
+            "an unreadable store is an error, not an empty list: {outcome:?}"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

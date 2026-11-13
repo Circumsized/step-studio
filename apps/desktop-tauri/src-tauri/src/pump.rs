@@ -826,6 +826,13 @@ fn pump(
                                 )
                             });
                             let _ = job.reply.send(Err(format!("desktop bridge: {error}")));
+                            // The turn never started, so the hold taken above has
+                            // nothing to guard. Without this the depth stays at 1
+                            // forever: the machine never sleeps again, and the
+                            // diagnostics page reports a hold that is not there.
+                            // A session that dies mid-turn is the other half of the
+                            // same leak, and that one is the watch loop's to reap.
+                            crate::platform::release_power();
                             continue;
                         }
                         let _ = job.reply.send(Ok(ack));
