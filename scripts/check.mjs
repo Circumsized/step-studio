@@ -271,6 +271,20 @@ if (plan.arch) {
   if (!result.ok) failures.push(result.name);
 }
 
+// The generated contract. Regenerates `contracts/generated/` and fails if the
+// checked-in copy moved, which is what makes `git diff --exit-code` on that
+// directory a gate rather than a no-op. Runs after the builds because it reads
+// the protocol from its built output.
+if (plan.arch || plan.types) {
+  const result = await runStep({
+    name: "contracts",
+    command: process.execPath,
+    args: ["--test", join(root, "test", "contracts.test.mjs")],
+  });
+  report(result);
+  if (!result.ok) failures.push(result.name);
+}
+
 if (plan.selects) {
   const result = await runStep({
     name: "selects",

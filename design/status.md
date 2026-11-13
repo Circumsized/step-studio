@@ -712,6 +712,40 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.1 第三块：`contracts/generated/` 从空操作变成真门禁（2026-11-13）
+
+用户第 5 步要的「`cargo test` 后 `git diff --exit-code contracts/generated/`」之前是空操作——
+仓里没有那个目录，方案也没写由谁生成、生成什么。现在有了。
+
+**形态**：`scripts/generate-contracts.mjs` 把**两个必须一致的名字清单**合成一份签入的产物
+`contracts/generated/protocol-names.json`：
+
+| 段 | 来源 | 是什么 |
+| --- | --- | --- |
+| `operations` | `packages/studio-protocol` 的 42 个 `*_KINDS` 常量（199 个） | 运行时能被要求的全部 operation |
+| `facade` | `packages/client-contract` 的 `operations.d.ts`（347 个） | facade 能问的全部 query/command 名 |
+| `shellLocal` / `adapterNative` / `renamed` | `pump.rs` 的三个分发表 | 本壳自己答、转给适配器、改名的 |
+| `runtimeCapabilities` | `step-studio-runtime/src/capabilities.rs` | 适配器自己声明的能力 |
+
+`test/contracts.test.mjs` 每次重生成并逐字节比较，不同就失败并提示该跑什么；同时断言**壳服务的
+每个名字都必须被某一边声明**。已接进 `npm run check`（`contracts` 步骤，`--fast` 也跑）。
+
+**一个名字合法地来自三处，只查一处就是假警报**——这条是实测逼出来的，不是设计时想到的：
+第一版只查 protocol 的 operation kinds，于是 `capabilities.get` 被报成「壳在服务但协议没声明」。
+它是 facade query，protocol 的 kind 常量里从来没有。第二版加了 facade，又撞上 `usage.get` 改名
+到的 `usage.panel`——那是**适配器能力**，不是 protocol operation。三处并集才对。
+
+**生成器里两个正则都先写错、都被测试逼出来**：
+- `operations.ts` 编译后是 `export {}`（纯类型），只能读 `.d.ts`；而 `CommandInputMap` 是四个
+  map 的交集，其中两个是**映射类型** `[K in EvaluationOperation["kind"]]`，键不是字面量、
+  刮不出来。漏读的那个恰好装着 `core.*` 全家——于是 `core.steer` 被报成未声明。
+- `capabilities.rs` 里带散文注释的条目跨行书写，只匹配单行形式的正则**恰好漏掉它们**，
+  `usage.panel` 正在其中。
+
+两条是同一个教训：**一个只匹配「上次见过的那种格式」的解析器，漏掉的就是新格式。**
+
+变异验证：从 `pump.rs` 删掉一个已服务名字 → FAILED；加一个谁都没声明的名字 → FAILED。
+
 ### M5.1 第二块：`cargo deny` 落地，许可证与 advisory 门禁进 CI（2026-11-13）
 
 用户第 5 步点名要的许可证门禁跑起来了。`deny.toml` + CI 的 `EmbarkStudios/cargo-deny-action`，
