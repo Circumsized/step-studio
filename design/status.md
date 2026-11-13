@@ -712,6 +712,60 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.6 第 2 步第四批：浏览器观测 4 + 计算机截图 1 落地，壳是纯传输（2026-11-13）
+
+新增 `apps/desktop-tauri/src-tauri/src/browser_observation.rs`，从 Electron 侧
+`browser-observation.ts` 与 `computer-observation.ts` 移植。
+
+**最重要的一件事：这里没有浏览器引擎，而这是设计。** 读 Electron 源码之前我以为要接
+`agent-browser` + `rmcp` + `chromiumoxide`；读完发现 Electron 自己也不用引擎——运行时
+拥有浏览器，往 `<state>/browser/<observationId>.json` 写一行描述符指向一根私有 socket，
+壳读描述符、用里面的 token 认证，然后双向转发换行分隔的 JSON。**没有任何 CDP 端点或方法
+进入渲染层。**
+
+所以用户「Tauri 侧只做转发」的判断比原话更彻底：整个模块零新依赖，
+`std::os::unix::net::UnixStream` 就是全部传输。`agent-browser` / `chromiumoxide` 是
+**运行时那一侧**的事，不是壳的。
+
+移植过来的真实逻辑（都有测试）：描述符六项校验（UUID 形状先验、`symlink_metadata` 拒符号
+链接、≤4096 字节、token 64 hex、过期窗口 60 秒上下界、endpoint 必须与壳自己推导的一致）、
+逐行 JSON 帧解析（半行留缓冲，2 MB 帧分 64 KB 到达仍能解码）、**帧背压**（序号回放过帧、
+未 ack 时过帧、95 ms 内的帧 ack 后丢弃）、控制权门（非 ping/take/release 必须
+`control === "human"`）、PNG 魔数 + IHDR 尺寸与描述符一致、截图一次性（读成功即删描述符
+和 payload，不可重放）。
+
+#### 一个必须先说清的阻塞：这 5 个成员今天无法端到端跑通
+
+`browser.tabs.get` 与 `browser.observe.prepare` **在整个仓库里没有任何实现**——不在 TS
+host，不在 Rust 适配器，只在 protocol 的 kind 列表里。而 `observationId`/`tabId` 正是这两
+个 operation 产出的。所以渲染层的 `BrowserPane` 在 `enabled` 那道门就停了（capability
+manifest 里没有 `browser.tabs.get`），壳侧这 5 个成员**今天不会被调用**。
+
+这不影响本批的价值：facade 的 capability 位按组推导（四个 browser 成员 + readComputerCapture
+全在位才算可用），位为 true 而 pane 仍被 Host 门挡住，是**正确的**降级——pane 显示「连接支持
+浏览器观察的 Runtime 后重试」，不是消失。真正的前置是运行时要能产出描述符，那是上游工作。
+
+#### 变异验证（六条安全相关测试逐条确认非空）
+
+| 变异 | 结果 |
+| --- | --- |
+| frame 字段数 8 → 9 | FAILED ✓ |
+| 描述符不校验 sessionId / tabId 归属 | FAILED ✓ |
+| 过期窗口去掉上界 | FAILED ✓ |
+| `symlink_metadata` → `metadata`（跟随符号链接） | FAILED ✓（第一版测试能过，见下） |
+| 去掉 PNG 魔数检查 | FAILED ✓（第一版测试能过，见下） |
+| navigate 接受任意 scheme | FAILED ✓ |
+
+第四、五条第一版都是**空测试**，变异能过：
+
+- 符号链接那条第一版指向一个内容为 `{}` 的文件，只断言 `is_err()`。跟随它读到 `{}`，
+  照样因为「字段不匹配」被拒——测试分不出「因为它是符号链接」和「因为它内容不对」。
+  改成指向一份**完全有效**的描述符才对：跟随它会成功，所以拒诊只能来自符号链接检查。
+- PNG 那条第一版只查 IHDR 尺寸。把魔数检查删掉，尺寸不符的用例仍然被尺寸检查拦住，
+  测试照绿。补了一个「IHDR 尺寸正确但魔数错误」的用例。
+
+两条是同一个教训的不同面目：**一个只断言「失败了」的测试，钉不住失败的原因。**
+
 ### M5.6 第 2 步第三批：服务定义 3 落地，OS keystore + AES-256-GCM（2026-11-13）
 
 新增 `apps/desktop-tauri/src-tauri/src/service_definitions.rs`，从 Electron 侧
@@ -853,9 +907,12 @@ artifacts 第一个撞上。
 | --- | --- | --- |
 | HostApi | 项目集成 2、Skillshare 1、产物 3、服务定义 3 = 9 | 0 |
 | PlatformApi | 菜单 1、日志 2、平台 1 = 4 | 0 |
+| BrowserApi | 浏览器观测 4、计算机截图 1 = 5 | 0 |
 | MediaApi | 0 | 媒体上传 4、实时音频 3、麦克风权限 2 |
-| BrowserApi | 0 | 浏览器观测 5 |
 | 预测通道（归属待定） | 0 | 5 |
+
+BrowserApi 5 个已全部落地，但**端到端仍被运行时的两个 operation 挡住**（见第四批记录）：
+壳侧 Ready，`browser.tabs.get` / `browser.observe.prepare` 全仓无实现。
 
 预测通道这 5 个（`attachPrediction` / `predictionInput` / `detachPrediction` /
 `importPredictionHistory` / `onPrediction`）在前面的 trait 归属表里**没有位置**——那张表

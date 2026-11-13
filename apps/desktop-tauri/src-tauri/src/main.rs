@@ -7,6 +7,7 @@
 
 mod artifacts;
 mod bridge;
+mod browser_observation;
 mod chrome;
 mod diagnostics;
 mod git;
@@ -108,6 +109,10 @@ fn main() {
             chrome::export_logs,
             chrome::open_project_directory,
             chrome::open_project_in_editor,
+            browser_observation::attach_browser_observation,
+            browser_observation::control_browser_observation,
+            browser_observation::detach_browser_observation,
+            browser_observation::read_computer_capture_command,
             service_definitions::list_service_definitions,
             service_definitions::save_service_definition,
             service_definitions::remove_service_definition,

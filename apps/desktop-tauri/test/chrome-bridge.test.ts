@@ -24,7 +24,12 @@ const bridgeSource = readFileSync(join(packageRoot, "src", "chrome-bridge.ts"), 
 // and service-definition members live in their own files, and reading one file
 // would have reported them as unbacked invocations — a false alarm loud enough to
 // be believed.
-const RUST_COMMAND_MODULES = ["chrome.rs", "artifacts.rs", "service_definitions.rs"];
+const RUST_COMMAND_MODULES = [
+  "chrome.rs",
+  "artifacts.rs",
+  "service_definitions.rs",
+  "browser_observation.rs",
+];
 const rustSources = RUST_COMMAND_MODULES.map(name =>
   readFileSync(join(packageRoot, "src-tauri", "src", name), "utf8"),
 );
@@ -59,20 +64,25 @@ describe("the chrome bridge's surface", () => {
   test("it exposes exactly the shell-level subset", () => {
     const keys = Object.keys(createTauriChromeBridge()).sort();
     assert.deepEqual(keys, [
+      "attachBrowserObservation",
       "chooseArtifactDirectory",
       "clearAvatar",
+      "controlBrowserObservation",
+      "detachBrowserObservation",
       "exportArtifact",
       "exportLogs",
       "importArtifact",
       "listServiceDefinitions",
       "loadAvatar",
       "notify",
+      "onBrowserObservation",
       "onMenuCommand",
       "openLogDir",
       "openProjectDirectory",
       "openProjectInEditor",
       "openUrl",
       "platform",
+      "readComputerCapture",
       "removeServiceDefinition",
       "reportPayloadHealth",
       "reportPerformanceSample",
@@ -92,7 +102,7 @@ describe("the chrome bridge's surface", () => {
     // The three artifact members are deliberately *not* in this list. They were
     // when the shell ran no Host, but the shell now owns the artifact library
     // itself, so they are shell-level operations like any other.
-    for (const absent of ["beginMediaUpload", "getUpdateSnapshot", "attachPrediction", "requestMicrophoneAccess", "attachBrowserObservation"]) {
+    for (const absent of ["beginMediaUpload", "getUpdateSnapshot", "attachPrediction", "requestMicrophoneAccess"]) {
       assert.equal(bridge[absent], undefined, `${absent} must not be exposed`);
     }
   });

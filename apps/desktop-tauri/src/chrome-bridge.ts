@@ -36,6 +36,60 @@ import { listen as tauriListen } from "@tauri-apps/api/event";
  */
 const MENU_COMMAND_EVENT = "omp-studio:chrome:menu-command";
 
+/**
+ * The channel browser-observation events arrive on. Byte-identical to the
+ * Electron preload's (`browser-observation-shared.ts`), so the renderer's
+ * subscription is the same on both shells.
+ */
+const BROWSER_EVENT_CHANNEL = "omp-studio:desktop:browser-event";
+
+/** Mirrors `BrowserObservationResult` in `apps/desktop/src/browser-observation-shared.ts`. */
+export type BrowserObservationResult = { readonly ok: boolean; readonly message?: string };
+
+/** Mirrors `BrowserObservationAttach` in the same file. */
+export interface BrowserObservationAttach {
+  readonly observationId: string;
+  readonly sessionId: string;
+  readonly tabId: string;
+}
+
+/** Mirrors `BrowserObservationControl` in the same file. */
+export interface BrowserObservationControl {
+  readonly observationId: string;
+  readonly input: BrowserObservationInput;
+}
+
+/** Mirrors `BrowserObservationInput` from `@omp-studio/studio-protocol`. */
+export type BrowserObservationInput =
+  | { readonly kind: "ping" }
+  | { readonly kind: "take" }
+  | { readonly kind: "release" }
+  | { readonly kind: "ack"; readonly sequence: number }
+  | { readonly kind: "navigate"; readonly url: string }
+  | { readonly kind: "click"; readonly sequence: number; readonly x: number; readonly y: number; readonly button: "left" | "right" }
+  | { readonly kind: "wheel"; readonly sequence: number; readonly x: number; readonly y: number; readonly deltaX: number; readonly deltaY: number }
+  | { readonly kind: "key"; readonly sequence: number; readonly key: string; readonly code: string; readonly modifiers: number }
+  | { readonly kind: "text"; readonly sequence: number; readonly text: string };
+
+/** Mirrors `BrowserObservationEvent` from `@omp-studio/studio-protocol`. */
+export type BrowserObservationEvent =
+  | { readonly kind: "state"; readonly observationId: string; readonly tabId: string; readonly title: string; readonly url: string; readonly frozen: boolean; readonly busy: boolean; readonly control: "agent" | "waiting" | "human" | "other-window" }
+  | { readonly kind: "frame"; readonly observationId: string; readonly tabId: string; readonly sequence: number; readonly data: string; readonly width: number; readonly height: number; readonly timestamp: number }
+  | { readonly kind: "error"; readonly observationId: string; readonly message: string }
+  | { readonly kind: "closed"; readonly observationId: string };
+
+/** Mirrors `ComputerCaptureRequest` in `apps/desktop/src/computer-observation-shared.ts`. */
+export interface ComputerCaptureRequest {
+  readonly captureId: string;
+  readonly sessionId: string;
+  readonly targetId: string;
+}
+
+/** Mirrors `ComputerCaptureResult` in the same file. */
+export type ComputerCaptureResult =
+  | { readonly ok: true; readonly data: ArrayBuffer; readonly width: number; readonly height: number }
+  | { readonly ok: false; readonly message: string };
+
 /** Mirrors `ServiceDefinitionResult` in `apps/desktop/src/chrome-services-shared.ts`. */
 export type ServiceDefinitionResult =
   | { readonly ok: true; readonly definitions: readonly ServiceDefinition[] }
@@ -138,6 +192,20 @@ export interface TauriChromeBridge {
     sessionId: string;
   }): Promise<{ ok: true; token: string; name: string } | { ok: false; message: string }>;
   /**
+   * Browser observation. The shell is a transport here, not a browser: the
+   * runtime owns the tab and hands over a private socket, and these four members
+   * relay to it. `attach` names the observation the runtime prepared, so a
+   * renderer cannot invent one.
+   */
+  attachBrowserObservation(input: BrowserObservationAttach): Promise<BrowserObservationResult>;
+  controlBrowserObservation(input: BrowserObservationControl): Promise<BrowserObservationResult>;
+  detachBrowserObservation(input: { observationId: string }): Promise<BrowserObservationResult>;
+  onBrowserObservation(listener: (event: BrowserObservationEvent) => void): () => void;
+  /**
+   * One computer capture, read once. The bytes are the PNG itself.
+   */
+  readComputerCapture(input: ComputerCaptureRequest): Promise<ComputerCaptureResult>;
+  /**
    * Saved service configurations. Each answers with the Electron preload's shape
    * (`ServiceDefinitionResult` in `apps/desktop/src/chrome-services-shared.ts`),
    * so the renderer's handling is identical on both shells. `ok: false` carries a
@@ -237,6 +305,34 @@ export function createTauriChromeBridge(): TauriChromeBridge {
       }),
     removeServiceDefinition: ({ workspaceId, id, revision }) =>
       tauriInvoke("remove_service_definition", { workspaceId, id, revision }),
+    attachBrowserObservation: input =>
+      tauriInvoke("attach_browser_observation", {
+        observationId: input.observationId,
+        sessionId: input.sessionId,
+        tabId: input.tabId,
+      }),
+    controlBrowserObservation: ({ observationId, input: action }) =>
+      tauriInvoke("control_browser_observation", { observationId, input: action }),
+    detachBrowserObservation: ({ observationId }) =>
+      tauriInvoke("detach_browser_observation", { observationId }),
+    readComputerCapture: ({ captureId, sessionId, targetId }) =>
+      tauriInvoke("read_computer_capture_command", { captureId, sessionId, targetId }),
+
+    // The shell relays to the owning window only, so another window's input
+    // cannot move this one's page. The renderer filters by `observationId` on
+    // top, which is what the pane's own ref check does.
+    onBrowserObservation: listener => {
+      // Same shape as :  resolves with the unlisten
+      // function, and the contract's unsubscribe is synchronous, so the returned
+      // closure captures whatever has resolved so far.
+      let unsubscribe = () => {};
+      void tauriListen<BrowserObservationEvent>(BROWSER_EVENT_CHANNEL, event => {
+        listener(event.payload);
+      }).then(unlisten => {
+        unsubscribe = unlisten;
+      });
+      return () => unsubscribe();
+    },
 
     onMenuCommand: listener => {
       let unsubscribe = () => {};
