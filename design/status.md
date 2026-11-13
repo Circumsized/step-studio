@@ -644,7 +644,22 @@ M2.3 的「多面」卡在一件事上：daemon 的 adapter pump 把**每一帧*
 4. `MediaApi` 按需：`flexaudio` + Tauri capabilities。验收：不开音频时 `capabilities()` 调用不触发任何权限弹窗。
 5. CI 门禁：`cargo deny` 查许可证（重点卡 AGPL）、`cargo test` 后 `git diff --exit-code contracts/generated/`、dhat 堆画像、「按需进程数 = 0」断言。
 
-**实测现状（第 1 步的输入）**：渲染层共 49 处 `globalThis.ompStudioChrome?.method` 后判空的写法，3 处显式 `=== undefined` 比较；`ompStudioChrome` 41 个成员中 Tauri `chrome.rs` 只实现 9 个。
+**实测现状（第 1 步的输入）**：`ompStudioChrome` 41 个成员中 Tauri `chrome.rs` 只实现 9 个；渲染层直读 `globalThis.ompStudioChrome` 共 **86 处、32 个文件**（其中约 49 处是 `?.method` 后判空的写法，3 处显式 `=== undefined` 比较）。
+
+**第 1 步进度（2026-11-13）**：facade 与 capability 位已落地并带验收测试；已收编 3 个文件（`platform.ts`、`App.tsx` 的项目目录/编辑器入口、`BrowserPane`），**剩 83 处、约 30 个文件**。剩余直读按域分布：
+
+| 文件 | 处数 | 域 |
+| --- | --- | --- |
+| `settings/updates.ts` | 8 | 更新 |
+| `settings/appUpdate.ts` | 7 | 更新 |
+| `services/ServicesPane.tsx` | 7 | HostApi 服务定义 |
+| `media/ArtifactLibraryPane.tsx` | 7 | HostApi 产物 |
+| `App.tsx` | 7 | 混合 |
+| `DiagnosticsPage.tsx` | 6 | 平台/诊断 |
+| `skillshare/SkillsharePane.tsx` | 5 | HostApi |
+| 其余 24 个文件 | 36 | 媒体/浏览器/预测/Composer/启动通知 |
+
+每一处都是同一机械变换：`globalThis.ompStudioChrome?.x` → `shellSurface()?.x`，成员存在性分支 → `shellCapabilities()` 的位。每批改动带 `npm run check -- --only renderer` 门禁。
 
 ### M5.6 前置测量：Electron 删除的真实规模远超方案估算（2026-11-13 实测，未执行）
 
