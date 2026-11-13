@@ -712,6 +712,47 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.2 第一块：daemon 换包的 swap 模块，含两个不可达分支的发现（2026-11-13）
+
+§12.4 的热替换序列三段里，中间那段（换包）是唯一有真逻辑、且不起 daemon 就能测的。新增
+`crates/studio-host/src/swap.rs`：`swap(new, target)` 与 `rollback(target)`。
+
+**为什么是先 rename 旧再 move 新，而不是反过来。** 同一个文件系统内 `rename` 是原子的，
+所以「把新二进制挪到最终名字」要么成要么不成。但两步之间崩掉，应用会**一个能跑的二进制都没有**——
+一台起不来的机器。反过来做，「什么都没有」的窗口只有一个 syscall 宽，而且旧二进制还在盘上、
+在一个我们选好的名字下面。
+
+**为什么回滚是 rename 不是 copy。** 旧二进制完好，放回去就是把当初挪走它的那个原子操作再做一遍。
+copy 是第二次失败的机会，而**回滚途中失败是唯一没人在看的那一刻**。
+
+#### 两个「不可达分支」的发现，都是测试逼出来的
+
+写测试时想强制 install 那步失败，做了各种设置（把 target 换成非空目录等），全部失败。追下去发现：
+**rename-aside 之后 `target` 已经不存在了**，所以 install 那步的 `rename` 只可能因为「第一个
+rename 也会失败的原因」而失败（跨设备、两次 syscall 之间权限变了）。单元测试产不出其中任何一个。
+
+同一件事在 `rollback` 里也成立：它的第二步 `rename(&aside, target)`，destination 是一个 syscall
+前刚腾出来的名字。所以第一版里「回滚失败时把 doomed 放回去」那段恢复代码**没人能跑到**。
+按 ponytail 删了——一条没人执行过的恢复路径，比没有更坏。
+
+顺带另一个发现：`swap` 里的 aside 预清理（`remove_file(&aside)`）**在 Unix 上是空操作**——
+`rename` 本身就覆盖已存在的文件。它是 **Windows 的必要条件**（那边 rename 到已存在的名字会失败）。
+所以删掉它的变异在本机全绿，在 Windows 上会坏第二次更新。**这是本会话交叉编译门禁第二次挣到工资**
+（第一次是 peer-uid）。
+
+#### 变异验证（四条）
+
+| 变异 | 结果 |
+| --- | --- |
+| 删掉 aside 预清理 | 本机 PASSED（Windows 才红，见上） |
+| `rollback` 不用 doomed 中转，直接删 target | FAILED ✓ |
+| `rollback` 不清理 doomed | FAILED ✓（断言原先在 rollback **之前**跑，移到后才钉住） |
+| aside 名改成带 pid 的时间戳 | FAILED ✓ |
+
+第一版的 `swapping_twice` 测试**根本没有交换第二次**，所以预清理那条变异白送；补了真正的二次交换，
+并且断言「只剩一个 `.previous`/`.rolled-back` 残留」——第一版只 filter `.previous`，
+漏掉 `.rolled-back`。
+
 ### M5.1 第六块：托盘 + 单实例 + 代理 + 电源落地，M5.1 平台能力齐了（2026-11-13）
 
 新增 `apps/desktop-tauri/src-tauri/src/tray.rs` 与 `platform.rs`，M5.1 点名的四项平台能力全部有着落。

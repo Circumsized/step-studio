@@ -17,3 +17,4 @@ pub mod routes;
 pub mod signing;
 pub mod state;
 pub mod supervisor;
+pub mod swap;
