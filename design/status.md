@@ -712,6 +712,53 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M2.4 删除连锁：真死代码是 `runtime-stepcode` 不是那三个文件（2026-11-13）
+
+M2.4 当年记的是「2507 行（`omp-usage-adapter.ts` 448 + `session-catalog.ts` 444 +
+`session-archive-reader.ts` 1615）可删，gate 在回退路径」。Electron 删除后 gate 解除，
+逐字核实那三个文件——**它们全都活着**：
+
+- `session-catalog.ts` 被 `session-archive-service` / `session-archive-reader` /
+  `session-delete-service` / `index.ts` 四个文件导入；
+- `session-archive-reader.ts` 从 `index.ts` 导出；
+- `omp-usage-adapter.ts` 是 `host-client-api` 的 usage 服务，有专门测试。
+
+**M2.4 把「回退路径的消费者」和「这三个文件」混为一谈了。** 那三个文件属于 TS Host 服务层
+（`packages/studio-host`，10,179 行，被 `host-client-api` 大量使用），不是 Electron 壳；
+它们是绞杀对象，随 Host 的 TS 实现一起退，不随 Electron。
+
+真正的死代码是 **`packages/runtime-stepcode`**（1256 行、16 文件）——TS 适配器自己的源码，
+唯一的产品消费者是它自己，而 daemon 实际拉起的是 `crates/step-studio-runtime` 的二进制
+（`native_runtime_command()` 优先 `target/{profile}/step-studio-runtime`）。已删。
+
+**删之前先救出它唯一不可替代的东西**：`real-cli.test.ts` 是跨语言真实性测试——用 TS
+`StudioBridgeClient` 驱动适配器，而协议在 `packages/studio-protocol` 里被实现了两遍，
+只有 Rust 单侧测试的话两个实现会漂移，且只有发布出去的壳会发现。已改指 Rust 栈并落户
+`packages/studio-host/test/real-runtime-adapter.test.ts`。
+
+搬过去时踩的四个坑，都是「看起来对但跑不起来」：
+
+1. `import("../dist/src/bridge-client.js")` 让 tsc 报「would overwrite input file」——
+   `tsconfig.json` 的 `include` 含 `test/**`，所以值导入会让它把 dist 里的文件当输入重新
+   emit。原测试用 `typeof import(...)` 类型导入绕开，注释写明了原因。
+2. `sendPrompt` 不存在，客户端只有一个 `invoke`。
+3. `RequestId` 是 branded type，测试外铸要 `as`——和客户端自己那一行
+   （`bridge-client.ts:218`）同一个 cast。
+4. `runtimeEpoch` 必填，得从 `hello` 拿，不能写常量——`invoke` 会拒绝陈旧 epoch，
+   那正是 daemon 防重放的那道门。
+
+**非空性验证**：本机没有 step CLI，测试按设计 skip。用 PATH 上放个假 `step` 跑，
+daemon 起来、客户端连上、握手真的发生了，因对端不讲协议而报 `malformed response`——
+所以到协议交换之前的每一行都真在跑。这点写进了测试注释，因为 skip 守卫正是测试
+「悄悄死掉」最常用的方式。
+
+另外修了两个会让测试永远跳过的路径错误：repo root 多算了一层（`dist/test/` 到根是四级），
+以及 socket 路径——daemon 的 `default_endpoint()` 是 `temp_dir/step-studio-<uid>/daemon.sock`，
+**不跟随 `--cwd`**，所以必须显式传 `--endpoint`。
+
+门禁：npm run check 全绿；shell 162、studio-host 78 测试 0 失败；六 crate clippy 净；
+`cargo deny` 退出码 0；contracts 2/2；architecture 7/7。
+
 ### M5.6 主体 + M7 剩余：Electron 删除，以及它解开的两道 gate（2026-11-13）
 
 **M5.6 主体完成**：`apps/desktop` 整目录删除，254 个文件、约 3.7 万行。删除前核实的两个前置

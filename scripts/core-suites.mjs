@@ -9,16 +9,16 @@ export const CORE_NODE_SUITES = [
   // Bridge contracts, client receipts, and both transport adapters.
   "packages/studio-protocol/dist/test/protocol.test.js",
   // Step Code's Studio Bridge adapter, driven by the real studio-host client.
-  "packages/runtime-stepcode/dist/test/host-integration.test.js",
-  "packages/runtime-stepcode/dist/test/spike.test.js",
   // Skips when no Step CLI is installed; exercises the real binary when one is.
-  "packages/runtime-stepcode/dist/test/real-cli.test.js",
   "packages/studio-protocol/dist/test/conversation.test.js",
   "packages/client/dist/test/reducer.test.js",
   "packages/client/dist/test/receipt-selectors.test.js",
   "packages/testkit/dist/test/transport-contract.test.js",
   // Opening, recovering, browsing and deleting conversations.
   "packages/studio-host/dist/test/backend-lifecycle.test.js",
+  // The Rust adapter driven by the TypeScript client: the cross-language half of
+  // what `runtime-stepcode` used to cover. Skips without a Step CLI.
+  "packages/studio-host/dist/test/real-runtime-adapter.test.js",
   "packages/studio-host/dist/test/conversation-open.test.js",
   "packages/studio-host/dist/test/session-catalog.test.js",
   "packages/studio-host/dist/test/session-delete-service.test.js",

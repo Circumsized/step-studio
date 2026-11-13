@@ -32,7 +32,6 @@ const ALLOWED_INTERNAL_DEPS = {
   "studio-host": ["runtime-installer", "studio-protocol"],
   "host-client-api": ["client-contract", "studio-host", "studio-protocol"],
   // Step Code's Studio Bridge adapter: protocol only, never the Host or client.
-  "runtime-stepcode": ["studio-protocol"],
 };
 
 function readUnits() {

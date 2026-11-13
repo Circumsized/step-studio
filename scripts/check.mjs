@@ -15,7 +15,6 @@
 // Units:  studio-protocol, client, client-contract, studio-host, host-client-api,
 //         transport-desktop, runtime-installer, platform, platform-win32,
 //         testkit, renderer,
-//         runtime-stepcode
 //
 // A failing step prints only the tail of its output. The full log stays in the
 // terminal scrollback, which keeps a 20-line type error readable.
