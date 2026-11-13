@@ -337,7 +337,7 @@ capability 等级（v4.3 改名以示区分）：stable / limited / unavailable�
 
 ~~四仪表盘共用 daemon query 面~~ **（M6a.2 第一块 2026-11-13 真机证伪）**：只有 `process.tree.get` 在 daemon 的查询面上（M2.3 第一块落的）。`session.agents.list` 与 `history.list` 是 Tauri 壳的 **shell-local** 查询（`pump.rs` 的 `SHELL_LOCAL` 表），daemon 转给适配器后回 `result: null`——TUI 切到这两个仪表盘看到的就是这个。`usage.get` 走适配器，未在本块验证。
 
-修法只有一条且已定：store 读取逻辑抽成共享 crate（`history.rs` 里读 store 的部分约 450 行），壳与 TUI 都调它；各写一份必然漂移。这一块未做，M6a.2 后两块因此待它。
+修法只有一条且已定：store 读取逻辑抽成共享 crate，壳与 TUI 都调它；各写一份必然漂移。**已落地**（`crates/step-studio-sessions`，`list`/`agents`/`project_path`/`store_dir` 从 `history.rs` 搬过去、壳改为委托；`projects` 留在壳里，TUI 不需要项目清单）。四块仪表盘现已全部能出数据；唯一仍报错的是用量，因为 `usage.get` 是 `RENAMED` 到适配器的 `usage.panel` 而 fake-step 夹具不实现它——夹具限制，且错误是响的。
 
 键位对标 tuicr；帧率 30（SSH 降 15）——退路上 ratatui 只差分不调速，两档要在事件循环自加 `Duration` 限速（见 §9.4 退路能力缺口）。
 

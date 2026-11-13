@@ -19,6 +19,9 @@ sha2.workspace = true
 portable-pty = "0.9"
 step-studio-bridge.workspace = true
 step-studio-host = { path = "../../../crates/studio-host" }
+# The store reader, shared with the TUI surface: two copies would drift, and the
+# drift would be silent.
+step-studio-sessions = { path = "../../../crates/step-studio-sessions" }
 tauri-plugin-dialog = "2.7.3"
 
 [build-dependencies]

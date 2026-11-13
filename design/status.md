@@ -565,7 +565,11 @@ D-1 的判据本就是个实证问题，直接查 `~/.stepcode`：
 
 这一次错误是**响的**，正是类型化 read model 买来的：换成 `Value` + `.get()`，就是 M2.5 那个静默空面板。
 
-修法明确且只有一条：store 读取逻辑抽成共享 crate（`apps/desktop-tauri/src-tauri/src/history.rs` 里读 store 的部分约 450 行：`list`/`read_session`/`store_dir`/`project_path`/`projects`/`agents`/`read_agent`/`snippet`），壳与 TUI 都调它。两份实现必然漂移，所以不能各写一份。这一块未做。
+修法明确且只有一条：store 读取逻辑抽成共享 crate（`apps/desktop-tauri/src-tauri/src/history.rs` 里读 store 的部分约 450 行），壳与 TUI 都调它。两份实现必然漂移，所以不能各写一份。
+
+**该共享 crate 已落地（`crates/step-studio-sessions`）**：`list`/`read_session`/`first_text`/`snippet`/`store_dir`/`project_path`/`agents`/`read_agent` 及其测试从 `history.rs` 搬过去，壳改为委托；`projects` 及其私用的 `newest_session_at`/`last_line_timestamp` 留在壳里（TUI 不需要项目清单）。搬完壳 83 测试、共享 crate 9 测试，无丢失。
+
+**四块仪表盘现已全部能出数据，真机复验通过**：进程树（daemon 查询）、Agent 状态与会话树（共享 crate 读 store）、用量（走适配器）。唯一仍报错的是用量——`invalid type: null, expected struct Usage`，因为 `usage.get` 在壳里是 `RENAMED` 到适配器的 `usage.panel`（`pump.rs:111`），而 fake-step 夹具只把 `/usage` 当 slash 命令处理、不实现那个 operation。这是**夹具限制而非代码缺陷**，且错误是响的（红字 + 原因），正是类型化 read model 买来的行为。
 
 **MSRV 已抬到 1.88**（ratatui 0.30.2 的地板；0.30.0 要 1.86，同样高于原 1.85）。依赖树 131 包。
 

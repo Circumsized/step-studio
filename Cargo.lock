@@ -4237,6 +4237,7 @@ dependencies = [
  "sha2 0.10.9",
  "step-studio-bridge",
  "step-studio-host",
+ "step-studio-sessions",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -4278,6 +4279,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "step-studio-sessions"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "step-studio-tui"
 version = "0.1.0"
 dependencies = [
@@ -4287,6 +4296,7 @@ dependencies = [
  "serde_json",
  "step-studio-bridge",
  "step-studio-host",
+ "step-studio-sessions",
  "unicode-width",
 ]
 

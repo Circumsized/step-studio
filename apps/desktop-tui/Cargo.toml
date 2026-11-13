@@ -21,3 +21,7 @@ step-studio-bridge.workspace = true
 # For `lifecycle::default_endpoint`: the TUI attaches to the same daemon the
 # shell does, and deriving that path a second time is how the two drift apart.
 step-studio-host = { path = "../../crates/studio-host" }
+# The session store reader, shared with the Tauri shell: two copies would drift,
+# and the drift would be silent — both would render a confident, differently-wrong
+# session list.
+step-studio-sessions = { path = "../../crates/step-studio-sessions" }

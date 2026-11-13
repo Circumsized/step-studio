@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "apps/desktop-tauri/src-tauri",
   "apps/desktop-tui",
+  "crates/step-studio-sessions",
   "crates/studio-bridge",
   "crates/step-studio-runtime",
   "crates/peer-uid",
@@ -31,6 +32,7 @@ hmac = "0.12"
 sha2 = "0.10"
 base64 = "0.22"
 step-studio-bridge = { path = "crates/studio-bridge" }
+step-studio-sessions = { path = "crates/step-studio-sessions" }
 # The TUI surface's renderer and terminal. See §9.4: this is the registered
 # fallback, taken because `hqtui` turned out not to exist (M6a.1 spike).
 ratatui = "0.30.2"

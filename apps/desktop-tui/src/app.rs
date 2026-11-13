@@ -78,10 +78,23 @@ impl App {
 
     fn refresh(&mut self) {
         self.refreshed = Instant::now();
-        let operation = self.dashboard.operation();
-        let outcome = self
-            .session
-            .invoke(serde_json::json!({ "kind": operation }));
+        // The two the daemon answers travel the wire; the two it does not are
+        // read from the store and never sent at all. Asking anyway yields
+        // `result: null`, which is not an error and so would empty the panel
+        // silently — the exact failure M2.5 found nine times over.
+        let outcome = match self.dashboard {
+            Dashboard::AgentStatus => Ok((
+                serde_json::json!({ "result": step_studio_sessions::agents(None) }),
+                Vec::new(),
+            )),
+            Dashboard::SessionTree => Ok((
+                serde_json::json!({ "result": step_studio_sessions::list(Some(200), None, None) }),
+                Vec::new(),
+            )),
+            _ => self
+                .session
+                .invoke(serde_json::json!({ "kind": self.dashboard.operation() })),
+        };
         match outcome {
             Ok((receipt, _)) => {
                 let result = receipt
@@ -111,7 +124,7 @@ impl App {
                 };
             }
             Err(error) => {
-                self.error = Some(format!("{operation} 失败：{error}"));
+                self.error = Some(format!("{} 失败：{error}", self.dashboard.operation()));
             }
         }
     }
