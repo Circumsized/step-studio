@@ -1,10 +1,11 @@
 //! The Desktop IPC bridge, wired to a real Studio Bridge session.
 //!
 //! M1.2 wires the Desktop IPC bridge to a real Studio Bridge session. The
-//! session wiring is ported from `crates/step-studio-shell/src/bridge_client.rs`,
-//! which already drove the adapter; the difference is where the event stream
-//! goes — that shell sent over an mpsc channel to its own view, this one emits
-//! on the Tauri event channel the renderer already listens to.
+//! session wiring was ported from the egui shell's `bridge_client.rs`, which
+//! already drove the adapter; the difference is where the event stream goes —
+//! that shell sent over an mpsc channel to its own view, this one emits on the
+//! Tauri event channel the renderer already listens to. (That crate is gone:
+//! v5.0 deleted the egui surface and M7 removed the dead code.)
 //!
 //! M1.2b added the working half: `query` and `command` are routed through
 //! `pump`, the one thread that owns the session and translates between the

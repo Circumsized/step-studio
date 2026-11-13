@@ -525,6 +525,20 @@ D-1 的判据本就是个实证问题，直接查 `~/.stepcode`：
 
 定案：**每个 worktree 作为独立 project 传给适配器**，不需要 Step 有 worktree 概念；首页项目列表可以是多 project，与适配器不冲突。这解开了 M2.3 的三重阻塞之一（另两重是会话目录移植与多面）。
 
+### M7 第一块：删除死代码 `crates/step-studio-shell`（2026-11-13 完成）
+
+方案自 v5.0（外壳定纯 Tauri、删除 egui 面）起就把它标记为「死代码待清」——它的无头夹具
+职责已由 Xvfb + Tauri release 二进制承接（M1.1 实证）。删除前核实**无任何外部依赖**：
+全仓只有 workspace `Cargo.toml` 成员表和 `bridge.rs` 的一条文档注释提到它。
+
+1993 行、10 个文件。删除后 `cargo build/test --workspace` 与 `npm run check` 全绿，
+无残留引用。
+
+**M7 剩余部分仍 gate 在 M5.6**：`platform-darwin` 被 Electron 主进程
+（`apps/desktop/src/host-factory.ts`）用，`transport-web` 被 testkit 的传输契约测试用
+（同时驱动 desktop 与 web 两条 transport）。这两个包要等 Electron 删除（M5.6）之后才能
+动——不是技术阻塞，是顺序依赖。
+
 ### M5.2 第一块：ed25519 签名清单（2026-11-13 完成）
 
 `crates/studio-host/src/signing.rs`，对应 §12.4「ed25519 清单 + 公钥 bake + 版本签入防降级」。

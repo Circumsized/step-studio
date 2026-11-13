@@ -3,7 +3,6 @@ resolver = "2"
 members = [
   "apps/desktop-tauri/src-tauri",
   "crates/studio-bridge",
-  "crates/step-studio-shell",
   "crates/step-studio-runtime",
   "crates/peer-uid",
   "crates/pty-bench",
