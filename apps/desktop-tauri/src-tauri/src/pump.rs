@@ -564,7 +564,7 @@ fn pump(
                                 .unwrap_or(Value::Null);
                             crate::git::execute(&operation)
                         } else if job.command_name == "session.agents.list" {
-                            crate::history::agents()
+                            crate::history::agents(job.operation.get("sessionId").and_then(Value::as_str))
                         } else if job.command_name == "environment.get" {
                             crate::diagnostics::environment(stream.runtime_id.clone(), stream.authority_epoch, stream.runtime_epoch)
                         } else if job.command_name == "diagnostics.get" {

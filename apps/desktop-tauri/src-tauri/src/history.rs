@@ -118,7 +118,15 @@ fn read_session(path: &Path, workspace_id: Option<&str>) -> Option<Value> {
         if title.is_some() {
             continue;
         }
-        let message = entry.get("message")?;
+        // `continue`, not `?`: a `message` line without a message record is
+        // one malformed line, and `?` here would propagate out of
+        // `read_session` and drop the whole session from history — a session
+        // that vanishes rather than errors. The reader this replaces defends
+        // against exactly this shape (`session-archive-reader.ts:1357`), so it
+        // is not hypothetical.
+        let Some(message) = entry.get("message") else {
+            continue;
+        };
         if message.get("role").and_then(Value::as_str) != Some("user") {
             continue;
         }
@@ -501,11 +509,19 @@ mod workspace_tests {
 /// `subagent-`/`workflow-`. That is the data source, and reading it is a scan of
 /// the store the shell already reads for history.
 ///
+/// **The contract's `sessionId` is not honoured, and cannot be.** The store
+/// records no parent-session link for a sub-agent: `parentId` in these files is
+/// the message tree's own parent, which is a different concept. So the scan is
+/// store-wide, and every session is shown the same roster. Filtering by
+/// `sessionId` would mean inventing a link that is not on disk.
+///
 /// The shape is honest about what a file can and cannot say: `status` is
 /// `idle`, because a session on disk is not running — a live one would be a
 /// process, and nothing here enumerates processes. `hasLiveSession` is therefore
 /// false, and `hasTranscript` is true, because the file *is* the transcript.
-pub fn agents() -> Value {
+pub fn agents(_session_id: Option<&str>) -> Value {
+    // The `sessionId` the contract passes is deliberately unread: see the module
+    // comment. Taking it and ignoring it would look like a filter that works.
     let Some(store) = store_dir() else {
         return json!({ "agents": [] });
     };
@@ -562,7 +578,6 @@ fn read_agent(path: &Path) -> Option<Value> {
     let started_at = header.get("timestamp").and_then(Value::as_str).unwrap_or("");
 
     let mut updated_at = started_at.to_string();
-    let mut unread = 0u64;
     for line in lines {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
             continue;
@@ -570,10 +585,12 @@ fn read_agent(path: &Path) -> Option<Value> {
         if let Some(at) = entry.get("timestamp").and_then(Value::as_str) {
             updated_at = at.to_string();
         }
-        if entry.get("type").and_then(Value::as_str) == Some("message") {
-            unread += 1;
-        }
     }
+    // There is no read state anywhere in the store, so "unread" is not a
+    // quantity that can be read. Reporting the message count here renders as a
+    // permanent badge claiming every message is unread; 0 says "no read state",
+    // which is what is actually known.
+    let unread = 0u64;
 
     let cwd = header.get("cwd").and_then(Value::as_str).unwrap_or("");
     Some(json!({

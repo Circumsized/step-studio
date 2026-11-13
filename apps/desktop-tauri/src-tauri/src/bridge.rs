@@ -974,12 +974,15 @@ fn model_config_read_model(payload: &Value) -> Value {
 fn mcp_read_model(payload: &Value) -> Value {
     let mut servers: Vec<Value> = Vec::new();
     for extension in payload.get("extensions").and_then(Value::as_array).into_iter().flatten() {
-        let scope = if extension.get("installed").and_then(Value::as_bool) == Some(false) {
-            "project"
-        } else {
-            "user"
-        };
-        let label = if scope == "project" { "项目" } else { "用户" };
+        // `installed` separates a marketplace catalog entry from a `plugins/`
+        // install — not project from user. So it cannot produce a scope, and a
+        // catalog entry that was never installed is not a configured server at
+        // all. Those are dropped rather than reported as enabled.
+        if extension.get("installed").and_then(Value::as_bool) == Some(false) {
+            continue;
+        }
+        let scope = "user";
+        let label = "用户";
         for server in extension.get("mcpServers").and_then(Value::as_array).into_iter().flatten() {
             let name = server.get("name").and_then(Value::as_str).unwrap_or("");
             if name.is_empty() {

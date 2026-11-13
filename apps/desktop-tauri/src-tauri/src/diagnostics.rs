@@ -51,10 +51,10 @@ pub fn environment(runtime_id: String, authority_epoch: u64, runtime_epoch: u64)
         "installer": {
             // The shell does not install anything: it launches the daemon beside
             // itself, and the daemon launches the runtime beside itself. There is
-            // no artifact download, so there is no install state to report
-            // beyond "already here".
+            // no artifact download and nothing probed a signature, so both
+            // values say what is actually known rather than what is assumed.
             "status": "installed",
-            "signature": "unsigned",
+            "signature": "unknown",
         },
     })
 }
