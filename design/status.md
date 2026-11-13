@@ -609,6 +609,37 @@ M2.3 的「多面」卡在一件事上：daemon 的 adapter pump 把**每一帧*
 
 既有 `two_surfaces_both_receive_the_same_broadcast` 仍然成立：事件广播这条性质没变。
 
+### M5.6 前置测量：Electron 删除的真实规模远超方案估算（2026-11-13 实测，未执行）
+
+M5.6 是「egui 轻量壳定型 + Electron 删除（4-6 人日）」。egui 已在 v5.0 删除，所以实质是 Electron 删除。**实测结论：这不是删掉 `apps/desktop` 就完的事，方案的 4-6 人日不覆盖它。**
+
+三处阻塞，逐条实证：
+
+**一、渲染层依赖 41 个 `ompStudioChrome` 成员，Tauri 的 `chrome.rs` 只实现 9 个，缺 32 个。** 这不是「壳换掉就行」——渲染层每少一个方法，对应功能就整个消失。缺失的按域分：
+
+| 域 | 缺失成员 |
+| --- | --- |
+| 媒体上传 | `beginMediaUpload` `appendMediaUpload` `finishMediaUpload` `abortMediaUpload` |
+| 实时音频 | `attachLiveAudio` `appendLiveAudio` `detachLiveAudio` |
+| 预测通道 | `attachPrediction` `predictionInput` `detachPrediction` `importPredictionHistory` `onPrediction` |
+| 浏览器观测 | `attachBrowserObservation` `controlBrowserObservation` `detachBrowserObservation` `readComputerCapture` `onBrowserObservation` |
+| 服务定义 | `listServiceDefinitions` `saveServiceDefinition` `removeServiceDefinition` |
+| 产物 | `chooseArtifactDirectory` `importArtifact` `exportArtifact` |
+| 菜单 / 麦克风权限 | `onMenuCommand` `requestMicrophoneAccess` `openMicrophoneSettings` `platform`（只读属性） |
+| 日志 | `openLogDir` `exportLogs` |
+| 项目集成 | `openProjectDirectory` `openProjectInEditor` |
+| Skillshare | `revealSkillshareToken` |
+
+Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`notify`/`setTheme`/`setConversationViewState`/`reportPayloadHealth`/`reportPerformanceSample`。
+
+删 Electron 因此要先二选一，且这是**产品决策不是工程决策**：为这 32 个成员在 Tauri 侧补齐实现，还是把渲染层对应功能一并删掉。前者是把 Electron 主进程重写一遍；后者是砍掉实时音频、预测通道、浏览器观测、媒体上传、产物管理五块功能。
+
+**二、TS `studio-host`（15,708 行）的非 Electron 消费方是 `host-client-api` 的 9 处 `import type`。** 类型导入在编译后消失，但 `tsc` 仍需要那些声明。删 `packages/studio-host` 前必须把这些类型迁去 `client-contract` 或留一个纯类型 shim。
+
+**三、TS 适配器回退路径的去留，方案自己写明「留到 M5.6 定」，而本轮查清它可以从上下文推定**：`packages/runtime-stepcode`（1,908 行）**没有任何 import 方**，只有它自己的测试经相对路径吃 `studio-host/dist/src/bridge-client.js`。回退路径的存在理由是「没有 Rust 二进制的机器靠它跑」——而 Electron 删除后，TS 侧没有任何消费者。所以删 Electron 即意味着回退路径一同终止，不需要单独决定。代价是这两个测试（`host-integration.test.ts`、`real-cli.test.ts`，都在核心门禁名单里）要改指 Rust 适配器或删除。
+
+删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
+
 ### M6a.1 spike：`hqtui` 不存在，选型作废；退路 ratatui 的 headless 渲染器已实证可用（2026-11-13）
 
 方案 §9.4 把表面 D 押在 `ports/rust` crate `hqtui` 0.2.0 上（「约 1.82 万行零依赖」fork 自管 + vendored path）。**查证结论：那个上游不存在，这一条选型无法执行。**
