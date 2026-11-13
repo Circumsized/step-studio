@@ -684,7 +684,7 @@ export function DiagnosticsPage({
       show(t("diagnostics.openLogsDemoToast"), "folder");
       return;
     }
-    const api = window.ompStudioChrome;
+    const api = shellSurface();
     if (api?.openLogDir === undefined) {
       show(t("diagnostics.openLogsUnavailable"), "alert-c");
       return;
@@ -703,7 +703,7 @@ export function DiagnosticsPage({
       show(t("diagnostics.exportLogsDemoToast"), "export");
       return;
     }
-    const api = window.ompStudioChrome;
+    const api = shellSurface();
     if (api?.exportLogs === undefined) {
       show(t("diagnostics.exportLogsUnavailable"), "alert-c");
       return;

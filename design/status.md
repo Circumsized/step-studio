@@ -712,6 +712,32 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.6 收口：渲染层直读 chrome 真正清零，结构规则有了测试（2026-11-13）
+
+第六批之后补的两件事，都是第 1 步验收条件的遗留。
+
+**一、`prediction` capability 位补上，消费方改看位。** facade 原有 11 个位，预测通道那 5 个
+成员接好了却没有位——`useWordPrediction.ts` 仍在按 `chrome?.attachPrediction &&
+chrome.predictionInput && chrome.onPrediction` 三个成员存在性分支，正是第 1 步要消灭的写法。
+位按组推导，且**刻意不含 `importPredictionHistory`**：它需要文件选择器，一个没有它的壳仍然
+可以 attach 和 steer，为一个缺失的导入把整条通道报成不可用是过度降级。
+
+**二、渲染层 src 直读 chrome 真正清零，并且这次有测试守着。** 第 1 步记的是「86 处 / 32 文件
+清零」，但那是按 `globalThis.ompStudioChrome` 数的——另有 4 处拼成 `window.ompStudioChrome`
+（`DiagnosticsPage` 两处、`ChipComposer`、`ToolBody`、`RuntimeCredentials`），一次
+`globalThis` 的 grep 对它们报 0。已全部收编进 `shellSurface()`。
+
+新增的测试按目录扫源文件，规则一条：**`chrome/` 之外没有文件读 `ompStudioChrome`**。它按成员
+访问（`.ompStudioChrome`）而不是按名字匹配，所以声明处（`vite-env.d.ts`）和注释里提到名字都
+不算；测试文件与 `.d.ts` 排除。
+
+变异验证：把 `RuntimeCredentials.tsx` 改回 `window.ompStudioChrome?.openUrl(...)`，测试
+FAILED；改回，绿。
+
+**教训**：一条只靠「找到上一次违法的那个搜索」来守的规则，等于没守。第一次清理数的是
+`globalThis` 形式，于是 `window` 形式的四个漏网之鱼在报告里是 0。
+
+
 ### M5.6 第 2 步第六批：预测通道 5 落地，32 个缺失成员全部清零（2026-11-13）
 
 新增 `apps/desktop-tauri/src-tauri/src/prediction.rs`，从 Electron 侧 `prediction.ts`

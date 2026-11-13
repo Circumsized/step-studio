@@ -8,7 +8,7 @@ import { usePreviewMode } from "../preview/PreviewContext";
 import { waitReceipt } from "../hostError";
 import { insertPlainText } from "./editorDom";
 import "./prediction.css";
-import { shellSurface } from "../chrome";
+import { shellCapabilities, shellSurface } from "../chrome";
 export interface ComposerPrediction {
   client: StudioClient;
   sessionId?: string | undefined;
@@ -104,13 +104,10 @@ export function useWordPrediction(
     )
       return;
     const chrome = shellSurface();
-    if (
-      !preview &&
-      (!chrome?.attachPrediction ||
-        !chrome.predictionInput ||
-        !chrome.onPrediction)
-    )
-      return;
+    // A capability bit, not three member checks. The old form is the pattern the
+    // facade exists to end: a shell that wired two of the three looked available
+    // and then failed on the missing one.
+    if (!preview && !shellCapabilities().prediction) return;
     let channel: PredictionChannel | undefined,
       connecting: Promise<void> | undefined,
       composing = false,

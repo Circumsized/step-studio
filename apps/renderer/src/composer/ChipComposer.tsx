@@ -38,6 +38,7 @@ import {
   replaceMention,
   writeDoc,
 } from "./editorDom";
+import { shellSurface } from "../chrome";
 import { CommandMenu } from "./CommandMenu";
 import { ImagePreview, type ImagePreviewSubject } from "./ImagePreview";
 import { MentionMenu } from "./MentionMenu";
@@ -105,7 +106,7 @@ async function resolveOsPaths(
   files: File[],
 ): Promise<Map<File, { kind: "file" | "dir" | "image"; path: string; name: string }>> {
   const out = new Map<File, { kind: "file" | "dir" | "image"; path: string; name: string }>();
-  const chrome = window.ompStudioChrome;
+  const chrome = shellSurface();
   if (chrome?.getPathForFile === undefined || chrome.resolveDroppedPaths === undefined) return out;
   const pairs: Array<{ file: File; path: string }> = [];
   for (const file of files) {

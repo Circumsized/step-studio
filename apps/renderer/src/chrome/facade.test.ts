@@ -9,9 +9,50 @@
  * deleting Electron cascaded into 55,092 lines rather than swapping a facade.
  */
 
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import { shellCapabilities, shellDegradedReason, shellSurface, type ChromeCapabilities } from "./index";
+
+/**
+ * The one structural rule of this module: outside `chrome/`, nothing reads
+ * `ompStudioChrome` directly.
+ *
+ * It is asserted by reading the tree rather than by review because it has already
+ * been broken twice in ways that looked fine. The first refactor counted 86 reads
+ * of `globalThis.ompStudioChrome` and cleared them — and left four behind that
+ * spelled it `window.ompStudioChrome`, which a grep for the `globalThis` form
+ * reported as zero. A rule that is only checked by the search that found the last
+ * violation is not checked.
+ */
+describe("nothing outside chrome/ reads the surface directly", () => {
+  it("holds for every source file under src/", () => {
+    const root = join(import.meta.dirname, "..");
+    const offenders: string[] = [];
+    const walk = (directory: string) => {
+      for (const entry of readdirSync(directory)) {
+        const path = join(directory, entry);
+        if (statSync(path).isDirectory()) {
+          if (entry !== "chrome") walk(path);
+          continue;
+        }
+        if (!/\.tsx?$/.test(entry) || entry.endsWith(".test.ts") || entry.endsWith(".test.tsx")) continue;
+        // The global's own declaration and prose that names it are not reads.
+        if (entry === "vite-env.d.ts") continue;
+        const text = readFileSync(path, "utf8");
+        // Comments and strings that merely mention the name are not reads either,
+        // so only a member access or a property lookup counts.
+        if (/\.ompStudioChrome\b|\(globalThis as[^)]*ompStudioChrome/.test(text)) {
+          offenders.push(relative(root, path));
+        }
+      }
+    };
+    walk(root);
+    expect(offenders).toEqual([]);
+  });
+});
 
 /** Every bit, so a new one cannot be added without a test noticing. */
 const ALL_CAPABILITIES: ReadonlyArray<keyof ChromeCapabilities> = [
@@ -22,6 +63,7 @@ const ALL_CAPABILITIES: ReadonlyArray<keyof ChromeCapabilities> = [
   "liveAudio",
   "microphonePermission",
   "browserObservation",
+  "prediction",
   "logs",
   "menu",
   "platform",

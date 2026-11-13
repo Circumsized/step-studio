@@ -44,6 +44,8 @@ export interface ChromeCapabilities {
   readonly microphonePermission: boolean;
   // --- BrowserApi: browser observation. External process, attached on demand. ---
   readonly browserObservation: boolean;
+  // --- The prediction channel: a transport to a socket the runtime owns. ---
+  readonly prediction: boolean;
   // --- PlatformApi: menu, logs, dialogs. Tauri plugins plus an ACL. ---
   readonly logs: boolean;
   readonly menu: boolean;
@@ -90,6 +92,11 @@ export function shellCapabilities(): ChromeCapabilities {
     microphonePermission: wired(shell, "requestMicrophoneAccess") && wired(shell, "openMicrophoneSettings"),
     browserObservation:
       wired(shell, "attachBrowserObservation") && wired(shell, "readComputerCapture") && wired(shell, "controlBrowserObservation") && wired(shell, "detachBrowserObservation"),
+    // `importPredictionHistory` is deliberately *not* in the group: it needs the
+    // file picker, so a shell without it can still attach and steer. Including it
+    // would report the whole channel unavailable for a missing import.
+    prediction:
+      wired(shell, "attachPrediction") && wired(shell, "predictionInput") && wired(shell, "detachPrediction") && wired(shell, "onPrediction"),
     logs: wired(shell, "openLogDir") && wired(shell, "exportLogs"),
     menu: wired(shell, "onMenuCommand"),
     platform: wired(shell, "platform"),
@@ -121,6 +128,8 @@ export function shellDegradedReason(capability: keyof ChromeCapabilities): strin
       return "当前外壳不支持麦克风授权管理";
     case "browserObservation":
       return "当前外壳不支持浏览器观测";
+    case "prediction":
+      return "当前外壳不支持输入预测";
     case "logs":
       return "当前外壳不支持日志目录";
     case "menu":

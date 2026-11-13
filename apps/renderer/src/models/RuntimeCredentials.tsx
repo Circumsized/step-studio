@@ -3,6 +3,7 @@ import type { StudioClient, RuntimeAuthProvider } from "@omp-studio/client-contr
 import { invokeUpgrade, useUpgradeAvailable } from "../runtimeUpgrade";
 import { useI18n } from "../i18n";
 import { hostErrorMessage } from "../hostError";
+import { shellSurface } from "../chrome";
 export function RuntimeCredentials({ client, preview, providers = ["typesafe"] }: {
  client: StudioClient | null; preview: boolean; providers?: readonly RuntimeAuthProvider[];
 }) {
@@ -44,7 +45,7 @@ function CredentialRow({ client, preview, provider }: { client: StudioClient | n
   <input className="input" type="password" autoComplete="new-password" aria-label={provider + " " + t("runtimeUpgrade.authKey")} value={key} disabled={!available || busy} onChange={event => setKey(event.target.value)} />
   <button className="btn small" disabled={!available || busy || !key.trim()} onClick={() => void save(false)}>{t("common.save")}</button>
   <button className="btn small" disabled={!available || busy || !configured} onClick={() => void save(true)}>{t("common.delete")}</button>
-  {provider === "exa" ? <button className="btn small" onClick={() => { if (!preview) void window.ompStudioChrome?.openUrl({ url: "https://dashboard.exa.ai/api-keys" }); }}>{t("runtimeUpgrade.authWebsite")}</button> : null}
+  {provider === "exa" ? <button className="btn small" onClick={() => { if (!preview) void shellSurface()?.openUrl({ url: "https://dashboard.exa.ai/api-keys" }); }}>{t("runtimeUpgrade.authWebsite")}</button> : null}
   {error ? <p role="alert">{error}</p> : null}
  </div>;
 }

@@ -20,6 +20,7 @@ import { ToolCardScroll } from "./useToolCardFollowScroll";
 import { CompletionRing, JobTile, type JobTileData } from "./JobWidget";
 import { MarkdownText } from "./markdown";
 import type { JobWidgetView } from "@omp-studio/studio-protocol";
+import { shellSurface } from "../chrome";
 
 const ToolCardLive = createContext(false);
 
@@ -1036,9 +1037,9 @@ function WebSearchBody({ tool }: { tool: ToolView }) {
   const answer = jsonString(data?.answer) ?? jsonString(response.answer) ?? jsonString(fields.answer) ?? jsonString(fields.output);
   const provider = jsonString(data?.provider) ?? jsonString(response.provider) ?? jsonString(fields.provider);
   const openExternal = (event: MouseEvent<HTMLAnchorElement>, url: string) => {
-    const chrome = (globalThis as { ompStudioChrome?: { openUrl?: (args: { url: string }) => unknown } }).ompStudioChrome;
-    if (chrome?.openUrl === undefined) return;
-    event.preventDefault(); chrome.openUrl({ url });
+    const open = shellSurface()?.openUrl;
+    if (open === undefined) return;
+    event.preventDefault(); open({ url });
   };
   const normalizeUrl = (value: string): string | undefined => {
     const candidate = /^[a-z][a-z\d+.-]*:/i.test(value) ? value : `https://${value}`;
