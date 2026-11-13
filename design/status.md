@@ -712,6 +712,32 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.1 第二块：`cargo deny` 落地，许可证与 advisory 门禁进 CI（2026-11-13）
+
+用户第 5 步点名要的许可证门禁跑起来了。`deny.toml` + CI 的 `EmbarkStudios/cargo-deny-action`，
+四条检查全绿（advisories / bans / licenses / sources），退出码 0。
+
+**规则只有一条要紧的：copyleft 禁用。** allow 清单是**今天树里实际出现的 13 个许可证，一个不多**——
+一个没人匹配的 allowance 是噪音，而且会掩盖新许可证真正出现的那天。
+
+实测清单：`0BSD`、`Apache-2.0`、`Apache-2.0 WITH LLVM-exception`、`BSD-2-Clause`、
+`BSD-3-Clause`、`BSL-1.0`、`CC0-1.0`、`MIT`、`MIT-0`、`MPL-2.0`、`Unicode-3.0`、
+`Unlicense`、`Zlib`。**没有 AGPL，也没有任何 GPL 变体。**
+
+顺带修掉一件早就该有的事：**workspace 八个 crate 一个都没有 `license` 字段**。已加
+`[workspace.package] license = "MIT"`（仓里本就有 MIT 的 LICENSE 与 NOTICE），各 crate
+`license.workspace = true`。没有它，许可证审计只能从文件列表猜。
+
+三处配置判断，都写了理由：
+
+1. `bans.wildcards = "allow"`——cargo-deny 把工作区内部 path 依赖「没有版本要求」读成 `*`，
+   于是八个 path 依赖全被报成无界。这个检查没法限定只查外部 crate，而树里没有任何外部
+   `*` 依赖（已 grep 证实）。给八个 path 依赖加假版本会更糟：那看着像钉住，其实什么都没钉。
+2. `advisories.unmaintained = "workspace"`——`all` 之下唯一命中是 RUSTSEC-2024-0370
+   （`proc-macro-error`，经 `proc-macro-crate` → `serde_with_macros` 传来，两者都是间接依赖）：
+   没有漏洞、上游没有修复、我们无能为力。每跑一次报一次，只会训练读的人跳过整节。
+3. `licenses.confidence-threshold = 0.93`——够高，一个猜测永远不会变成禁用。
+
 ### M5.1 第一块：Windows 交叉编译门禁从红到部分绿，暴露出三处设计缺口（2026-11-13）
 
 CI 的 `Rust crates (Windows)` job（`cargo clippy -p ... -p step-studio-host --target

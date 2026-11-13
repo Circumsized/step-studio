@@ -13,6 +13,8 @@ members = [
 
 [workspace.package]
 version = "0.1.0"
+# The whole workspace is MIT. See LICENSE and NOTICE.
+license = "MIT"
 edition = "2021"
 # 1.88, not lower, because the TUI surface is ratatui 0.30.2 and that is its
 # own floor (0.30.0 needs 1.86, so neither fits the previous 1.85). Recorded in

@@ -1,0 +1,67 @@
+# Licence and advisory policy for the workspace.
+#
+# The rule that matters: **copyleft is banned**. The plan names AGPL explicitly —
+# a dependency under one would oblige publishing this shell's source, and this is
+# a confidential project. The allow list below is exactly what the tree uses
+# today plus nothing: an allowance nobody matches is noise, and it hides the day
+# a new licence actually appears.
+
+[graph]
+# Every target the workspace claims. A licence that is fine on Linux and not on
+# Windows is still not fine, so all three are checked.
+targets = [
+  { triple = "x86_64-unknown-linux-gnu" },
+  { triple = "x86_64-pc-windows-msvc" },
+  { triple = "aarch64-apple-darwin" },
+]
+all-features = false
+
+[licenses]
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+# High enough that a guess never becomes a ban: a licence inferred from prose
+# below this confidence is reported rather than acted on.
+confidence-threshold = 0.93
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+# `deny` here reports every workspace-internal path dependency as unbounded,
+# because a path dep carries no version requirement and cargo-deny reads "no
+# requirement" as `*`. There is no way to scope the check to external crates, and
+# the tree has no external wildcard (verified: no `"*"` in any manifest). Left
+# permissive rather than adding fake versions to eight path deps, which would
+# read as a pin and pin nothing.
+wildcards = "allow"
+highlight = "all"
+
+[advisories]
+# `unmaintained` is informational, not a vulnerability, and `workspace` scopes it
+# to crates we own. The one hit under `all` is RUSTSEC-2024-0370 (`proc-macro-error`,
+# via `proc-macro-crate` → `serde_with_macros`, both transitive): no vulnerability,
+# no fix upstream, nothing we can do. Reporting it every run would train a reader
+# to skip the advisories section.
+unmaintained = "workspace"
+
+[sources]
+# Only the public registry. A git dependency is an unreviewed supply-chain edge,
+# and this workspace has none.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

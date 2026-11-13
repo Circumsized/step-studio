@@ -1,6 +1,9 @@
 [package]
 name = "step-studio-runtime"
 version.workspace = true
+# The whole workspace is MIT (LICENSE, NOTICE). Declared per crate so a licence
+# audit reads a fact rather than guessing from the file list.
+license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 

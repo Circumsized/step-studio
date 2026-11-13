@@ -93,6 +93,15 @@ jobs:
       # pin.
       - run: cargo test -p step-studio-bridge -p step-studio-runtime -p step-studio-host -p step-studio-sessions -p step-studio-tui
       - run: cargo clippy -p step-studio-bridge -p step-studio-runtime -p step-studio-host -p step-studio-sessions -p step-studio-tui --all-targets -- -D warnings
+      # Licences and advisories. The rule that matters is in `deny.toml`:
+      # copyleft is banned, because a dependency under one would oblige
+      # publishing this shell's source. Runs here rather than in a separate job
+      # so the registry cache `Swatinem/rust-cache` already warmed is reused —
+      # `cargo deny` resolves the same graph.
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features=false
 
   rust-shell:
     # The shell was excluded from `rust` because it links wry and needed the GTK
