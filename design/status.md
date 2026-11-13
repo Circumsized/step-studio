@@ -712,6 +712,48 @@ Tauri 已有的 9 个是 `saveAvatar`/`loadAvatar`/`clearAvatar`/`openUrl`/`noti
 
 删除连锁总量：`packages/studio-host` 15,708 + `apps/desktop` 37,476 + `packages/runtime-stepcode` 1,908 = **55,092 行**，外加上述 32 个 chrome 成员的处置与 9 处类型导入的迁移。
 
+### M5.6 第 2 步第一批：32 个缺失成员落地 7 个，剩 25 个（2026-11-13）
+
+按负责人落地顺序补齐壳侧成员。第 1 步已把渲染层的调用全部收编进 facade，所以这一批
+**渲染层零改动**，只加壳侧实现 + `chrome-bridge.ts` 的同名方法。
+
+已落地 6 个：`openProjectDirectory` / `openProjectInEditor`（HostApi 项目集成 2）、
+`openLogDir` / `exportLogs`（PlatformApi 日志 2）、`onMenuCommand`（PlatformApi 菜单 1）、
+`revealSkillshareToken`（HostApi Skillshare 1）。第 7 个是 `platform`——它不是命令，
+`detectPlatform` 已经从 WebView 引擎推出同一个值，所以这一项是「本来就有」而不是新落地；
+从 32 个名字里划掉。
+
+**剩余 25 个**：产物 3、服务定义 3（HostApi，共 6 个）；媒体上传 4、实时音频 3、麦克风
+权限 2（MediaApi，共 9 个）；浏览器观测 5（BrowserApi）；**预测通道 5 个**。
+
+预测通道这 5 个（`attachPrediction` / `predictionInput` / `detachPrediction` /
+`importPredictionHistory` / `onPrediction`）在前面的 trait 归属表里**没有位置**——那张表
+HostApi 9 + MediaApi 9 + BrowserApi 5 + PlatformApi 4 加起来只有 27，差的正是这 5 个。
+它们是「壳把运行时的预测流转发给渲染层」的通道，既不是纯 Rust crate 接得住的 HostApi，
+也不是外置浏览器或 Tauri 插件。归属待定，先记账，不要当成已经分好了组。
+
+#### Skillshare 一次性令牌：与 Electron 逐条对齐，因为读的是同一个目录
+
+`revealSkillshareToken` 镜像 `takeSkillshareToken` 的每一步：UUID 形状先验（secretId
+要变成文件名）、`symlink_metadata` 而非 `metadata`（符号链接必须拒绝而不是跟随）、
+≤8192 字节、≤121000 ms 有效期窗口、claim-then-unlink。**四种失败返回同一个答案**——
+「没有这个 secret」「已过期」「属于别的会话」「格式错」对调用方是同一句话，区分它们等于
+告诉探测者某个 id 是否存在。令牌只回渲染层，**不经 Host 回执或快照**：那些会进日志，
+进日志的令牌就是泄漏的令牌。
+
+#### 过程中一个自己造出来的死锁，值得记
+
+为了让测试指向临时目录而没有用 `std::env::set_var`（`unsafe`，本 workspace 禁止），
+加了 `STATE_DIR_OVERRIDE`。第一版让 `StateDirGuard` **持有这把锁度过整个测试**，而
+`shell_state_dir()` 要锁同一把 `Mutex`——`std::sync::Mutex` 不可重入，测试在自己调用的
+那个函数上自锁。现象是 `cargo test` 挂住，**没有任何输出**：这不是测试失败，是挂起。
+拆成两把锁才对：override 只在单次读或写时持有，串行另用一把 `Mutex<()>` 由 guard 持有。
+
+顺带一条经验：这个 crate 的测试此前 91 个全绿，所以「只跑新增的 4 个名字」看着够用——
+但新增的测试挂在半路时，整套 `cargo test` 连结果都没有。**新增测试后必须重跑整套。**
+
+
+
 ### M6a.1 spike：`hqtui` 不存在，选型作废；退路 ratatui 的 headless 渲染器已实证可用（2026-11-13）
 
 方案 §9.4 把表面 D 押在 `ports/rust` crate `hqtui` 0.2.0 上（「约 1.82 万行零依赖」fork 自管 + vendored path）。**查证结论：那个上游不存在，这一条选型无法执行。**

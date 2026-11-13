@@ -61,6 +61,10 @@ export interface TauriChromeBridge {
    * unsubscribe function, matching the Electron preload's shape.
    */
   onMenuCommand(listener: (command: string) => void): () => void;
+  revealSkillshareToken(input: {
+    secretId: string;
+    sessionId: string;
+  }): Promise<{ ok: true; token: string; name: string } | { ok: false; message: string }>;
   exportLogs(): Promise<
     | { readonly ok: true }
     | { readonly ok: false; readonly cancelled: true }
@@ -109,6 +113,15 @@ export function createTauriChromeBridge(): TauriChromeBridge {
     // The shell builds a native menu and emits the allowlisted id; this only
     // subscribes. The id is not narrowed here because the shell already enforces
     // the closed set — an id outside it never reaches the channel.
+    // A one-time secret handoff. The token comes back over this channel and is
+    // never routed through Host receipts or snapshots: those are logged, and a
+    // token in a log is a leaked token.
+    revealSkillshareToken: input =>
+      tauriInvoke("reveal_skillshare_token", {
+        secretId: input.secretId,
+        sessionId: input.sessionId,
+      }),
+
     onMenuCommand: listener => {
       let unsubscribe = () => {};
       void tauriListen<string>(MENU_COMMAND_EVENT, event => {

@@ -102,6 +102,7 @@ fn main() {
             chrome::clear_avatar,
             chrome::open_url,
             chrome::open_log_dir,
+            chrome::reveal_skillshare_token,
             chrome::export_logs,
             chrome::open_project_directory,
             chrome::open_project_in_editor,

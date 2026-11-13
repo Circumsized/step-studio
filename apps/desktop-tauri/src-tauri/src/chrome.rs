@@ -14,6 +14,7 @@
 //! Every entry below has a live call site in `apps/renderer/src`.
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::process::Command;
 
 use serde::Serialize;
@@ -238,32 +239,57 @@ fn project_dir(workspace_id: &str) -> ChromeResult<PathBuf> {
     Ok(path)
 }
 
-/// Where this shell keeps its own logs: `<cwd>/.step-studio`.
+/// `<cwd>/.step-studio`: where this shell keeps its own per-project state.
 ///
+/// The daemon log lives here, and so does the Skillshare secrets directory.
 /// Derived the same way the bridge derives it (`connection_config`), because two
-/// derivations of "where the log lives" is how a reveal button ends up opening a
-/// directory that has nothing in it. The bridge is the one that writes the file,
-/// so it is the one that decides.
-fn log_dir() -> PathBuf {
+/// derivations of "where the state lives" is how a reveal button ends up opening
+/// a directory with nothing in it — and how a secret gets written to one place
+/// and read from another.
+fn shell_state_dir() -> PathBuf {
+    // A test may have installed a directory. Checked first so a test never has
+    // to touch the process environment: `std::env::set_var` is `unsafe`, and this
+    // workspace forbids `unsafe` outright.
+    if let Some(dir) = STATE_DIR_OVERRIDE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+    {
+        return dir;
+    }
     let cwd = std::env::var_os("STEP_STUDIO_CWD")
         .map(|value| value.to_string_lossy().to_string())
         .unwrap_or_else(|| ".".to_string());
-    log_dir_from(Path::new(&cwd))
+    state_dir_from(Path::new(&cwd))
 }
+
+/// Where a test says the shell's state lives. `None` in production.
+///
+/// Held only for the length of one read or one write — never across a call into
+/// this module. See [`skillshare_tests::StateDirGuard`] for why that matters.
+static STATE_DIR_OVERRIDE: Mutex<Option<PathBuf>> = Mutex::new(None);
+
+/// Serialises the tests that install [`STATE_DIR_OVERRIDE`].
+///
+/// Separate from the override so the override's own lock is never held across a
+/// call that needs to read it. `cfg(test)`: nothing outside the tests touches it,
+/// and an unused static in a release build is an error under `-D warnings`.
+#[cfg(test)]
+static STATE_DIR_SERIALISE: Mutex<()> = Mutex::new(());
 
 /// The same, from a cwd the caller names.
 ///
 /// Split out so the path is testable without touching the process environment:
 /// `std::env::set_var` is `unsafe` and this workspace forbids `unsafe`. It is
 /// also the shape the bridge itself would use if it ever needed to ask.
-fn log_dir_from(cwd: &Path) -> PathBuf {
+fn state_dir_from(cwd: &Path) -> PathBuf {
     cwd.join(".step-studio")
 }
 
 /// Reveal the shell's log directory in the OS file manager.
 #[tauri::command]
 pub fn open_log_dir() -> ChromeResult<()> {
-    let dir = log_dir();
+    let dir = shell_state_dir();
     // Created rather than required: a first run has no log yet, and revealing a
     // path that does not exist is a file manager error rather than an answer.
     let _ = std::fs::create_dir_all(&dir);
@@ -288,7 +314,7 @@ pub fn open_log_dir() -> ChromeResult<()> {
 /// shows nothing either way.
 #[tauri::command]
 pub fn export_logs(app: tauri::AppHandle) -> ChromeResult<Value> {
-    let source = log_dir().join("daemon.log");
+    let source = shell_state_dir().join("daemon.log");
     if !source.is_file() {
         return Err(ChromeError::failed("no daemon log has been written yet"));
     }
@@ -309,6 +335,152 @@ pub fn export_logs(app: tauri::AppHandle) -> ChromeResult<Value> {
     std::fs::copy(&source, destination)
         .map_err(|error| ChromeError::failed(format!("cannot copy the log: {error}")))?;
     Ok(json!({ "ok": true, "cancelled": false }))
+}
+
+/// Reveal a Skillshare token, once.
+///
+/// A one-time handoff, and every check here exists because the file being read
+/// was written by a different process and is being asked for by a renderer that
+/// may not be the one it was written for. The shape mirrors the Electron shell's
+/// `takeSkillshareToken` exactly — same validations, same expiry window, same
+/// claim-then-unlink dance — because the two shells read the same directory and a
+/// divergence would be a security difference rather than a refactor.
+///
+/// The token is returned to the renderer and never routed through Host receipts
+/// or snapshots: those are logged, and a token in a log is a leaked token.
+#[tauri::command]
+pub fn reveal_skillshare_token(secret_id: String, session_id: String) -> ChromeResult<Value> {
+    // Shape first. `secretId` is a UUID and `sessionId` a bounded non-empty
+    // string; anything else is refused before a path is built, because the
+    // secretId becomes a filename.
+    if !is_uuid(&secret_id) {
+        return Err(ChromeError::invalid("invalid secret identity"));
+    }
+    if session_id.is_empty() || session_id.len() > 512 {
+        return Err(ChromeError::invalid("invalid secret identity"));
+    }
+
+    let file = shell_state_dir()
+        .join("skillshare")
+        .join("secrets")
+        .join(format!("{secret_id}.json"));
+    // `symlink_metadata`, not `metadata`: a symlink must be refused rather than
+    // followed, or a link placed in the secrets directory reads whatever it
+    // points at. This is the check the Electron side makes with `lstat`.
+    let metadata = match std::fs::symlink_metadata(&file) {
+        Ok(metadata) => metadata,
+        // Absent and expired are the same answer to the caller: the token can no
+        // longer be revealed. Saying which would tell a prober whether an id
+        // exists.
+        Err(_) => return Ok(unavailable_token()),
+    };
+    if !metadata.is_file() || metadata.len() > 8192 {
+        return Ok(unavailable_token());
+    }
+
+    let text = match std::fs::read_to_string(&file) {
+        Ok(text) => text,
+        Err(_) => return Ok(unavailable_token()),
+    };
+    let stored: Value = match serde_json::from_str(&text) {
+        Ok(value) => value,
+        Err(_) => return Ok(unavailable_token()),
+    };
+
+    // The secret belongs to the session it was written for. A renderer asking
+    // for another session's token is refused rather than served.
+    if stored.get("sessionId").and_then(Value::as_str) != Some(session_id.as_str()) {
+        return Ok(unavailable_token());
+    }
+
+    let now_ms = now_millis();
+    let expires_at = stored.get("expiresAt").and_then(Value::as_i64);
+    match expires_at {
+        // Already expired: the file is removed so it cannot be asked for again.
+        Some(expires_at) if expires_at <= now_ms => {
+            let _ = std::fs::remove_file(&file);
+            return Ok(unavailable_token());
+        }
+        // The window is short by design. A descriptor claiming a token valid for
+        // a long time is not one this handoff wrote, so it is refused rather than
+        // served — and served longer than intended is the failure that matters.
+        Some(expires_at) if expires_at > now_ms + 121_000 => {
+            return Ok(unavailable_token());
+        }
+        Some(_) => {}
+        None => return Ok(unavailable_token()),
+    }
+
+    let token = stored.get("token").and_then(Value::as_str).unwrap_or("");
+    let name = stored.get("name").and_then(Value::as_str).unwrap_or("");
+    if token.len() > 4096 || !token.starts_with("sks_") || !token.is_ascii() {
+        return Ok(unavailable_token());
+    }
+    if name.len() > 128 {
+        return Ok(unavailable_token());
+    }
+
+    // Claim then read, so two readers cannot both be served: the rename is
+    // atomic, and only one of them gets to keep the file. The claim is removed
+    // either way, so a crash between the two leaves nothing behind.
+    let claim = format!("{}.{}.claim", file.display(), std::process::id());
+    if std::fs::rename(&file, &claim).is_err() {
+        return Ok(unavailable_token());
+    }
+    let revealed = json!({ "ok": true, "token": token, "name": name });
+    let _ = std::fs::remove_file(&claim);
+    Ok(revealed)
+}
+
+/// The one answer for every way this can fail.
+///
+/// Deliberately identical for "no such secret", "expired", "belongs to another
+/// session" and "malformed": distinguishing them would let a prober learn
+/// whether an id exists. The message tells the user what to do, not what
+/// happened.
+fn unavailable_token() -> Value {
+    json!({
+        "ok": false,
+        "message": "This token can no longer be revealed. It may have expired or already been read. \
+                    Revoke it before creating a replacement if necessary.",
+    })
+}
+
+/// Whether a string is a canonical UUID.
+///
+/// Checked here rather than trusted because the value becomes a filename: a
+/// `secretId` of `../../etc/passwd` would otherwise build a path outside the
+/// secrets directory.
+fn is_uuid(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 36 {
+        return false;
+    }
+    for (index, byte) in bytes.iter().enumerate() {
+        let expected_separator = matches!(index, 8 | 13 | 18 | 23);
+        if expected_separator {
+            if *byte != b'-' {
+                return false;
+            }
+        } else if !byte.is_ascii_digit() && !(b'a'..=b'f').contains(byte) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Milliseconds since the epoch, for the secret's expiry window.
+///
+/// Local rather than borrowed from `pump`: chrome does not otherwise depend on
+/// the pump, and a secret's expiry is the one place this module needs a clock.
+/// `SystemTime::now` cannot fail backwards, so the `unwrap_or` is the
+/// unreachable arm rather than a swallowed error.
+fn now_millis() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 /// A system notification with fixed text.
@@ -472,7 +644,7 @@ mod log_tests {
         // opening a directory with nothing in it. The bridge writes
         // `<cwd>/.step-studio/daemon.log`, so this has to agree with it.
         assert_eq!(
-            log_dir_from(Path::new("/tmp/a-project")),
+            state_dir_from(Path::new("/tmp/a-project")),
             PathBuf::from("/tmp/a-project/.step-studio")
         );
     }
@@ -482,7 +654,7 @@ mod log_tests {
         // `Path::join` handles this, and a test is what stops somebody from
         // building the path with `format!` instead.
         assert_eq!(
-            log_dir_from(Path::new("/tmp/a-project/")),
+            state_dir_from(Path::new("/tmp/a-project/")),
             PathBuf::from("/tmp/a-project/.step-studio")
         );
     }
@@ -490,8 +662,156 @@ mod log_tests {
     #[test]
     fn a_relative_cwd_stays_relative() {
         assert_eq!(
-            log_dir_from(Path::new(".")),
+            state_dir_from(Path::new(".")),
             PathBuf::from("./.step-studio")
         );
+    }
+}
+
+#[cfg(test)]
+mod skillshare_tests {
+    use super::*;
+
+    const SESSION: &str = "session-1";
+    const SECRET: &str = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+
+    /// Write a secret descriptor the way the creating process does.
+    fn write_secret(dir: &Path, secret_id: &str, body: &Value) {
+        let secrets = dir.join("skillshare").join("secrets");
+        std::fs::create_dir_all(&secrets).expect("make the secrets directory");
+        std::fs::write(
+            secrets.join(format!("{secret_id}.json")),
+            serde_json::to_string(body).expect("serialize the descriptor"),
+        )
+        .expect("write the descriptor");
+    }
+
+    fn valid(expires_in_ms: i64) -> Value {
+        json!({
+            "sessionId": SESSION,
+            "token": "sks_abc-DEF_123",
+            "name": "a package",
+            "expiresAt": now_millis() + expires_in_ms,
+        })
+    }
+
+    #[test]
+    fn a_valid_secret_is_revealed_once() {
+        let dir = std::env::temp_dir().join(format!("ss-ok-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("make a state dir");
+        write_secret(&dir, SECRET, &valid(60_000));
+
+        // Point the module at this directory by making it the state dir.
+        let guard = StateDirGuard::set(&dir);
+        let revealed =
+            reveal_skillshare_token(SECRET.to_string(), SESSION.to_string()).expect("revealed");
+        assert_eq!(revealed.get("ok").and_then(Value::as_bool), Some(true));
+        assert_eq!(
+            revealed.get("token").and_then(Value::as_str),
+            Some("sks_abc-DEF_123")
+        );
+
+        // And only once: the file is gone, so a second ask is refused.
+        let again = reveal_skillshare_token(SECRET.to_string(), SESSION.to_string())
+            .expect("refused, not an error");
+        assert_eq!(again.get("ok").and_then(Value::as_bool), Some(false));
+        drop(guard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_secret_for_another_session_is_refused() {
+        // The descriptor names the session it was written for. A renderer asking
+        // for a different one is refused rather than served.
+        let dir = std::env::temp_dir().join(format!("ss-other-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("make a state dir");
+        write_secret(&dir, SECRET, &valid(60_000));
+
+        let guard = StateDirGuard::set(&dir);
+        let revealed = reveal_skillshare_token(SECRET.to_string(), "someone-else".to_string())
+            .expect("refused");
+        assert_eq!(revealed.get("ok").and_then(Value::as_bool), Some(false));
+        drop(guard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_expired_secret_is_removed_and_refused() {
+        // Removed, so it cannot be asked for again — and so a prober learns
+        // nothing from asking twice.
+        let dir = std::env::temp_dir().join(format!("ss-expired-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("make a state dir");
+        write_secret(&dir, SECRET, &valid(-1_000));
+
+        let guard = StateDirGuard::set(&dir);
+        let revealed =
+            reveal_skillshare_token(SECRET.to_string(), SESSION.to_string()).expect("refused");
+        assert_eq!(revealed.get("ok").and_then(Value::as_bool), Some(false));
+        assert!(
+            !dir.join("skillshare").join("secrets").join(format!("{SECRET}.json")).exists(),
+            "an expired secret is deleted, not left to be asked for again"
+        );
+        drop(guard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_secret_id_that_would_escape_the_directory_is_refused() {
+        // The secretId becomes a filename. `../../etc/passwd` must be refused
+        // before a path is built, which is why the UUID shape is checked first.
+        for candidate in [
+            "../../etc/passwd",
+            "3f2504e0-4f89-11d3-9a0c-0305e82c330",
+            "3f2504e04f8911d39a0c0305e82c3301",
+            "",
+            "3f2504e0-4f89-11d3-9a0c-0305e82c3301/",
+        ] {
+            assert!(reveal_skillshare_token(candidate.to_string(), SESSION.to_string()).is_err());
+        }
+        // And a real one is the right shape.
+        assert!(is_uuid(SECRET));
+    }
+
+    /// Point the module at a directory for the length of a test.
+    ///
+    /// Two locks, and the split is the whole point. The override is held only for
+    /// the length of one write or one read, so `shell_state_dir()` can lock it
+    /// while a test runs. Serialisation is a *separate* mutex this guard keeps
+    /// for the test's lifetime — the first version used one lock for both, and
+    /// because `std::sync::Mutex` is not reentrant the test deadlocked against
+    /// itself the moment it called the function it had just pointed at a
+    /// directory. Nothing in the output said so: it hung, which is how a
+    /// self-deadlock reports.
+    ///
+    /// No `unsafe`, and no dependence on test execution order: the state dir is
+    /// otherwise read through an environment variable, and `set_var` is `unsafe`,
+    /// which this workspace forbids.
+    struct StateDirGuard {
+        _serialise: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl StateDirGuard {
+        fn set(dir: &Path) -> Self {
+            let serialise = STATE_DIR_SERIALISE
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            *STATE_DIR_OVERRIDE
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(dir.to_path_buf());
+            Self {
+                _serialise: serialise,
+            }
+        }
+    }
+
+    impl Drop for StateDirGuard {
+        fn drop(&mut self) {
+            *STATE_DIR_OVERRIDE
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        }
     }
 }
