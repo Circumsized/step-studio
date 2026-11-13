@@ -768,10 +768,18 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         // a surface that keeps sending while its adapter has died is a socket
         // nobody is reading, and the shell behind it would wait forever.
         let (relay_done, relay_done_rx) = mpsc::channel::<()>();
-        // Frames the daemon answered itself, handed back to the surface's writer
-        // thread rather than written here: the writer owns that half of the
-        // socket, and two owners of one fd is how a frame ends up interleaved.
-        let (answered, answered_rx) = mpsc::channel::<Vec<u8>>();
+        // Frames the daemon answered itself go back on the surface's *own*
+        // sender, which is the same one the adapter's pump writes to and the same
+        // one this surface's writer thread drains. One writer per socket.
+        //
+        // There used to be a second thread here, draining an `answered` channel
+        // and writing to `stream.try_clone()` — which contradicted the comment
+        // directly above it ("two owners of one fd is how a frame ends up
+        // interleaved"). On Linux the socket lock serialises the two writers, so
+        // nothing visibly broke; on a Windows byte-mode named pipe a partial write
+        // from one lands the other's bytes inside its frame, and the client's
+        // `read_frame` sees a corrupt length and closes with a protocol error.
+        let sender_for_relay = sender.clone();
         let mut surface_reader = surface_reader;
         let daemon_for_relay = Arc::clone(&daemon);
         std::thread::spawn(move || {
@@ -799,7 +807,7 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
                                 });
                                 let mut bytes = Vec::new();
                                 if write_frame(&mut bytes, daemon.epoch, &answer).is_ok() {
-                                    let _ = answered.send(bytes);
+                                    let _ = sender_for_relay.send(bytes);
                                 }
                                 continue;
                             }
@@ -833,20 +841,6 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         });
         // A second writer for the daemon's own answers, on the surface's write
         // half, so the relay thread never touches it.
-        std::thread::spawn({
-            let mut stream = match stream.try_clone() {
-                Ok(stream) => stream,
-                Err(_) => return,
-            };
-            move || {
-                use std::io::Write;
-                while let Ok(frame) = answered_rx.recv() {
-                    if stream.write_all(&frame).is_err() {
-                        return;
-                    }
-                }
-            }
-        });
         loop {
             if daemon.stopping.load(Ordering::Relaxed) {
                 break;
