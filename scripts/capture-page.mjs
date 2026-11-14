@@ -21,10 +21,23 @@
  *      the surface after 20 s, and the shell reports "Connection reset by peer".
  *
  * Usage:
- *   node scripts/capture-page.mjs --page workbench [--out DIR] [--wait MS]
+ *   node scripts/capture-page.mjs [--out DIR] [--wait MS]
  *                                 [--width N] [--height N] [--keep]
  *
- * `--page` is the route the shell should open; see PAGES below.
+ * There is no `--page`. The first version had one and it did nothing: it set
+ * `STEP_STUDIO_ROUTE` in the shell's environment, and a repo-wide grep found
+ * exactly one reader of that name — the line that set it. The renderer's initial
+ * route comes from localStorage `omp.lastRoute`
+ * (`apps/renderer/src/settings/appSettings.ts:308`), which a fresh WebView
+ * profile does not have, so the shell lands on `startupPage`'s default
+ * ("workbench") whatever the environment says. Every `--page` value therefore
+ * produced a different filename holding the same image — the same failure as the
+ * ten identical pages, in a script written to avoid it.
+ *
+ * A per-route native capture needs a route-seeding mechanism that does not exist
+ * yet (the shell would have to write into the WebView's localStorage before the
+ * renderer boots). The Playwright harness has one — `?route=` — which is why
+ * `capture-page-signoff.mjs` is the per-page instrument and this one is not.
  */
 
 import { spawn, spawnSync } from "node:child_process";
@@ -41,7 +54,6 @@ const option = (name, fallback) => {
 };
 const flag = (name) => args.includes(name);
 
-const page = option("--page", "workbench");
 const width = Number(option("--width", "1280"));
 const height = Number(option("--height", "800"));
 const waitMs = Number(option("--wait", "55000"));
@@ -83,18 +95,27 @@ const sh = spawn(shell, [], {
     // the evidence the capture is of a working shell rather than a crash.
     STEP_STUDIO_SELF_CHECK: "1",
     // A page to land on. The shell's route table is the renderer's.
-    STEP_STUDIO_ROUTE: page,
   },
   stdio: ["ignore", "ignore", "pipe"],
 });
 
-let trace = "";
+// Two separate buffers, and the distinction is the whole point. `tail` is what
+// gets echoed and is truncated to the last partial line after every chunk, so it
+// stays cheap. `seen` is never truncated, because the verdict at the end of this
+// script regex-tests it. The first version had one buffer doing both jobs, so it
+// tested a fragment — and after a chunk ending in a newline that fragment is "",
+// which made a perfectly healthy capture report "did NOT complete a turn" and
+// exit 3. An instrument whose health signal is inverted is worse than none.
+let seen = "";
+let tail = "";
 sh.stderr.on("data", (chunk) => {
-  trace += chunk.toString();
-  for (const line of trace.split("\n").slice(-6)) {
+  const text = chunk.toString();
+  seen += text;
+  tail += text;
+  for (const line of tail.split("\n").slice(-6)) {
     if (line.trim()) process.stderr.write(`[shell] ${line}\n`);
   }
-  trace = trace.split("\n").pop() ?? "";
+  tail = tail.split("\n").pop() ?? "";
 });
 
 /** The shell's own window id, or undefined while it has none. */
@@ -142,7 +163,7 @@ if (shot.status !== 0 || !existsSync(xwdPath)) {
 }
 
 mkdirSync(outDir, { recursive: true });
-const pngPath = join(outDir, `${page}.png`);
+const pngPath = join(outDir, "shell.png");
 const converted = spawnSync("uv", ["run", "--with", "pillow", "python", join(root, "scripts", "xwd2png.py"), xwdPath, pngPath], {
   encoding: "utf8",
 });
@@ -153,7 +174,7 @@ if (converted.status !== 0) {
   process.exit(1);
 }
 
-const settled = /receipt core\.prompt -> completed|conversation\.turn\.completed/.test(trace);
+const settled = /receipt core\.prompt -> completed|conversation\.turn\.completed/.test(seen);
 console.log(converted.stdout.trim());
 console.log(`capture-page: window ${windowId} on ${display}, self-check ${settled ? "completed a turn" : "did NOT complete a turn"}`);
 if (!settled) {

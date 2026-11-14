@@ -108,3 +108,7 @@ apps/desktop-tauri/src-tauri/target/
 # Three got committed as empty tracked files; the name carries a pid, so it is
 # never a real asset.
 scratch-diff-test-*.txt
+
+# Sign-off captures are regenerable output, not source. The command that
+# produces them is in design/m41-signoff.md.
+design/signoff/

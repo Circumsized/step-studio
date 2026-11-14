@@ -98,13 +98,22 @@ def convert(source, target, scale=None):
         )
 
     channels = [mask_shift(header[name]) for name in ("red_mask", "green_mask", "blue_mask")]
+    # The byte order comes from the header, not from the host. `xwd` writes ZPixmap
+    # data in the *display's* order and records it in `byte_order` — which is what
+    # `xwud` consults. Reading big-endian on a little-endian dump (Xvfb on x86-64
+    # is LSBFirst, i.e. `byte_order == 0`) turns memory bytes `[B, G, R, 0]` into
+    # `0xBBGGRR00`, which the masks then read as red←green, green←red, blue←0:
+    # every blue in the capture vanishes and red and green swap. On a
+    # mostly-greyscale page that is invisible, which is how it survived — the
+    # tool's whole purpose is pixel fidelity, so it must be right by construction.
+    order = "little" if header["byte_order"] == 0 else "big"
     image = Image.new("RGB", (width, height))
     output = image.load()
     for y in range(height):
         base = pixels_at + y * stride
         for x in range(width):
             start = base + x * bytes_per_pixel
-            pixel = int.from_bytes(blob[start:start + bytes_per_pixel], "big")
+            pixel = int.from_bytes(blob[start:start + bytes_per_pixel], order)
             colour = []
             for shift, width_bits in channels:
                 if width_bits == 0:

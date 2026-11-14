@@ -6047,6 +6047,7 @@ button.compact-rule.is-open .compact-rule-chev { transform: rotate(180deg); }
 .agent-row .ag-last { display: block; min-width: 0; }
 /* The current action: icon + tool + target, between the description and the
    metrics — where the reference puts it. */
+.agent-row .ag-demo-head { padding: 4px 10px 6px; }
 .agent-row .ag-act {
   display: flex;
   align-items: center;

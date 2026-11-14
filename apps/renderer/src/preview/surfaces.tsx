@@ -238,7 +238,7 @@ export function PreviewTokenPanel() {
   const t = PREVIEW_TELEMETRY;
   return (
     <>
-      <div className="tp-head"><Icon name="zap" extra="sm" />Token 用量<span className="spacer" /><span className="chip blue xs">演示</span></div>
+      <div className="tp-head"><Icon name="zap" extra="sm" />Token 用量<span className="spacer" /><span className="chip blue xs demo-badge">演示</span></div>
       <div className="tok-hero">
         <div className="th-cell">
           <div className="th-k">总消耗</div>
@@ -475,7 +475,7 @@ export function PreviewGitPanel() {
       top={(
         <>
       <div className="ch-toolbar git-toolbar">
-        <span className="chip gray xs">演示</span>
+        <span className="chip gray xs demo-badge">演示</span>
         <span className="git-branch-label ellipsis"><Icon name="branch" extra="sm" />{PREVIEW_GIT.branch}</span>
         <span className="chip gray xs">↑{PREVIEW_GIT.ahead} ↓{PREVIEW_GIT.behind}</span>
         <span className="spacer" />
@@ -579,7 +579,7 @@ export function PreviewSidePreview() {
             </button>
           ))}
         </span>
-        <span className="chip gray xs">演示</span>
+        <span className="chip gray xs demo-badge">演示</span>
       </div>
       <div className="pv-statusbar">
         <span className="dot green" />
@@ -622,6 +622,10 @@ const AGENT_TONE: Record<PreviewSideAgent["status"], string> = {
 export function PreviewSideAgents({ onOpenHub }: { onOpenHub: (id: string) => void }) {
   return (
     <>
+      {/* Every sibling preview surface carries a 演示 marker; this one did not,
+          so the Agents panel was the one place demo agent data was
+          indistinguishable from real. AGENTS.md:87 — 预览面带「演示」标记. */}
+      <div className="ag-demo-head"><span className="chip gray xs demo-badge">演示</span></div>
       {PREVIEW_SIDE_AGENTS.map((agent) => (
         <div className="agent-row" key={agent.id}>
           <span className="ag-tree" aria-hidden="true">{agent.parent ? "└" : ""}</span>

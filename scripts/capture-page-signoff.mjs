@@ -143,6 +143,16 @@ const SCENARIOS = [
       await page.getByRole("tab", { name: /浏览器|Browser/ }).click();
     },
   },
+  // `light-project-home.png` has no scenario here: it is the home page *inside the
+  // shell* — four action cards, recent projects, recent activity — and `route=home`
+  // already captures exactly that, distinct from `workbench`. The first version of
+  // this entry tried to reach it by clicking a "项目与对话" button on the workbench
+  // route, which matches nothing: that string is the sidebar's `aria-label` and an
+  // `<h2>`, not a button. The click blocked for Playwright's 30 s timeout, the
+  // `.catch()` swallowed it, and the screenshot was the workbench as it first
+  // paints — byte-identical to `wb-bottom`, which the duplicate detector did catch.
+  // The deeper reason it cannot work is that the `home` route has no sidebar at all
+  // (see `plan.md` §19.1), so there is nothing on it to click.
   {
     id: "wb-streaming",
     label: "工作台 · 流式回合",
@@ -176,14 +186,6 @@ const SCENARIOS = [
     reference: "light-palette.png",
     drive: async (page) => {
       await page.keyboard.press("Control+k");
-    },
-  },
-  {
-    id: "project-home",
-    label: "项目主页",
-    reference: "light-project-home.png",
-    drive: async (page) => {
-      await page.getByRole("button", { name: /项目与对话|PROJECTS/ }).first().click().catch(() => undefined);
     },
   },
 ];
