@@ -271,7 +271,7 @@ function SessionBuildList({ provenance, zh, demo }: { provenance: SessionBuildPr
     <div className="diag-section" aria-label={zh ? "会话运行版本" : "Session build provenance"}>
       <h3>
         {zh ? "此会话由以下版本运行" : "This session was run by"}
-        {demo ? <span className="chip gray xs" style={{ marginLeft: 8 }}>{zh ? "演示" : "Demo"}</span> : null}
+        {demo ? <span className="chip gray xs demo-badge" style={{ marginLeft: 8 }}>{zh ? "演示" : "Demo"}</span> : null}
       </h3>
       <ol className="card" style={{ margin: 0, paddingInlineStart: 28 }}>
         {provenance.history.map((identity, index) => (

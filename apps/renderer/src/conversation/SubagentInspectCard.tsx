@@ -156,7 +156,7 @@ export function SubagentInspectCard({
           <p className="muted small">{target.agentId}</p>
         </div>
         <SubagentMetrics {...metrics} />
-        {preview ? <span className="chip gray xs">演示</span> : null}
+        {preview ? <span className="chip gray xs demo-badge">演示</span> : null}
         <button type="button" className="btn small outline" disabled={!preview&&(!canBtw||!runtimeConnected||!agent?.hasLiveSession)} onClick={()=>requestClose(()=>onOpenHub(target.agentId,"btw"))}>BTW</button>
         <button type="button" className="btn small outline" onClick={() => requestClose(() => onOpenHub(target.agentId))}>
           前往 Agent Hub

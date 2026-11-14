@@ -4,6 +4,24 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* `?quiet=1`: a capture with no demo furniture in it.
+ *
+ * The sign-off captures used to hide these from outside, with a stylesheet the
+ * capture script injected into the page and a text match on "演示". That had two
+ * problems: it only worked for a client willing to inject CSS, so a bare
+ * `chrome-headless-shell --screenshot` got the badges; and the text match was
+ * matching twelve different class combinations, so a badge rendered anywhere new
+ * was simply visible. The app can render a clean capture of itself, which is
+ * what this is — the harness sets `data-quiet` on <html>, the badges carry one
+ * shared class, and one rule covers all of them. */
+html[data-quiet] .demo-badge { display: none !important; }
+html[data-quiet] .startup-notice,
+html[data-quiet] .tip-layer,
+html[data-quiet] .tip-host,
+html[data-quiet] .mc-page-banner,
+html[data-quiet] .git-notice,
+html[data-quiet] .hub-ro-banner { display: none !important; }
+
 html, body {
   height: 100%;
   overflow: hidden;

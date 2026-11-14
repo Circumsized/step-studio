@@ -229,7 +229,7 @@ export function RuntimeQueueBar({
             {zh ? "由 Runtime 排队和执行" : "Queued and executed by Runtime"}
           </span>
           {preview ? (
-            <span className="chip gray xs">{zh ? "演示" : "Demo"}</span>
+            <span className="chip gray xs demo-badge">{zh ? "演示" : "Demo"}</span>
           ) : null}
         </button>
       </div>

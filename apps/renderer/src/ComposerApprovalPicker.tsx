@@ -121,7 +121,7 @@ export function ComposerApprovalPicker({
           >
             {preview ? (
               <p className="cmp-menu-note">
-                <span className="chip gray xs">{t("common.demo")}</span>{t("composer.previewModelNote")}
+                <span className="chip gray xs demo-badge">{t("common.demo")}</span>{t("composer.previewModelNote")}
               </p>
             ) : null}
             {nextTurnOnly ? <p className="cmp-menu-note">{t("composer.permissionNoteNextTurn")}</p> : null}

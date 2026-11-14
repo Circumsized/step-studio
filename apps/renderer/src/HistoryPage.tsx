@@ -500,7 +500,7 @@ export function HistoryPage({
                 <button type="button" className="btn outline" onClick={() => show(t("history.demoExportToast"), "export")}>
                   <Icon name="export" extra="sm" />{t("history.export")}
                 </button>
-                <span className="chip gray xs">{t("common.demo")}</span>
+                <span className="chip gray xs demo-badge">{t("common.demo")}</span>
               </>
             )
             : (

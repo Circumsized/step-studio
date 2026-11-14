@@ -105,6 +105,11 @@ try {
 }
 document.documentElement.setAttribute("data-theme", qaTheme);
 document.documentElement.setAttribute("data-density", qaDensity);
+// `?quiet=1` — see the rule in `styles/base.css`. The app renders a clean
+// capture of itself rather than relying on a client to reach in and hide
+// elements, which is what made a bare `--screenshot` capture differ from a
+// scripted one for no reason the reader could see.
+if (qaParams.get("quiet") === "1") document.documentElement.setAttribute("data-quiet", "true");
 
 // Load the app after its persisted fixture settings are initialized. Several
 // preference stores read storage at module evaluation time.

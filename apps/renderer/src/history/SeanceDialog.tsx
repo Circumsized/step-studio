@@ -78,7 +78,7 @@ export function SeanceDialog({
         <div className="modal-head">
           {zh ? "只读咨询：" : "Consult (read-only): "}
           {title}
-          {preview ? <span className="chip gray xs seance-demo">{zh ? "演示" : "Demo"}</span> : null}
+          {preview ? <span className="chip gray xs demo-badge seance-demo">{zh ? "演示" : "Demo"}</span> : null}
         </div>
         <div className="modal-body seance-body">
           <p className="small muted">

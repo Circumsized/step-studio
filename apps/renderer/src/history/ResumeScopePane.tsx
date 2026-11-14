@@ -41,7 +41,7 @@ export function ResumeScopePane({ client, context, onOpen }: { client?: StudioCl
     finally { if (current === epoch.current) setBusy(false); }
   }
   return <section className="feature-pane" aria-label={zh ? "原生恢复范围" : "Native resume scope"}>
-    <h2>{zh ? "原生恢复范围" : "Native resume scope"} {preview ? <span className="chip gray xs">{zh ? "演示" : "Demo"}</span> : null}</h2>
+    <h2>{zh ? "原生恢复范围" : "Native resume scope"} {preview ? <span className="chip gray xs demo-badge">{zh ? "演示" : "Demo"}</span> : null}</h2>
     <p className="small muted">{zh ? "按原生 session.worktreeScope 默认值列出当前目录或同仓库关联 Worktree 的会话。恢复前切到目标工作区；不改变当前项目的侧栏归属。" : "Uses native session.worktreeScope. Resume switches to the target workspace without mixing sibling history into this project's sidebar."}</p>
     <AppSelect aria-label={zh ? "恢复范围" : "Resume scope"} value={scope ?? "repo"} disabled={!enabled || busy} onChange={event => setScope(event.target.value as "directory" | "repo")}><option value="directory">{zh ? "仅当前目录" : "This directory"}</option><option value="repo">{zh ? "同仓库 Worktree" : "Repository worktrees"}</option></AppSelect>
     {!enabled ? <p className="muted">{zh ? "需要支持恢复范围的已连接 Runtime。" : "Connect a Runtime that supports resume scopes."}</p> : rows.map(row => <div key={row.sessionId} className="feature-row"><div><b>{row.title}</b><p className="tiny muted">{row.currentDirectory ? zh ? "当前目录" : "This directory" : zh ? "关联 Worktree" : "Sibling worktree"} · {row.modifiedAt}{row.continuationOf ? zh ? " · 继续副本" : " · Continuation" : ""}</p></div><button type="button" className="btn small outline" disabled={busy || (!preview && !onOpen)} onClick={() => void open(row)}>{zh ? "恢复" : "Resume"}</button></div>)}

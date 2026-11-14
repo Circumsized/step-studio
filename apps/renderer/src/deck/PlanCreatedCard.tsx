@@ -37,7 +37,7 @@ export function PlanCreatedCard({
         <span className="plan-created-label">已创建计划</span>
         <span className="plan-created-title">{title}</span>
       </span>
-      {demo === true ? <span className="chip gray xs">演示</span> : null}
+      {demo === true ? <span className="chip gray xs demo-badge">演示</span> : null}
       <Icon name="chevron-r" extra="sm plan-created-chev" />
     </button>
   );

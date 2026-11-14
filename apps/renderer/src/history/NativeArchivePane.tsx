@@ -219,7 +219,7 @@ export function NativeArchivePane({
           <h2>
             Archive / Recap{" "}
             {preview ? (
-              <span className="chip gray xs">{zh ? "演示" : "Demo"}</span>
+              <span className="chip gray xs demo-badge">{zh ? "演示" : "Demo"}</span>
             ) : null}
           </h2>
           <p>

@@ -188,24 +188,6 @@ const SCENARIOS = [
   },
 ];
 
-async function quiet(page) {
-  await page.addStyleTag({
-    content: `
-      .startup-notice, .tip-layer, .tip-host { display: none !important; }
-      .mc-page-banner, .git-notice, .hub-ro-banner { display: none !important; }
-    `,
-  }).catch(() => undefined);
-  await page.evaluate(() => {
-    document.documentElement.setAttribute("data-theme", arguments[0] ? "dark" : "light");
-    for (const el of document.querySelectorAll(".chip, .tiny.muted, p.tiny.muted")) {
-      const text = (el.textContent ?? "").trim();
-      if (text === "演示" || text.startsWith("演示模式") || text.includes("当前是演示数据")) {
-        el.style.display = "none";
-      }
-    }
-  }, dark).catch(() => undefined);
-}
-
 const browser = await chromium.launch();
 // 1658x846, the size every one of the 24 reference screensshots in
 // `ui_reference/ver2/__shots/` is. Matching it is what makes a capture
@@ -228,11 +210,22 @@ for (const [route, label] of PAGES) {
   // page lands on workbench. A sign-off instrument wants the opposite of
   // preserved preferences: it wants the same deterministic settings on every
   // run, which is the only way two captures taken a week apart are comparable.
-  const url = `${base}&route=${route}&theme=${dark ? "dark" : "light"}&lang=${lang}`;
-  await page.goto(url, { waitUntil: "networkidle" }).catch(() => undefined);
-  await page.waitForTimeout(600);
-  await quiet(page);
-  await page.waitForTimeout(200);
+  //
+  // `quiet=1` is the app hiding its own demo furniture (`styles/base.css`), not
+  // this script reaching in with an injected stylesheet. It used to inject one
+  // and match on the text "演示" — which only worked for a client willing to
+  // inject CSS, so a bare `chrome-headless-shell --screenshot` got the badges,
+  // and the text match was covering twelve different class combinations, so a
+  // badge rendered anywhere new was simply visible.
+  const url = `${base}&route=${route}&theme=${dark ? "dark" : "light"}&lang=${lang}&quiet=1`;
+  // `data-qa-ready`, not `networkidle` plus a guessed sleep. The harness sets it
+  // once the shell has mounted, the fonts have loaded and the entrance animations
+  // have settled (`preview-app-harness-entry.tsx:142`) — which is exactly the
+  // moment a screenshot is worth taking. Waiting on the network instead measured
+  // how long the dev server takes to answer, and the fixed sleeps measured
+  // nothing at all: a 20-image run spent 78 s, almost all of it here.
+  await page.goto(url, { waitUntil: "commit" }).catch(() => undefined);
+  await page.waitForSelector("[data-qa-ready]", { timeout: 15_000 }).catch(() => undefined);
   const dest = path.join(outDir, `${route}.${suffix}.png`);
   await page.screenshot({ path: dest, animations: "disabled" });
   const { createHash } = await import("node:crypto");
@@ -273,9 +266,8 @@ async function openSidePanel(page) {
 const reachable = SCENARIOS.filter((scenario) => scenario.drive !== null);
 const unreachable = SCENARIOS.filter((scenario) => scenario.drive === null);
 for (const scenario of reachable) {
-  await page.goto(`${base}&route=workbench&theme=${dark ? "dark" : "light"}&lang=${lang}`, { waitUntil: "networkidle" }).catch(() => undefined);
-  await page.waitForTimeout(600);
-  await quiet(page);
+  await page.goto(`${base}&route=workbench&theme=${dark ? "dark" : "light"}&lang=${lang}&quiet=1`, { waitUntil: "commit" }).catch(() => undefined);
+  await page.waitForSelector("[data-qa-ready]", { timeout: 15_000 }).catch(() => undefined);
   try {
     await scenario.drive(page);
     await page.waitForTimeout(700);

@@ -612,7 +612,7 @@ export function SubagentsPanel({
           </button>
           <b style={{ fontSize: "var(--fs-14)" }}>{draft.existing ? t("subagents.editSubagent", { name: draft.name }) : t("subagents.newSubagent")}</b>
           {draft.source ? <span className={`chip ${SOURCE_CHIP[draft.source]} xs`}>{sourceLabel(draft.source, t)}</span> : <span className="chip purple xs">{t("common.custom") || "Custom"}</span>}
-          {preview ? <span className="chip purple xs">{t("common.demo")}</span> : null}
+          {preview ? <span className="chip purple xs demo-badge">{t("common.demo")}</span> : null}
         </div>
         <ToastHost message={flash} onDismiss={() => setFlash(null)} />
 

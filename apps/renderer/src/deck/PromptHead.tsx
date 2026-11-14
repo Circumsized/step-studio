@@ -26,7 +26,7 @@ export function QueueNav({ queue }: { queue?: DeckQueue }) {
 }
 
 export function demoMark(demo?: boolean) {
-  return demo ? <span className="chip gray xs">演示</span> : null;
+  return demo ? <span className="chip gray xs demo-badge">演示</span> : null;
 }
 
 export function PromptHead({

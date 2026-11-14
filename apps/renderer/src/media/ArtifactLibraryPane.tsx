@@ -234,7 +234,7 @@ export function ArtifactLibraryPane({
     <section className="artifact-library" aria-label={t("media.library")}>
       <div className="media-toolbar">
         <h3>{t("media.library")}</h3>
-        {preview ? <span className="chip gray">{t("common.demo")}</span> : null}
+        {preview ? <span className="chip gray demo-badge">{t("common.demo")}</span> : null}
         <AppSelect
           className="select"
           aria-label={t("media.filter")}
