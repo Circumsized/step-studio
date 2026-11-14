@@ -6045,6 +6045,17 @@ button.compact-rule.is-open .compact-rule-chev { transform: rotate(180deg); }
   font-variant-numeric: tabular-nums;
 }
 .agent-row .ag-last { display: block; min-width: 0; }
+/* The current action: icon + tool + target, between the description and the
+   metrics — where the reference puts it. */
+.agent-row .ag-act {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: var(--fs-11);
+  color: var(--text-1);
+}
+.agent-row .ag-act svg { flex: none; color: var(--text-3); }
 .agent-row .ag-tree { width: 14px; flex: none; color: var(--glyph-faint); font-family: var(--font-mono); align-self: center; }
 .agent-row .ag-acts { display: flex; flex-direction: column; gap: 2px; flex: none; }
 

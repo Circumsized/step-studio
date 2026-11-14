@@ -633,8 +633,13 @@ export function PreviewSideAgents({ onOpenHub }: { onOpenHub: (id: string) => vo
                 <span className={`chip ${AGENT_TONE[agent.status]} xs`}>{agent.statusText}</span>
               </span>
               <span className="ag-task">{agent.role} · {agent.task}</span>
+              {/* The current action, not the last one. `light-wb-agents.png` has a
+                  line per card reading `⚡ Write · CapabilityProbe.tsx` — icon, tool,
+                  target — sitting between the description and the metrics, and it is
+                  what the agent is doing *now*. This was `最近工具：…` below the
+                  metrics, which answers a different question and reads as history. */}
+              <span className="ag-act"><Icon name="zap" extra="sm" />{agent.lastTool}</span>
               <span className="ag-meta"><span>{agent.time}</span><span>{agent.tokens} tok · {agent.cost}</span><span>{agent.files} 文件</span></span>
-              <span className="ag-last tiny muted ellipsis">最近工具：{agent.lastTool}</span>
             </button>
           </div>
         </div>
