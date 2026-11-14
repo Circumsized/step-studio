@@ -37,7 +37,7 @@ import { PLATFORM } from "./platform";
 import { ensureRuntimeConnection } from "./runtimeEnsure";
 import { isUpdateCheckTimeout, queryWithTimeout } from "./updateCheck";
 import { checkForUpdates, downloadUpdateToReady, fetchUpdatePrefs, useUpdates } from "./settings/updates";
-import { shellSurface } from "./chrome";
+import { shellCapabilities, shellSurface } from "./chrome";
 
 type DiagAction = {
   readonly kind: "reconnect" | "restart" | "install" | "update" | "reinstall" | "recheck" | "check-update" | "import" | "rollback" | "prune";
@@ -906,11 +906,11 @@ export function DiagnosticsPage({
         <div className="set-section">
           <div className="set-row">
             <div className="sr-label">{t("updates.rollbackRuntime")}</div>
-            <button type="button" className="btn outline" disabled={busy !== null || (!preview && !shellSurface()?.rollbackRuntimeUpdate)} onClick={() => void maintainRuntime("rollback")}>{t("updates.rollbackRuntime")}</button>
+            <button type="button" className="btn outline" disabled={busy !== null || (!preview && !shellCapabilities().runtimeUpgrade)} onClick={() => void maintainRuntime("rollback")}>{t("updates.rollbackRuntime")}</button>
           </div>
           <div className="set-row">
             <div className="sr-label">{t("updates.pruneOld")}</div>
-            <button type="button" className="btn outline" disabled={busy !== null || (!preview && !shellSurface()?.pruneRuntimeUpdates)} onClick={() => void maintainRuntime("prune")}>{t("updates.pruneOld")}</button>
+            <button type="button" className="btn outline" disabled={busy !== null || (!preview && !shellCapabilities().runtimeUpgrade)} onClick={() => void maintainRuntime("prune")}>{t("updates.pruneOld")}</button>
           </div>
           {(runtimeUpdate?.plan === "available" || runtimeUpdate?.plan === "blocked") ? (
             <div className="set-row">

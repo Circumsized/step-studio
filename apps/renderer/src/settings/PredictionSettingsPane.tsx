@@ -13,7 +13,7 @@ import { waitReceipt, hostErrorMessage } from "../hostError";
 import type { NativePreferencesContext } from "./NativePreferencesPane";
 import { SettingSection, SettingRow } from "./SettingRow";
 import { PLATFORM } from "../platform";
-import { shellSurface } from "../chrome";
+import { shellCapabilities, shellSurface } from "../chrome";
 export function PredictionSettingsPane({
   client,
   context,
@@ -463,7 +463,7 @@ export function PredictionSettingsPane({
           disabled={
             !has("prediction.prepare") ||
             !!busy ||
-            (!preview && !shellSurface()?.importPredictionHistory)
+            (!preview && !shellCapabilities().predictionImport)
           }
           onClick={() => void importHistory()}
         >

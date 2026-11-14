@@ -22,7 +22,7 @@ import {
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { WorkspaceEmpty, WorkspaceStatus } from "../workspaces/Workspace";
 import "./maintenance.css";
-import { shellSurface } from "../chrome";
+import { shellCapabilities, shellSurface } from "../chrome";
 const CATEGORIES: GcCategory[] = ["blobs", "archive", "wal", "stale"];
 const LABELS: Record<GcCategory, [string, string]> = {
   blobs: ["无引用附件", "Unreferenced attachments"],
@@ -349,7 +349,7 @@ export function NativeMaintenancePane({
             </span>
             <button
               className="btn small outline"
-              disabled={!preview && !shellSurface()?.exportArtifact}
+              disabled={!preview && !shellCapabilities().artifacts}
               onClick={() => {
                 if (preview) {
                   setNotice(

@@ -8,6 +8,7 @@ import { Icon } from "../icons";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { WorkspaceDialog } from "../workspaces/Workspace";
 import { PREVIEW_COMPUTER, PREVIEW_COMPUTER_IMAGE } from "../preview/computerPreview";
+import { shellCapabilities } from "../chrome";
 import "./computer.css";
 import { shellSurface } from "../chrome";
 
@@ -68,7 +69,7 @@ export function ComputerPane({ client, sessionId, available, visible, capabiliti
   const currentBlob = useRef<string | undefined>(undefined);
   const can = (kind: string) => preview || (available && !!sessionId && capabilities?.capabilities.some(item => item.id === kind && item.grade !== "unavailable") === true);
   const canRead = can("computer.status");
-  const desktopCapture = preview || !!shellSurface()?.readComputerCapture;
+  const desktopCapture = preview || shellCapabilities().computerCapture;
 
   const invoke = useCallback(async <K extends keyof ComputerObservationResultMap>(kind: K, input: CommandInput<K>): Promise<ComputerObservationResultMap[K]> => {
     const handle = await client.command(kind, input);

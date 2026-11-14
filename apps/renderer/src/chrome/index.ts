@@ -54,6 +54,22 @@ export interface ChromeCapabilities {
   readonly computerCapture: boolean;
   // --- The prediction channel: a transport to a socket the runtime owns. ---
   readonly prediction: boolean;
+  // Separate from `prediction` because the history import needs a file picker: a
+  // shell that can attach and steer but not import is not a shell that cannot
+  // predict. The two are answered independently, which is the whole point of
+  // splitting the bit.
+  readonly predictionImport: boolean;
+  // --- Runtime self-maintenance: rollback and prune of downloaded runtimes. ---
+  readonly runtimeUpgrade: boolean;
+  // One member, one consumer: the conversation-view lease in
+  // `conversationViews.ts`, which keeps the host from virtualising away the
+  // sessions the user is looking at. Optional on the surface, so an older shell
+  // reports false and the lease is simply not taken.
+  readonly conversationView: boolean;
+  // One member, one consumer: `SkillsharePane`'s reveal-token button. The token
+  // lives in the OS keystore on the shell side, so a surface without the member
+  // cannot hand it over at all — which is a reason, not a blank row.
+  readonly skillshareToken: boolean;
   // --- PlatformApi: menu, logs, dialogs. Tauri plugins plus an ACL. ---
   readonly logs: boolean;
   readonly menu: boolean;
@@ -109,11 +125,18 @@ export function shellCapabilities(): ChromeCapabilities {
       && wired(shell, "onBrowserObservation"),
     // One member, one consumer: `ComputerPane`'s screenshot button.
     computerCapture: wired(shell, "readComputerCapture"),
+    // One member, one consumer: `SkillsharePane`'s reveal-token button. The
+    // token lives in the OS keystore on the shell side, so a surface without the
+    // member cannot hand it over at all — which is a reason, not a blank row.
+    skillshareToken: wired(shell, "revealSkillshareToken"),
     // `importPredictionHistory` is deliberately *not* in the group: it needs the
     // file picker, so a shell without it can still attach and steer. Including it
     // would report the whole channel unavailable for a missing import.
     prediction:
       wired(shell, "attachPrediction") && wired(shell, "predictionInput") && wired(shell, "detachPrediction") && wired(shell, "onPrediction"),
+    predictionImport: wired(shell, "importPredictionHistory"),
+    runtimeUpgrade: wired(shell, "rollbackRuntimeUpdate") && wired(shell, "pruneRuntimeUpdates"),
+    conversationView: wired(shell, "setConversationViewState"),
     logs: wired(shell, "openLogDir") && wired(shell, "exportLogs"),
     menu: wired(shell, "onMenuCommand"),
     platform: wired(shell, "platform"),
@@ -147,6 +170,14 @@ export function shellDegradedReason(capability: keyof ChromeCapabilities): strin
       return "当前外壳不支持浏览器观测";
     case "computerCapture":
       return "当前外壳不支持屏幕截图";
+    case "predictionImport":
+      return "当前外壳不支持导入提示词历史";
+    case "skillshareToken":
+      return "当前外壳不支持读取分享凭据";
+    case "runtimeUpgrade":
+      return "当前外壳不支持运行时回滚或清理";
+    case "conversationView":
+      return "当前外壳不支持会话可见性同步";
     case "prediction":
       return "当前外壳不支持输入预测";
     case "logs":

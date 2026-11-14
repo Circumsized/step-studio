@@ -83,7 +83,7 @@ export function ArtifactStorageSettings({
           type="button"
           className="btn small outline"
           disabled={
-            !preview && !shellSurface()?.chooseArtifactDirectory
+            !preview && !shellCapabilities().artifacts
           }
           onClick={() => {
             if (preview) {
@@ -264,9 +264,7 @@ export function ArtifactLibraryPane({
         <button
           type="button"
           className="btn small outline"
-          disabled={
-            busy || (!preview && !shellSurface()?.importArtifact)
-          }
+          disabled={busy || (!preview && !shellCapabilities().artifacts)}
           onClick={() => void importFile()}
         >
           {t("media.import")}
@@ -364,9 +362,7 @@ export function ArtifactLibraryPane({
               <button
                 type="button"
                 className="btn small outline"
-                disabled={
-                  !preview && !shellSurface()?.exportArtifact
-                }
+                disabled={!preview && !shellCapabilities().artifacts}
                 onClick={() => {
                   if (preview) return;
                   void shellSurface()

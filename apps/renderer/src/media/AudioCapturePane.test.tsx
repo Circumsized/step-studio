@@ -8,7 +8,16 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); localS
 function page(sessionId: string) { return <I18nProvider forcedLanguage="zh"><PreviewModeProvider switchEnabled={false}><AudioCapturePane sessionId={sessionId} onSaved={() => {}} /></PreviewModeProvider></I18nProvider>; }
 function devices(getUserMedia: () => Promise<unknown>) {
   Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
-  vi.stubGlobal("ompStudioChrome", { beginMediaUpload: vi.fn() });
+  // All four members, not just the first: `mediaUpload` is one bit over the
+  // whole upload lifecycle, and a stub that can start but not finish an upload
+  // is a surface that cannot record. Wiring one member here made the pane report
+  // unavailable and the tests then asserted on a disabled button.
+  vi.stubGlobal("ompStudioChrome", {
+    beginMediaUpload: vi.fn(),
+    appendMediaUpload: vi.fn(),
+    finishMediaUpload: vi.fn(),
+    abortMediaUpload: vi.fn(),
+  });
   class Recorder { static isTypeSupported() { return true; } state = "inactive"; mimeType = "audio/webm"; onstop?: () => void; start() { this.state = "recording"; } stop() { this.state = "inactive"; this.onstop?.(); } }
   vi.stubGlobal("MediaRecorder", Recorder);
 }

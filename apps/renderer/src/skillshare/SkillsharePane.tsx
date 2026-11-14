@@ -20,7 +20,7 @@ import {
   PREVIEW_SKILLSHARE_TOKENS,
 } from "../preview/skillsharePreview";
 import "./skillshare.css";
-import { shellSurface } from "../chrome";
+import { shellCapabilities, shellSurface } from "../chrome";
 
 const ACTION_LABELS: Record<
   SkillshareAction["type"],
@@ -1179,7 +1179,7 @@ export function SkillsharePane({
           {action.link ? (
             <button
               className="btn small outline"
-              disabled={!shellSurface()?.openUrl}
+              disabled={!shellCapabilities().window}
               onClick={() => {
                 if (!preview)
                   void shellSurface()?.openUrl({
@@ -1193,9 +1193,7 @@ export function SkillsharePane({
           {action.secretId ? (
             <button
               className="btn small primary"
-              disabled={
-                busy || !shellSurface()?.revealSkillshareToken
-              }
+              disabled={busy || !shellCapabilities().skillshareToken}
               onClick={() =>
                 void run(async (generation) => {
                   const view = secretView.current;

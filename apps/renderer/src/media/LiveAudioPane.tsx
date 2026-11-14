@@ -9,7 +9,7 @@ import { PREVIEW_LIVE_AUDIO } from "../preview/liveAudioPreview";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { openLiveCapture, type LiveCapture } from "./liveCapture";
 import { MicrophoneDeniedError, MicrophoneSettingsButton, ensureMicrophoneAccess } from "./microphoneAccess";
-import { shellSurface } from "../chrome";
+import { shellCapabilities, shellSurface } from "../chrome";
 
 export function LiveAudioPane({ client, sessionId, available, visible = true }: { client: StudioClient; sessionId?: string | undefined; available: boolean; visible?: boolean }) {
   const { preview } = usePreviewMode(); const { resolvedLanguage } = useI18n(); const zh = resolvedLanguage === "zh";
@@ -17,7 +17,7 @@ export function LiveAudioPane({ client, sessionId, available, visible = true }: 
   const [state, setState] = useState<LiveAudioState>(); const [voice, setVoice] = useState("sol"); const [device, setDevice] = useState(""); const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [review, setReview] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [micDenied, setMicDenied] = useState(false);
   const generation = useRef(0); const lock = useRef(false); const capture = useRef<LiveCapture | undefined>(undefined); const abort = useRef<AbortController | undefined>(undefined); const audioId = useRef<string | undefined>(undefined); const confirm = useRef<HTMLButtonElement>(null);
-  const desktop = !!shellSurface()?.attachLiveAudio && !!navigator.mediaDevices?.getUserMedia;
+  const desktop = shellCapabilities().liveAudio && !!navigator.mediaDevices?.getUserMedia;
   const enabled = visible && (preview || (desktop && available && !!sessionId));
   const active = !!state && !["off", "error"].includes(state.phase);
   const invoke = useCallback(async <K extends keyof LiveAudioResultMap>(kind: K, input: CommandInput<K>): Promise<LiveAudioState> => {
