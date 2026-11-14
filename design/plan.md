@@ -848,6 +848,7 @@ flowchart LR
 | 纯 Tauri 的内存代价由 G-1 单独承担 | 失去 egui 118 MB 低开销模式后无兜底；但上游地板 252 MB（step 167.1 + MCP 84.9）不变，壳层差异被稀释 | 保留 egui 作低开销模式 | M5 回填 G-1 后 |
 | Tauri 命令名去掉 `omp-studio:desktop:` 家族前缀 | Tauri 插件命令按 `plugin:name\|cmd` 命名空间化，带冒号的命令名要逐个 rename | 直接用 channel 串作命令名（v4.2 §5.2 原述，不可达） | 不改 |
 | sender 用「单 listen 扇出到 Set」 | Tauri `listen` 返回 Promise，逐订阅注册会让早于 resolve 的 `removeListener` 找不到目标，监听活到窗口生命周期结束 | 每订阅一个 listen + `Map<listener, UnlistenFn>` | M1.2 三桥重建时 |
+| **次级页渲染在壳内，保留应用侧栏与应用顶栏**（待批，2026-11-14 实测提出） | `ui_reference/ver2/__shots/` 的 `light-settings-perms.png` 与 `light-diagnostics.png` **都**保留左侧应用侧栏（项目与对话 + EXPLORER 文件树）与应用顶栏，次级页只是主列里的内容；本仓 `App.tsx` 的 `{showPage ? <SecondaryPage/> : <壳>}` 是二选一，次级页拿到的是自己的 `.page-head`（返回键 + 标题 + 页签轨 + 主题键）并**完全没有侧栏与顶栏**。这是 M4.1 首轮结构比对里最大的一处「缺」，且横跨全部 10 个次级路由 | 维持全屏次级页（现状）：省掉一次壳层重构，但 10 个页面都与基准面不一致，像素签收无法通过 | M4.1 人眼比对前 |
 | 事件派发传 `(event, payload)` 两个参数 | `subscribeChannel`（`apps/desktop/src/chrome-api.ts:81-93`）解构第二个参数 | 只传 payload：M1.2 所有 chrome/terminal 监听会收到 undefined | 不改 |
 | Tauri 拒绝统一重包为 `Error` | Tauri 拒绝时是 Rust 错误的裸序列化（struct Err 即 `{code, message}`），透传会让真实 ClientErrorCode 泄漏到 UI；Electron 下统一是 TRANSPORT_ERROR | 原样透传 | 不改 |
 | `createDesktopIpcBridge` 移入 `packages/transport-desktop` | `apps/desktop-tauri` 不能跨 app 相对导入（破坏 `rootDir`）；依赖 `desktop/dist` 会在 M5.6 删除 apps/desktop 时断 | 从 `../../desktop/src/ipc-validation.ts` 相对导入（esbuild 能解析，但是把 M1.2 的债提前背） | M1.2 |
@@ -901,6 +902,44 @@ flowchart LR
 可推翻上述任一条的条件：新的实测数据，或用户明确的方向变更。
 
 ---
+
+### 19.1 次级页在壳内的改法（待批）
+
+现状（`App.tsx:8756`）：
+
+```jsx
+{showPage ? (
+  <SecondaryPage route={pageRoute} …>{banners}{pages}</SecondaryPage>
+) : (
+  <div className="app-body adaptive-workbench">
+    <AppSidebar …/>
+    <div className="main-col"><AppTopbar …/><WorkbenchCanvas …/></div>
+  </div>
+)}
+```
+
+基准面要的形状：应用侧栏 + 应用顶栏 + **主列里的次级页内容**。次级页自己的分组导航
+（设置页的 常规/背景/…）留在页面体内，参照它现在的样子。
+
+改法（三步，每步可独立验）：
+
+1. 把 `<AppSidebar/>` 与 `<AppTopbar/>` 提到 `showPage` 判断**之外**，两个分支共用；
+   `AppTopbar` 已有按 route 取标题的分支（`App.tsx:6874`），补一个次级路由的
+   「← 返回工作台 / <页标题>` 形态即可，主题键它本来就有。
+2. `<SecondaryPage>` 从壳外搬进 `.main-col`，并**去掉 `.page-head` 的页签轨**
+   （`PAGE_NAV_DEFS` 那排）——基准面里那排不存在，页内分组导航才是导航。
+   返回键与标题并入顶栏面包屑，主题键由顶栏承担。
+3. `.page` / `.page-body` 的高度与内边距从「占满视口」改为「占满主列」，
+   否则侧栏会把内容压出屏幕。
+
+影响面：10 个次级路由的布局、`HomePage.tsx` 的 `SecondaryPage`、
+`workbench.css` / `pages.css` 的 `.page*` 规则、以及
+`HomePage.test.tsx` 里 `SecondaryPage body motion` 那条（它断言的是现有头部结构）。
+
+**为什么先记决策不动手**：这是壳层组成的产品决策，不是缺陷修复；它改全部 10 个页面的
+布局，而像素签收本身还要人眼（B3）。在一个尚未经人眼确认的方向上先投一个大 diff，
+风险高于收益。记在这里，人签字后一次做完。
+
 
 ## 20. 术语表
 
