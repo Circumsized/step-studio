@@ -253,22 +253,25 @@ fn connect_and_handshake(
 /// The proof is re-signed for the surface's own challenge: a proof computed for
 /// the daemon's challenge would not verify against the surface's, and the
 /// surface would refuse the connection.
+///
+/// Every other field is the adapter's own, passed through verbatim. The first
+/// version re-listed them by hand and dropped `upstreamCommit` doing it — which
+/// the TypeScript client requires, so every surface handshake failed with
+/// `malformed response` and the cross-language test that would have caught it
+/// documented that same failure as its proof of being non-vacuous. Copying a
+/// known set of keys is a list that goes stale the moment the adapter grows one;
+/// overriding four keys is a rule that does not.
 pub fn hello_result(handle: &AdapterView, challenge: &str, request_id: &Value) -> Value {
     let identity = &handle.identity;
     let proof = challenge_proof(&handle.token, challenge, &handle.instance_id);
-    json!({
-        "type": "studio.hello.result",
-        "requestId": request_id,
-        "selectedProtocolVersion": identity.get("selectedProtocolVersion").cloned().unwrap_or(json!(PROTOCOL_VERSION)),
-        "runtimeVersion": identity.get("runtimeVersion").cloned().unwrap_or(Value::Null),
-        "upstreamVersion": identity.get("upstreamVersion").cloned().unwrap_or(Value::Null),
-        "runtimeInstanceId": handle.instance_id,
-        "runtimeEpoch": handle.epoch,
-        "capabilityManifest": identity.get("capabilityManifest").cloned().unwrap_or(Value::Null),
-        "commandManifestHash": identity.get("commandManifestHash").cloned().unwrap_or(Value::Null),
-        "stateVersion": identity.get("stateVersion").cloned().unwrap_or(json!(0)),
-        "challengeProof": proof,
-    })
+    let mut body = identity.clone();
+    if let Some(map) = body.as_object_mut() {
+        map.insert("requestId".to_string(), request_id.clone());
+        map.insert("runtimeInstanceId".to_string(), json!(handle.instance_id));
+        map.insert("runtimeEpoch".to_string(), json!(handle.epoch));
+        map.insert("challengeProof".to_string(), json!(proof));
+    }
+    body
 }
 
 impl AdapterHandle {

@@ -35,11 +35,13 @@ fn find_step() -> Option<String> {
 /// A wrapper that runs the shared fake CLI, so the adapter can be pointed at a
 /// script instead of a single executable.
 fn fake_step_wrapper(dir: &std::path::Path) -> PathBuf {
+    // Next to the tests that use it. It used to live in
+    // `packages/runtime-stepcode/test/`, which was deleted as dead code — and
+    // these tests then pointed at a file that no longer existed, wrote a wrapper
+    // that exec'd nothing, and failed with "the dialog never reached the Host"
+    // rather than "fixture missing". A fixture belongs with its consumers.
     let fake = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("repo root")
-        .join("packages/runtime-stepcode/test/fake-step.mjs");
+        .join("tests/fixtures/fake-step.mjs");
     let wrapper = dir.join("fake-step");
     std::fs::write(
         &wrapper,
@@ -682,7 +684,7 @@ fn a_new_session_mints_a_fresh_session_id() {
 #[test]
 fn a_turn_settles_when_the_cli_dies_mid_turn() {
     // The fake CLI exits on the word "die" without settling. Nothing will ever
-    // produce `agent_settled` then, so without an explicit check the Host waits
+    // produce `session_settled` then, so without an explicit check the Host waits
     // forever and the shell sits on "streaming" with a Stop button that talks
     // to a dead process. The TypeScript adapter settles on exit; this pins the
     // same guarantee for the Rust one.

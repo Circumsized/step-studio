@@ -83,8 +83,14 @@ fn fixture_store(tag: &str) -> std::path::PathBuf {
         "type": "session", "id": "s-1", "cwd": "/home/ubuntu/ws",
         "timestamp": "2026-11-13T00:00:00.000Z",
     });
+    // `parentSession`, not `origin: "subagent"`. The real CLI sets the former
+    // (`src/task/executor.ts`) and has no `origin` field at all; the reader used
+    // to match on `origin` and an id prefix, both invented, and reported an
+    // empty roster against 417 real sessions. A fixture that keeps the invented
+    // marker now agrees with nothing — it is the one place the wrong contract
+    // could still look right.
     let subagent = serde_json::json!({
-        "type": "session", "id": "subagent-explore", "origin": "subagent",
+        "type": "session", "id": "subagent-explore", "parentSession": "s-1",
         "cwd": "/home/ubuntu/ws", "timestamp": "2026-11-13T00:01:00.000Z",
     });
     let message = serde_json::json!({

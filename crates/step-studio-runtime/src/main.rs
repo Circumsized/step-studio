@@ -1,7 +1,7 @@
 //! Step Studio's Studio Bridge adapter in Rust.
 //!
 //! Speaks the same framed protocol the Host expects, and drives
-//! `step --mode rpc --include-live-events` behind it. The TypeScript adapter
+//! `step --mode rpc` behind it. The TypeScript adapter
 //! this replaces was 64 MB of Node doing frame codec and JSONL forwarding.
 
 use step_studio_runtime::bridge_server::Runtime;

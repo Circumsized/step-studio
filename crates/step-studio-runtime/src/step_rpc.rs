@@ -1,4 +1,4 @@
-//! JSONL client for `step --mode rpc --include-live-events`.
+//! JSONL client for `step --mode rpc`.
 //!
 //! Requests are one JSON object per line on stdin, correlated by `id`.
 //! Responses carry that id back; everything else on stdout is an event.
@@ -71,11 +71,16 @@ impl StepRpc {
     pub fn spawn(launch: &StepLaunch) -> Result<Self, StepError> {
         // The CLI reads commands from stdin and writes frames to stdout, so
         // both must be pipes; stderr is inherited so its diagnostics surface.
+        // `--include-live-events` was removed here on 2026-11-14: the pinned
+        // Runtime (18.13.2) has no such flag and exits 2 on it, so the adapter
+        // could not start the real CLI at all. That surfaced as a spawn error
+        // rather than a protocol error, which is why every "real CLI" test
+        // skipped instead of going red. Live events are on by default in
+        // `rpc-mode.ts` — `RpcSessionEventForwarder` starts with no filter and
+        // forwards everything; the opt-out is now the `set_event_filter`
+        // command, which this adapter does not send.
         let mut command = Command::new(&launch.command);
-        command
-            .arg("--mode")
-            .arg("rpc")
-            .arg("--include-live-events");
+        command.arg("--mode").arg("rpc");
         if launch.continue_session {
             command.arg("--continue");
         }
@@ -214,7 +219,13 @@ impl StepRpc {
     }
 
     /// Fire a request without waiting for its response.
-    pub fn send(&mut self, kind: &str, payload: Value) -> Result<(), StepError> {
+    ///
+    /// Returns the id it was sent under, so a caller can recognise the CLI's
+    /// eventual `prompt_result` — which carries that id back — among the other
+    /// frames on the stream. A `send` that throws the id away leaves the caller
+    /// matching on event *kind* alone, and more than one kind of frame can
+    /// describe the end of a turn.
+    pub fn send(&mut self, kind: &str, payload: Value) -> Result<String, StepError> {
         if self.exited {
             return Err(StepError::Closed("process has exited".to_string()));
         }
@@ -225,7 +236,8 @@ impl StepRpc {
             map.insert("id".to_string(), json!(id));
             map.insert("type".to_string(), json!(kind));
         }
-        self.write(&request)
+        self.write(&request)?;
+        Ok(id)
     }
 
     /// Next buffered event, if any. Events buffered while a request was in

@@ -1085,10 +1085,14 @@ fn watch(daemon: Arc<Daemon>) {
 fn parse_args(args: impl Iterator<Item = String>) -> Result<Config, String> {
     let mut config = Config {
         endpoint: lifecycle::default_endpoint(),
-        adapter_endpoint: std::env::temp_dir()
-            .join("step-studio-adapter.sock")
-            .to_string_lossy()
-            .to_string(),
+        // Derived from this daemon's own endpoint, never a fixed path in the
+        // temp dir. It was `temp_dir()/step-studio-adapter.sock`, which two
+        // daemons — or one daemon and a stale adapter from a previous run —
+        // collide on: the second one binds nothing, connects to the first
+        // one's adapter, and serves a different daemon's runtime under its own
+        // epoch. That is how a rebuilt binary kept failing exactly like the
+        // unrebuilt one, with nothing in the log to say why.
+        adapter_endpoint: String::new(),
         cwd: std::env::var("STEP_STUDIO_CWD").unwrap_or_else(|_| ".".to_string()),
         step_command: std::env::var("STEP_STUDIO_STEP_CMD").unwrap_or_else(|_| "step".to_string()),
         repo_root: String::new(),
@@ -1111,6 +1115,18 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Config, String> {
             }
             other => return Err(format!("unknown flag {other}")),
         }
+    }
+    // Paired with this daemon's endpoint unless the caller said otherwise, so
+    // two daemons on one machine never share an adapter socket. A daemon with
+    // its own endpoint but a shared adapter is the collision described at
+    // `adapter_endpoint`'s declaration.
+    if config.adapter_endpoint.is_empty() {
+        let endpoint = std::path::Path::new(&config.endpoint);
+        let stem = endpoint.file_stem().and_then(|s| s.to_str()).unwrap_or("daemon");
+        config.adapter_endpoint = endpoint
+            .with_file_name(format!("{stem}-adapter.sock"))
+            .to_string_lossy()
+            .to_string();
     }
     Ok(config)
 }

@@ -227,6 +227,8 @@ struct Session {
     state_version: u64,
     command_manifest_hash: String,
     pending_prompt: Option<String>,
+    /// The id the in-flight `prompt` was sent under; empty when none is.
+    prompt_request_id: String,
     /// A `usage.panel` request waiting for its panel, and when it gives up.
     ///
     /// Parked rather than waited for: holding the connection handler until the
@@ -461,9 +463,16 @@ impl Session {
                 }
                 self.receipt(&request_id, "accepted", None);
                 self.pending_prompt = Some(request_id);
-                if let Err(error) = self.step.send("prompt", json!({ "message": text })) {
-                    self.settle_prompt(Some(format!("step runtime could not start: {error}")));
-                }
+                // The id the CLI will echo back on `prompt_result`. Kept so the
+                // pump can tell this turn's result from any other frame that
+                // happens to describe an ending.
+                self.prompt_request_id = match self.step.send("prompt", json!({ "message": text })) {
+                    Ok(id) => id,
+                    Err(error) => {
+                        self.settle_prompt(Some(format!("step runtime could not start: {error}")));
+                        String::new()
+                    }
+                };
             }
             "core.steer" | "core.followUp" => {
                 let command = if kind == "core.steer" {
@@ -785,7 +794,15 @@ impl Session {
                 );
             }
             self.route_event(&event);
-            if kind == "agent_settled" {
+            // `session_settled`, not `agent_settled`: the pinned Runtime emits
+            // the former (`rpc-session-settle.ts`) and has no frame by the
+            // latter's name anywhere in its source. Matching the invented one
+            // meant no prompt ever settled, so the Host waited out its whole
+            // timeout and the shell sat on "streaming" with a Stop button wired
+            // to a finished turn. `prompt_result` is also watched because it
+            // carries the turn's own status, which is what a failed turn needs
+            // to report: `session_settled` says only that the session is quiet.
+            if kind == "session_settled" || (kind == "prompt_result" && event.get("id").and_then(|v| v.as_str()) == Some(&self.prompt_request_id)) {
                 let error = self.turn_error.take();
                 self.settle_prompt(error);
                 settled = true;
@@ -1045,6 +1062,7 @@ fn serve_connection(
         state_version: 0,
         command_manifest_hash: command_hash,
         pending_prompt: None,
+        prompt_request_id: String::new(),
         pending_usage: None,
         interactions: InteractionRegistry::default(),
     };

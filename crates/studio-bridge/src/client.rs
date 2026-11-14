@@ -128,9 +128,16 @@ impl BridgeSession {
             }
         };
 
-        // An empty `node` means the peer is already running and this session is
+        // Nothing to spawn means the peer is already running and this session is
         // only a client — used when the runtime under test is not one we spawn.
-        let child = if launch.node.is_empty() {
+        //
+        // The test is "is there a command at all", not "is `node` non-empty".
+        // Gating on `node` made the `command` field unreachable from here: a
+        // launch carrying only a native binary in `command` left `node` empty, so
+        // the session decided the peer was already up, never spawned anything, and
+        // then waited twenty seconds for a socket nobody was going to create.
+        let spawnable = !launch.node.is_empty() || !launch.command.is_empty();
+        let child = if !spawnable {
             None
         } else {
             let _ = std::fs::remove_file(&launch.socket_path);

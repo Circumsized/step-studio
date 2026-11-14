@@ -1,8 +1,20 @@
 //! `BridgeSession` end to end against the real adapter. The shell drives this
 //! from a thread, so a hang here is invisible in the UI — it just never
 //! becomes ready.
+//!
+//! The adapter under test is the Rust one, `step-studio-runtime`. It used to be
+//! the TypeScript adapter in `packages/runtime-stepcode`, which was deleted as
+//! dead code — the daemon launches the Rust binary — and these tests then
+//! pointed at a `main.js` that no longer existed. They failed as four hangs and
+//! a panic, which reads like a regression in `BridgeSession` rather than a
+//! missing fixture.
+//!
+//! The CLI behind it is the same fixture the runtime crate's e2e tests use,
+//! reached by path rather than by dependency: `studio-bridge` sits below
+//! `step-studio-runtime` and must not depend on it, and a test locating a binary
+//! by path needs no dependency at all.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use step_studio_bridge::{AdapterLaunch, BridgeSession};
@@ -15,31 +27,53 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// The Rust adapter, in whichever profile has been built.
+fn adapter_binary(root: &Path) -> Option<PathBuf> {
+    ["release", "debug"]
+        .iter()
+        .map(|profile| root.join("target").join(profile).join("step-studio-runtime"))
+        .find(|candidate| candidate.exists())
+}
+
+fn fake_step_wrapper(dir: &std::path::Path, root: &Path) -> PathBuf {
+    let fake = root.join("crates/step-studio-runtime/tests/fixtures/fake-step.mjs");
+    let wrapper = dir.join("fake-step");
+    std::fs::write(
+        &wrapper,
+        format!("#!/bin/sh\nexec node {} \"$@\"\n", fake.display()),
+    )
+    .expect("write wrapper");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755));
+    }
+    wrapper
+}
+
 fn launch(tag: &str) -> AdapterLaunch {
     let dir = std::env::temp_dir().join(format!("rust-session-{tag}-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&dir);
     let root = repo_root();
+    let adapter = adapter_binary(&root).expect("step-studio-runtime is not built; run cargo build -p step-studio-runtime");
     AdapterLaunch {
-        node: "node".to_string(),
-        adapter_script: root
-            .join("packages/runtime-stepcode/dist/src/main.js")
-            .to_string_lossy()
-            .to_string(),
+        node: String::new(),
+        adapter_script: String::new(),
         socket_path: dir.join("bridge.sock").to_string_lossy().to_string(),
         token_file: dir.join("token").to_string_lossy().to_string(),
         cwd: dir.to_string_lossy().to_string(),
         runtime_epoch: 1,
+        // A wrapper script, not `node <path>`: `StepRpc::spawn` hands
+        // `step_command` to `Command::new` as one executable, so a two-word
+        // value fails with ENOENT and the adapter reports a spawn error that
+        // looks like a missing CLI.
         env: vec![(
-            "STEP_STUDIO_RUNTIME_CMD".to_string(),
-            format!(
-                "node {}",
-                root.join("packages/runtime-stepcode/test/fake-step.mjs")
-                    .to_string_lossy()
-            ),
+            "STEP_STUDIO_STEP_CMD".to_string(),
+            fake_step_wrapper(&dir, &root).to_string_lossy().to_string(),
         )],
         // This session spawns the adapter, so it owns the token file.
         token: None,
-        command: Vec::new(),
+        command: vec![adapter.to_string_lossy().to_string()],
     }
 }
 

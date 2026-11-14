@@ -55,7 +55,12 @@ fn step_rpc_runs_a_turn_against_the_real_cli() {
         if !kinds.contains(&kind) {
             kinds.push(kind.clone());
         }
-        if kind == "agent_settled" {
+        // `session_settled` is the frame the CLI actually emits
+        // (`rpc-session-settle.ts`). This test waited on `agent_settled`, a name
+        // that appears nowhere in the Runtime's source, so it could only ever
+        // end in the panic below — and it is a skip-by-default test, so nobody
+        // ran it with a CLI present to find that out.
+        if kind == "session_settled" {
             eprintln!("settled after seeing: {kinds:?}");
             return;
         }

@@ -75,7 +75,14 @@ const describeReal = stepCommand === undefined || daemonBinary() === undefined ?
 
 describeReal("the Rust adapter drives the real Step CLI", { timeout: 180_000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), "step-studio-real-rust-"));
-  const token = "real-step-token";
+  // The bridge token is a fixed shared literal, not a per-install secret: the
+  // daemon writes `"step-studio"` into the token file it owns
+  // (`adapter.rs:107`) and the shell hardcodes the same constant
+  // (`bridge.rs:508`). The first version of this test invented its own token
+  // and wrote it to `dir/token` — a file the daemon never reads — so the
+  // challenge proof was signed with one token and verified with another, and
+  // the handshake failed `UNAUTHENTICATED` no matter what the adapter did.
+  const token = "step-studio";
   writeFileSync(join(dir, "token"), token);
   const socketPath = join(dir, "bridge.sock");
 
@@ -100,15 +107,18 @@ describeReal("the Rust adapter drives the real Step CLI", { timeout: 180_000 }, 
     // it. `RequestId` is a branded type, so minting one outside the client needs
     // the same cast the client itself uses (`bridge-client.ts:218`) — a brand is a
     // compile-time marker, and this is the one place a test legitimately crosses it.
-    let promptId = "";
+    //
+    // Minted *at the call site*, not captured from `createRequestId`: that hook
+    // fires for the hello and the snapshot too, so whatever it last returned is
+    // the snapshot's id. Reusing it sent the prompt under an id the daemon had
+    // already routed and settled, which the daemon reports as "request … was
+    // already waiting on surface 1; surface 1 took it over" — and the client then
+    // waits on a receipt that belongs to a request it already finished.
+    const promptId = crypto.randomUUID();
     const client = new StudioBridgeClient({
       endpoint: socketPath,
       token,
       requestTimeoutMs: 150_000,
-      createRequestId: () => {
-        promptId = crypto.randomUUID();
-        return promptId;
-      },
       onEvent: event => {
         const payload = event.event as { kind?: string; delta?: string; toolName?: string };
         if (payload.kind === "conversation.message.delta") deltas.push(payload.delta ?? "");

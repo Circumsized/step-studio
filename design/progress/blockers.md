@@ -11,19 +11,24 @@ M5.4 门禁实测回填 + RSS 曲线 + 托盘跳帧 + 两种壳产物对比；M5
 **已做的替代**：Windows 交叉编译门禁从「一直红」修到「剩 6 个错误、全部位于
 `serve_surface` 一个函数里」，且正确的 Windows 设计已记录（`set_read_timeout` 交错读写）。
 
-## B2 — 无 step CLI
+## B2 — 无 step CLI —— **已解除（2026-11-14）**
 
-**卡住**：M0 验收④「一个真实 turn 端到端」；M4 的 Agent 状态监控数据面；`real-cli` 类测试
+**曾经卡住**：M0 验收④「一个真实 turn 端到端」；M4 的 Agent 状态监控数据面；`real-cli` 类测试
 全部 skip。
 
-**进展**（2026-11-13）：
-- `npm run omp:install-deps` 成功，403 包装好
-- `packages/natives` 的 Rust 编译（bazel/napi 路线）尚未通过——它要 nightly toolchain 且磁盘曾满
-- **替代方案**：协议替身。适配器与 CLI 的契约由 `crates/step-studio-runtime/src/step_rpc.rs`
-  定义（stdin 一行 JSON 请求 / stdout 一行 JSON response，其余为 event）。替身实现同一契约，
-  即可驱动「壳 ↔ 适配器 ↔ CLI」三段接线——而要验的正是接线，不是 CLI 本身。
+**解除方式**：`npm run omp:overlay:apply` + `npm run omp:build:host` 构建出
+`omp/18.13.2-studio.10`（240 MB，含 `--mode studio-host`），经 `~/.local/bin/step` 上 PATH。
+构建前置：`cmake` 与 `ninja-build`（apt 安装，磁盘原先 100% 满）。
 
-**解除需要**： natives 编译通过，或一台有 step 的机器。
+解除过程中修掉四个跨层契约错误，详见 `m5.md` 的「B2 解除记录」。其中最关键的一条：
+`agent_settled` 这个回合结束事件**在 Runtime 源码里根本不存在**，适配器一直在等它，于是没有
+任何回合被结算——而所有相关测试要么 skip，要么用一个同样发虚构事件的替身，所以一直是绿的。
+
+**现在的状态**：`cargo test -p step-studio-{bridge,runtime,host,sessions,tui}` 全绿；
+`real-runtime-adapter.test.js` 用真 CLI 通过。
+
+**仍需本机之外的条件**：真实 turn 要有额度的模型。当前默认 `stepfun-cn/step-3.7-flash`；
+原来的 `autoclaw-cn/zaicoding_glm-5.3` 返回 402 积分不足。
 
 ## B3 — 像素级签收要人眼
 

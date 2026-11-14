@@ -53,7 +53,12 @@ impl Daemon {
             &step,
             format!(
                 "#!/bin/sh\nexec node {}\n",
-                root.join("packages/runtime-stepcode/test/fake-step.mjs")
+                // The same fixture the runtime crate's e2e tests use, reached by
+                // path. It used to live in `packages/runtime-stepcode/test/`,
+                // which was deleted as dead code — and these tests then wrote a
+                // wrapper that exec'd nothing, so every turn came back `failed`
+                // with a spawn error that looked like a runtime regression.
+                root.join("crates/step-studio-runtime/tests/fixtures/fake-step.mjs")
                     .to_string_lossy()
             ),
         )
