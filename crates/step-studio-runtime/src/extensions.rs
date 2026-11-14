@@ -130,7 +130,13 @@ pub fn list_extensions(root: Option<&Path>) -> Vec<Value> {
 /// skills surface — there is no separate skills registry to read.
 pub fn list_commands(step: &mut StepRpc) -> Result<Vec<Value>, String> {
     let catalog = step
-        .request("get_commands", json!({}), std::time::Duration::from_secs(10))
+        // `get_available_commands`, not `get_commands`. The pinned Runtime has no
+        // `get_commands` case at all — it falls through to `default:` and answers
+        // `Unknown command: get_commands`, and upstream asserts that failure in
+        // `rpc-compatible-primitives.test.ts`. So `session.commands.list`, declared
+        // `stable` and mapped to `skills.get` by the Tauri shell, could never
+        // succeed against the real CLI. The response shape `{commands}` is the same.
+        .request("get_available_commands", json!({}), std::time::Duration::from_secs(10))
         .map_err(|e| e.to_string())?;
     Ok(catalog
         .get("commands")

@@ -222,9 +222,7 @@ struct Session {
     shutting_down: bool,
     /// When a shutdown request stops waiting for the turn in flight. `None`
     /// until a shutdown is asked for.
-    shutdown_deadline: Option<Instant>,
-    turn_error: Option<String>,
-    state_version: u64,
+    shutdown_deadline: Option<Instant>,    state_version: u64,
     command_manifest_hash: String,
     pending_prompt: Option<String>,
     /// The id the in-flight `prompt` was sent under; empty when none is.
@@ -803,7 +801,19 @@ impl Session {
             // carries the turn's own status, which is what a failed turn needs
             // to report: `session_settled` says only that the session is quiet.
             if kind == "session_settled" || (kind == "prompt_result" && event.get("id").and_then(|v| v.as_str()) == Some(&self.prompt_request_id)) {
-                let error = self.turn_error.take();
+                // The turn's own verdict comes from `prompt_result`, which is the
+                // only frame carrying one (`RpcPromptResultFrame`: `status` plus
+                // `error{message, provider, model, httpStatus, retable}`).
+                // `session_settled` says only that the session went quiet, so it
+                // cannot distinguish a finished turn from a failed one.
+                //
+                // This used to read a `turn_error` field that was declared,
+                // initialised to `None` and never written anywhere in the crate —
+                // so a turn whose `prompt_result` was `status:"error"` settled the
+                // Studio prompt as `completed {ok:true}`. The field's own comment
+                // described exactly the behaviour that did not exist. It is gone;
+                // the frame is the source of truth.
+                let error = prompt_failure(&event);
                 self.settle_prompt(error);
                 settled = true;
                 break;
@@ -1018,6 +1028,34 @@ fn step_epoch_placeholder() -> Value {
 
 /// Whether a confirm answer approves. The Studio contract's approval values
 /// are `true`, `"once"`, `"session"` or a grant object; anything else denies.
+/// Why a turn failed, read off the `prompt_result` frame that says so.
+///
+/// `None` for every other frame and for every non-error status — including
+/// `aborted`, which `e2e.rs` deliberately pins as settling `completed`, because an
+/// abort is something the user asked for rather than something that went wrong.
+fn prompt_failure(event: &Value) -> Option<String> {
+    if event.get("type").and_then(|v| v.as_str()) != Some("prompt_result") {
+        return None;
+    }
+    if event.get("status").and_then(|v| v.as_str()) != Some("error") {
+        return None;
+    }
+    let message = event
+        .pointer("/error/message")
+        .and_then(|m| m.as_str())
+        .filter(|m| !m.is_empty())
+        .unwrap_or("the turn failed");
+    // Provider and model are what make the message actionable: the same text
+    // means different things from different providers, and the shell shows this
+    // string to a user deciding whether to retry.
+    let context = ["provider", "model"]
+        .iter()
+        .filter_map(|key| event.pointer(&format!("/error/{key}")).and_then(|v| v.as_str()))
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(if context.is_empty() { message.to_string() } else { format!("{message} ({context})") })
+}
+
 fn is_affirmative(value: Option<&Value>) -> bool {
     match value {
         Some(Value::Bool(true)) => true,
@@ -1058,7 +1096,6 @@ fn serve_connection(
         terminal,
         shutting_down: false,
         shutdown_deadline: None,
-        turn_error: None,
         state_version: 0,
         command_manifest_hash: command_hash,
         pending_prompt: None,

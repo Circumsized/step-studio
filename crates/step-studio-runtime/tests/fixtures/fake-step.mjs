@@ -119,6 +119,22 @@ rl.on("line", line => {
       write({ type: "session_settled" });
       return;
     }
+    // A turn that fails at the provider: the real CLI answers `prompt_result`
+    // with `status:"error"` and the error object (`message`, `provider`, `model`,
+    // `retryable`, `httpStatus`). The fixture used to have no such branch, so the
+    // adapter's failure path was never exercised — and the adapter read a
+    // `turn_error` field that nothing ever wrote, so a failed turn settled the
+    // Studio prompt as `completed {ok:true}`. Both sides were wrong together.
+    if (text === "fail") {
+      write({ type: "agent_start" });
+      write({ type: "message_start", message: userMessage(text) });
+      write({ type: "message_end", message: userMessage(text) });
+      write({ type: "agent_end", willRetry: false, messageCount: 1 });
+      write({ type: "prompt_result", id: message.id, agentInvoked: true, status: "error",
+        error: { message: "provider said no", provider: "fake-gateway", model: "fake-model", retryable: false, httpStatus: 402 } });
+      write({ type: "session_settled" });
+      return;
+    }
     // Mid-turn death: no session_settled will ever follow.
     if (text === "die") {
       setTimeout(() => process.exit(3), 5);

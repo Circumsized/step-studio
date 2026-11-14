@@ -711,6 +711,82 @@ fn a_new_session_mints_a_fresh_session_id() {
 }
 
 #[test]
+fn a_failed_turn_settles_as_failed_not_completed() {
+    // The turn's verdict lives on `prompt_result`, and it used to be read from a
+    // `turn_error` field that was declared, initialised to `None` and never
+    // written anywhere in the crate. So a turn whose `prompt_result` was
+    // `status:"error"` settled the Studio prompt as `completed {ok:true}` — a
+    // failed turn reported as a success, which is the worst shape a bug can take
+    // because nothing downstream can tell.
+    //
+    // Verified against the real CLI too: with a model that returns 402, the
+    // adapter now answers `turn failed: 402 … 积分不足` rather than `completed`.
+    let dir = std::env::temp_dir().join(format!("rust-failturn-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let (config, _) = config_in(&dir, fake_step_wrapper(&dir).to_string_lossy().to_string());
+
+    let runtime = Runtime::new(AdapterConfig {
+        endpoint: config.endpoint.clone(),
+        token: config.token.clone(),
+        runtime_epoch: config.runtime_epoch,
+        cwd: config.cwd.clone(),
+        step_command: config.step_command.clone(),
+        step_env: config.step_env.clone(),
+        continue_session: false,
+        exit_on_disconnect: false,
+    });
+    std::thread::spawn(move || {
+        let _ = runtime.serve();
+    });
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !std::path::Path::new(&config.endpoint).exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    let session = BridgeSession::connect(&AdapterLaunch {
+        node: String::new(),
+        adapter_script: String::new(),
+        socket_path: config.endpoint.clone(),
+        token_file: String::new(),
+        cwd: config.cwd.clone(),
+        runtime_epoch: config.runtime_epoch,
+        env: Vec::new(),
+        token: Some(config.token.clone()),
+        command: Vec::new(),
+    })
+    .expect("connect to the Rust adapter");
+
+    let (receipt, _events) = session
+        .invoke(serde_json::json!({ "kind": "core.prompt", "text": "fail" }))
+        .expect("the failed turn still answers");
+
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("failed"),
+        "a turn the CLI reported as an error must not settle as a success: {}",
+        receipt
+    );
+    let message = receipt
+        .pointer("/error/message")
+        .and_then(|m| m.as_str())
+        .unwrap_or("");
+    assert!(
+        message.contains("provider said no"),
+        "the provider's own message must reach the shell: {message}"
+    );
+    // Provider and model are what make it actionable, so they travel with it.
+    assert!(
+        message.contains("fake-gateway") && message.contains("fake-model"),
+        "the error must name the provider and model: {message}"
+    );
+}
+
+#[test]
 fn a_turn_settles_when_the_cli_dies_mid_turn() {
     // The fake CLI exits on the word "die" without settling. Nothing will ever
     // produce `session_settled` then, so without an explicit check the Host waits
