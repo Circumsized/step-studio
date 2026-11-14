@@ -979,6 +979,16 @@ const zhRaw = {
     "disabledInSession": "当前会话不可用",
     "demoMcpConnected": "演示：已连接（{count} 个工具）"
   },
+  "agent": {
+    "status.starting": "启动中",
+    "status.running": "运行中",
+    "status.idle": "空闲",
+    "status.parked": "已暂停",
+    "status.reviving": "唤醒中",
+    "status.aborted": "已中止",
+    "status.failed": "失败",
+    "status.released": "已释放",
+  },
   "agentHub": {
     "title": "Agent Hub",
     "subtitle": "多代理名册、状态监控与协同管理",

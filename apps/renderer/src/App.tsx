@@ -334,6 +334,52 @@ function isSecondary(route: Route): route is SecondaryRoute {
   return route === "home" || route === "history" || route === "agent-hub" || route === "capabilities" || route === "model-config" || route === "settings" || route === "diagnostics" || route === "media" || route === "evaluation" || route === "statistics";
 }
 
+/** Status tone per `AgentStatus`, shared by the live and preview agent cards.
+ *
+ * The preview panel had its own map and the live one used a flat grey chip, so
+ * the same status read as coloured in the demo and colourless in the product. */
+const AGENT_STATUS_TONE: Record<string, string> = {
+  starting: "gray",
+  running: "blue",
+  idle: "gray",
+  parked: "amber",
+  reviving: "amber",
+  aborted: "amber",
+  failed: "red",
+  released: "gray",
+};
+
+/** The status word a card shows. Contract terms are English; the UI is not. */
+export function agentStatusLabel(status: string, t: (key: string) => string): string {
+  switch (status) {
+    case "starting": return t("agent.status.starting");
+    case "running": return t("agent.status.running");
+    case "idle": return t("agent.status.idle");
+    case "parked": return t("agent.status.parked");
+    case "reviving": return t("agent.status.reviving");
+    case "aborted": return t("agent.status.aborted");
+    case "failed": return t("agent.status.failed");
+    case "released": return t("agent.status.released");
+    default: return status;
+  }
+}
+
+/** `durationMs` as the compact string the reference cards show (`6m 12s`). */
+export function formatAgentDuration(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  if (total < 60) return `${total}s`;
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  if (minutes < 60) return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+/** Tokens as `48.2k`, the way the reference cards and the preview both show them. */
+export function formatAgentTokens(tokens: number): string {
+  if (tokens < 1000) return String(tokens);
+  return `${(tokens / 1000).toFixed(1)}k`;
+}
+
 const SECONDARY_META: Record<SecondaryRoute, { titleKey: string; icon: string }> = {
   statistics: {titleKey:"nav.statistics",icon:"pulse"},
   home: { titleKey: "nav.home", icon: "home" },
@@ -6281,6 +6327,7 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
                 rosterAgents.length ? (
                   rosterAgents.map((agent) => (
                     <div className="agent-row" key={agent.agentId}>
+                      <span className="ag-tree" aria-hidden="true">{agent.parentAgentId ? "└" : ""}</span>
                       <span className="ag-ic" aria-hidden="true"><Icon name="bot" extra="sm" /></span>
                       <div className="ag-main">
                         <button
@@ -6290,10 +6337,24 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
                         >
                           <span className="ag-name">
                             {agent.displayName}
-                            <span className="chip gray xs">{agent.status}</span>
+                            <span className={`chip ${AGENT_STATUS_TONE[agent.status] ?? "gray"} xs`}>{agentStatusLabel(agent.status, t)}</span>
                           </span>
                           <span className="ag-task">{agent.assignment ?? agent.summary ?? "—"}</span>
-                          <span className="ag-meta">gen {agent.generation}{agent.parentAgentId ? ` · of ${agent.parentAgentId}` : ""}</span>
+                          {/* What it is doing now, from the contract's own `stage`.
+                              The preview panel has had this line all along; the live
+                              one was rendering `gen N · of <parent>` here instead,
+                              which is identity, not activity — so the panel that
+                              shows a real agent said strictly less than the demo. */}
+                          <span className="ag-act"><Icon name="zap" extra="sm" />{agent.stage ?? agentStatusLabel(agent.status, t)}</span>
+                          <span className="ag-meta">
+                            {/* `usage` is cumulative per-agent and already in the
+                                contract; dropping it is why the live panel had no
+                                numbers where the reference and the preview both do. */}
+                            {agent.usage ? <span>{formatAgentDuration(agent.usage.durationMs)}</span> : null}
+                            {agent.usage ? <span>{formatAgentTokens(agent.usage.tokens)} tok{agent.usage.cost > 0 ? ` · ¥ ${agent.usage.cost.toFixed(2)}` : ""}</span> : null}
+                            {agent.resolvedModel ? <span>{agent.resolvedModel}</span> : null}
+                            {agent.usage ? null : <span>gen {agent.generation}{agent.parentAgentId ? ` · of ${agent.parentAgentId}` : ""}</span>}
+                          </span>
                         </button>
                       </div>
                       <div className="ag-acts">

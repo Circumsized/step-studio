@@ -979,6 +979,16 @@ export const en: LocaleDictionary = {
     "disabledInSession": "Unavailable in current session",
     "demoMcpConnected": "Demo: connected ({count} tools)"
   },
+  "agent": {
+    "status.starting": "Starting",
+    "status.running": "Running",
+    "status.idle": "Idle",
+    "status.parked": "Parked",
+    "status.reviving": "Reviving",
+    "status.aborted": "Aborted",
+    "status.failed": "Failed",
+    "status.released": "Released",
+  },
   "agentHub": {
     "title": "Agent Hub",
     "subtitle": "Multi-agent roster, lifecycle monitoring, and collaboration",
