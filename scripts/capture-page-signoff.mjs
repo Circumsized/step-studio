@@ -50,6 +50,144 @@ const PAGES = [
   ["evaluation", "评估 / Evaluation"],
 ];
 
+// Workbench *states*, not routes: the reference set in
+// `ui_reference/ver2/__shots/` is mostly the same page with a different panel
+// open, and a route parameter cannot reach those. Each entry drives the live UI
+// the way a user would — clicking the tab, opening the panel — because the state
+// belongs to the app, not to the URL.
+//
+// `null` marks a scenario that cannot be reached without a live turn or a failed
+// environment: streaming, approval and env-fail need the real runtime. They are
+// listed so the gap is named rather than silently absent.
+const SCENARIOS = [
+  {
+    // Not a distinct state: the bottom panel is open on "Step Logs" by default on
+    // this route, so this captures the workbench as it first paints. Kept because
+    // `light-wb-bottom.png` is a reference for exactly that, and because dropping
+    // it would hide the fact that the default view is already the bottom panel.
+    id: "wb-bottom",
+    label: "工作台 · 底部面板（默认态）",
+    reference: "light-wb-bottom.png",
+    drive: async (page) => {
+      await page.getByRole("tab", { name: "Step Logs" }).click();
+    },
+  },
+  {
+    id: "wb-terminal",
+    label: "工作台 · 终端",
+    reference: null,
+    drive: async (page) => {
+      await page.getByRole("tab", { name: "Terminal" }).click();
+    },
+  },
+  {
+    id: "wb-problems",
+    label: "工作台 · Problems",
+    reference: null,
+    drive: async (page) => {
+      await page.getByRole("tab", { name: "Problems" }).click();
+    },
+  },
+  {
+    id: "wb-pvlogs",
+    label: "工作台 · Preview Logs",
+    reference: "light-wb-preview.png",
+    drive: async (page) => {
+      await page.getByRole("tab", { name: "Preview Logs" }).click();
+    },
+  },
+  {
+    id: "wb-agents",
+    label: "工作台 · Agents 侧栏",
+    reference: "light-wb-agents.png",
+    drive: async (page) => {
+      await openSidePanel(page);
+      await page.getByRole("tab", { name: /Agents/ }).click();
+    },
+  },
+  {
+    id: "wb-diff-split",
+    label: "工作台 · Changes 分屏",
+    reference: "light-wb-diff-split.png",
+    drive: async (page) => {
+      await openSidePanel(page);
+      await page.getByRole("tab", { name: /Changes/ }).click();
+      // The bottom panel is open by default and covers the lower half, so a
+      // Changes capture with it up is the default view again — which is what the
+      // duplicate check reported. Collapse it so the diff is the subject.
+      const collapse = page.locator('button[aria-controls="bottomPanel"]');
+      if ((await collapse.count()) > 0 && (await collapse.first().getAttribute("aria-expanded")) === "true") {
+        await collapse.first().click();
+        await page.waitForTimeout(400);
+      }
+    },
+  },
+  {
+    id: "wb-git",
+    label: "工作台 · Git 侧栏",
+    reference: null,
+    drive: async (page) => {
+      await openSidePanel(page);
+      await page.getByRole("tab", { name: /Git/ }).click();
+    },
+  },
+  {
+    id: "wb-preview",
+    label: "工作台 · Preview 侧栏",
+    reference: null,
+    drive: async (page) => {
+      await openSidePanel(page);
+      // `t("browser.title")` — 浏览器 / Browser. Matching /Preview/ here found the
+      // bottom panel's "Preview Logs" instead, so this scenario was a second copy
+      // of `wb-pvlogs` with a different filename.
+      await page.getByRole("tab", { name: /浏览器|Browser/ }).click();
+    },
+  },
+  {
+    id: "wb-streaming",
+    label: "工作台 · 流式回合",
+    reference: "light-wb-streaming.png",
+    // Needs a live turn. Preview fixtures have no streaming composer state, and
+    // faking one would produce a screenshot that looks like evidence of a thing
+    // that never happened — the same failure as the ten identical pages.
+    drive: null,
+  },
+  {
+    id: "wb-approval",
+    label: "工作台 · 审批对话框",
+    reference: "light-wb-approval.png",
+    drive: null,
+  },
+  {
+    id: "wb-minimap",
+    label: "工作台 · Minimap",
+    reference: "light-wb-minimap.png",
+    drive: null,
+  },
+  {
+    id: "env-fail",
+    label: "环境失败态",
+    reference: "light-env-fail.png",
+    drive: null,
+  },
+  {
+    id: "palette",
+    label: "命令面板",
+    reference: "light-palette.png",
+    drive: async (page) => {
+      await page.keyboard.press("Control+k");
+    },
+  },
+  {
+    id: "project-home",
+    label: "项目主页",
+    reference: "light-project-home.png",
+    drive: async (page) => {
+      await page.getByRole("button", { name: /项目与对话|PROJECTS/ }).first().click().catch(() => undefined);
+    },
+  },
+];
+
 async function quiet(page) {
   await page.addStyleTag({
     content: `
@@ -112,6 +250,55 @@ if (digests.size !== PAGES.length) {
   console.error(`\n${PAGES.length - digests.size} page(s) captured an image another page already produced.`);
   console.error("The sign-off is not evidence until each page is distinct.");
   process.exitCode = 4;
+}
+
+/** Make sure the right-hand panel is open, so a click on one of its tabs lands.
+ *
+ * The panel is open by default on this route, and clicking its toggle when it is
+ * already open *closes* it — which is how the first version of these scenarios
+ * captured byte-identical images: the tabs vanished from the DOM, the click threw,
+ * and the screenshot was of the page as it was. So this only clicks when the
+ * panel is actually shut, and reads `aria-expanded` rather than assuming. */
+async function openSidePanel(page) {
+  const toggle = page.locator('button[aria-controls="sidePanel"]');
+  if (await toggle.count() === 0) throw new Error("no side-panel toggle in the DOM");
+  if ((await toggle.first().getAttribute("aria-expanded")) !== "true") {
+    await toggle.first().click();
+    await page.waitForTimeout(400);
+  }
+}
+
+// Workbench states. Each starts from a fresh navigation so one scenario's open
+// panel cannot leak into the next.
+const reachable = SCENARIOS.filter((scenario) => scenario.drive !== null);
+const unreachable = SCENARIOS.filter((scenario) => scenario.drive === null);
+for (const scenario of reachable) {
+  await page.goto(`${base}&route=workbench&theme=${dark ? "dark" : "light"}&lang=${lang}`, { waitUntil: "networkidle" }).catch(() => undefined);
+  await page.waitForTimeout(600);
+  await quiet(page);
+  try {
+    await scenario.drive(page);
+    await page.waitForTimeout(700);
+  } catch (error) {
+    console.error(`${scenario.label} -> could not be driven: ${error.message.split("\n")[0]}`);
+    process.exitCode = 5;
+    continue;
+  }
+  const dest = path.join(outDir, `${scenario.id}.${suffix}.png`);
+  await page.screenshot({ path: dest, animations: "disabled" });
+  const { createHash } = await import("node:crypto");
+  const { readFile } = await import("node:fs/promises");
+  const digest = createHash("sha256").update(await readFile(dest)).digest("hex");
+  if (digests.has(digest)) {
+    console.error(`${scenario.label} -> ${path.relative(root, dest)}  DUPLICATE of ${digests.get(digest)}: the state did not change`);
+    process.exitCode = 4;
+  } else {
+    digests.set(digest, scenario.id);
+    console.log(`${scenario.label} -> ${path.relative(root, dest)}${scenario.reference ? `  [ref: ${scenario.reference}]` : ""}`);
+  }
+}
+for (const scenario of unreachable) {
+  console.log(`${scenario.label} -> skipped: needs a live turn or a failed environment${scenario.reference ? `  [ref: ${scenario.reference}]` : ""}`);
 }
 
 await browser.close();

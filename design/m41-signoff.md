@@ -58,67 +58,82 @@ capture.xwd: 1280x800 -> out.png
 
 ## 本轮产出
 
-`design/signoff/*.zh.png`，10 张，1658×846，互异（md5 去重 = 10）：
+`design/signoff/*.zh.png`，**20 张，1658×846，全部互异**（md5 去重 = 20/20）：
 
-| 文件 | 页面 |
-| --- | --- |
-| `home.zh.png` | 首页（工作台） |
-| `history.zh.png` | 会话历史 |
-| `settings.zh.png` | 设置 |
-| `diagnostics.zh.png` | 诊断中心 |
-| `capabilities.zh.png` | 能力中心 |
-| `model-config.zh.png` | 模型配置 |
-| `agent-hub.zh.png` | Agent Hub |
-| `media.zh.png` | 媒体 |
-| `evaluation.zh.png` | 评测 |
-| `workbench.zh.png` | 工作台 |
+10 个路由页 + 10 个工作台状态。
 
 复现：起 dev server（`cd apps/renderer && npx vite --port 5179`）后
 `node scripts/capture-page-signoff.mjs --out design/signoff`。
 
-## 首轮逐页比对（三态：齐 / 空 / 缺）
+工作台状态不是路由能到达的——参考集里大部分是**同一页开不同面板**。所以脚本用
+Playwright 直接驱活 UI（点页签、开侧栏、收底栏、按 Ctrl+K），而不是给 renderer 加
+查询参数。四个场景驱不动，脚本**明确跳过并说明原因**，不留静默缺口：
 
-只记我能从图里直接读出的。**逐模块像素判定仍然要人眼**——下面是结构比对，不是像素比对。
+| 场景 | 参考图 | 为什么跳过 |
+| --- | --- | --- |
+| 流式回合 | `light-wb-streaming.png` | 要一个真实 turn；预览夹具没有流式 composer 状态，伪造一张会变成「看起来像证据的假图」——正是那十张相同图犯的错 |
+| 审批对话框 | `light-wb-approval.png` | 同上 |
+| Minimap | `light-wb-minimap.png` | 同上 |
+| 环境失败态 | `light-env-fail.png` | 要一个失败的环境 |
 
-### 设置页：`settings.zh.png` ↔ `ui_reference/ver2/__shots/light-settings-perms.png`
+驱活过程中脚本自己抓到三个会静默出错的地方，都已修并留注释：
+
+- 侧栏页签在侧栏**关闭时不在 DOM 里**，而侧栏在这条路由上**默认是开的**——所以
+  「先点开侧栏」的辅助函数反而把它关了，点击抛异常，截图落在原始状态。现在读
+  `aria-expanded` 再决定要不要点。
+- Preview 侧栏页签的中文名是**「浏览器」**（`t("browser.title")`）。用 `/Preview/`
+  匹配到底栏的 "Preview Logs"，于是这个场景是 `wb-pvlogs` 换了文件名。
+- 底部面板**默认就开在 Step Logs**，所以「工作台 · 底部面板」这个场景其实是默认态，
+  而 Changes 场景不收起底栏就又是默认态。现在 diff 场景先收底栏，让 diff 成为主体。
+
+## 逐场景比对（三态：齐 / 空 / 缺）
+
+只记能从图里直接读出的。**逐模块像素判定仍要人眼**——下面是结构比对。
+
+### Agents 侧栏：`wb-agents.zh.png` ↔ `light-wb-agents.png`
 
 | 比对点 | 态 |
 | --- | --- |
-| 左分组导航 + 右表单的主体版式 | **齐**（同一模式：左侧分组列表，右侧该组的表单行） |
-| 顶栏 | **缺**：参考是「pi 图标 + OMP Studio + 搜索 + 返回工作台 + 设置面包屑 + 主题切换」；我们是「文件/编辑/视图/帮助 菜单栏 + 页面页签轨」。不是同一套 chrome |
-| 左侧 IDE 侧栏（项目与对话 + EXPLORER 文件树） | **缺**：参考有，我们没有。我们的左栏是设置自己的分组导航 |
-| 设置分组 Taxonomy | **缺**：参考 General / Models and Providers / Permissions / Sessions / Preview / Advanced（6 组）；我们 常规/背景/对话与交互/权限与安全/上下文与记忆/文件与终端/任务与执行/高级/运行偏好（10 组） |
-| 默认落地的分组 | **缺**：参考落在 Permissions；我们落在 常规 |
-| Permissions 内容（Review / Workspace / Full Access 三卡 + 粒度控制开关列表） | **未比**：参考图是 Permissions 页，我们截图落在 常规。要判定就得按 `?settingsGroup=` 再抓一张 |
+| 卡片列表 + 状态徽标 + 角色描述 | **齐**（四张卡片：名字、状态、角色/描述、时长、token、成本、文件数都在） |
+| 指标行 | **齐**（`6m 12s  48.2k tok · ¥1.94  4 文件` 对 `2m 18s  42k tok  $0.94  📄2 个文件`） |
+| 「当前动作 + 目标文件」行 | **缺**：参考每个卡片有一行 `⚡ Write · CapabilityProbe.tsx`（图标 + 工具 + 目标文件）；我们只有指标行下的 `最近工具：Bash · npm run typecheck`——是「最近」不是「当前」，且没有目标文件 |
+| 嵌套子 Agent | **缺**：参考有 `> 2 个子 Agent` 可展开，子卡片同样带完整指标；我们没有 |
+| 状态词表 | **缺**：参考 `Waiting for Agent` / `Running Tool`；我们 `Running` / `Thinking` / `Waiting for User` / `Failed`。语义方向一致，状态集与措辞不同 |
+| 面板头 | **齐**（`4 个 AGENT` + Task List + × 对 `Agents 4` + Task List + ×） |
+| 工作台整体骨架 | **齐**（左侧栏 + 中对话 + 右窄面板，页签轨位置一致） |
 
-结论：**版式范式齐，信息架构缺**。这不是「数据没接」，是产品 IA 不同——按
-`comparison-checklist.md` 的规矩，「缺」要么补实现，要么在方案里记一条决策说明为什么不做。
-目前方案里没有这条决策。
-
-### 诊断页：`diagnostics.zh.png` ↔ `ui_reference/ver2/__shots/light-diagnostics.png`
+### 设置页：`settings.zh.png` ↔ `light-settings-perms.png`
 
 | 比对点 | 态 |
 | --- | --- |
-| 页签 + 卡片式检测列表 | **齐**（运行环境 / 会话与维护 两个页签，下面是卡片与检测行） |
-| 更新提示条 | **齐**（「有可用 Runtime 更新」+ 更新按钮） |
-| Runtime / Step 版本信息格 | **齐** |
-| 环境检测清单（勾选/警告图标 + 状态 + 说明） | **齐** |
-| 平台显示 | **待确认**：图上是 `win32 · x64`，而捕获机是 Linux。预览模式下走 fixture，所以这是演示数据的值；但要确认真实模式下 `platform` 位读的是真值，不是也落了 fixture |
+| 左分组导航 + 右表单的主体版式 | **齐**（同一模式） |
+| 顶栏 | **缺**：参考「pi 图标 + OMP Studio + 搜索 + 返回工作台 + 设置面包屑 + 主题切换」；我们「文件/编辑/视图/帮助 菜单栏 + 页面页签轨」 |
+| 左侧 IDE 侧栏（项目与对话 + EXPLORER 文件树） | **缺**：参考有，我们没有 |
+| 设置分组 Taxonomy | **缺**：参考 6 组（General / Models and Providers / Permissions / Sessions / Preview / Advanced）；我们 10 组 |
+| 默认落地的分组 | **缺**：参考 Permissions；我们 常规 |
+| Permissions 内容（三卡 + 粒度控制开关列表） | **未比**：参考图是 Permissions 页，我们截图落在 常规 |
 
-### 其余四页（首页 / 会话历史 / 能力中心 / 媒体）
+### 诊断页：`diagnostics.zh.png` ↔ `light-diagnostics.png`
 
-页面都渲染出了完整的真实 UI（不是空壳、不是崩溃页），互异。逐模块比对未做——参考集里
-没有与它们一一对应的基准图（`__shots/` 的 24 张集中在 workbench / diagnostics /
-settings-perms / palette / project-home / agents / approval / streaming / diff-split /
-minimap / preview / env-fail 十二个场景）。
+| 比对点 | 态 |
+| --- | --- |
+| 页签 + 卡片式检测列表 | **齐** |
+| 更新提示条 / Runtime 版本信息格 / 环境检测清单 | **齐** |
+| 平台显示 | **待确认**：图上是 `win32 · x64`，捕获机是 Linux。预览模式走 fixture 所以是演示值；要确认真实模式下 `platform` 位读的是真值 |
+
+### 其余场景
+
+`wb-bottom`（= 默认态）、`wb-terminal`、`wb-problems`、`wb-pvlogs`、`wb-diff-split`、
+`wb-git`、`wb-preview`、`palette`、`project-home` 都已捕获且互异，逐模块比对未做。
+参考集里 `light-wb-diff-split` / `light-wb-minimap` / `light-wb-preview` 与我们
+对应场景的比对同样未做。
 
 ## 因此 M4.1 的真实剩余
 
-不是「没做」，是三件具体的事：
-
-1. **IA 差异要一个决策**：设置页分组 taxonomy 与顶栏 chrome 和 omp-studio 不同。
-   `comparison-checklist.md` 要求「缺」要么补、要么在 `plan.md` 记决策。现在两者都没做。
-2. **按参考场景补抓**：`__shots/` 的十二个场景里，我们能对应的（workbench-streaming、
-   wb-approval、wb-agents、wb-diff-split、wb-minimap、wb-preview、palette、
-   project-home、env-fail）都还没有对应捕获。harness 已支持 `?route=`，加场景即可。
-3. **人眼逐模块过一遍**：B3，无法在本机替代。
+1. **IA 差异要一个决策**（不卡人眼）：设置页 taxonomy、顶栏 chrome、左侧 IDE 侧栏
+   与 omp-studio 不同。`comparison-checklist.md` 要求「缺」要么补实现、要么在
+   `plan.md` 记一条决策。现在两者都没做。
+2. **Agents 卡片补两件**（不卡人眼）：「当前动作 + 目标文件」行、嵌套子 Agent。
+   这两件参考集有、我们没有，属于可补的实现缺口，不是审美分歧。
+3. **四个场景要真实运行时**：流式回合、审批对话框、Minimap、环境失败态。
+4. **人眼逐模块过一遍**：B3，无法在本机替代。
