@@ -22,6 +22,36 @@ import { describe, expect, it } from "vitest";
 const appSource = readFileSync(join(import.meta.dirname, "App.tsx"), "utf8");
 const menusSource = readFileSync(join(import.meta.dirname, "menus.tsx"), "utf8");
 
+/**
+ * The full opening tag starting at `from`, or `undefined` when it never closes.
+ *
+ * A `>` inside an attribute value does not close the tag — `onClick={() => …}`
+ * is the common case in this codebase — so the scan tracks string literals and
+ * `=>`. Stopping at the first `>` is what made the previous version of the
+ * icon-btn scan miss attributes that came after an arrow function.
+ */
+function readTag(source: string, from: number): string | undefined {
+  let quote: string | undefined;
+  let position = from + 1;
+  while (position < source.length) {
+    const char = source[position];
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+    } else if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+    } else if (char === ">") {
+      // `=>` is an arrow, not a closer.
+      if (source[position + 1] === "=") {
+        position += 2;
+        continue;
+      }
+      return source.slice(from, position + 1);
+    }
+    position += 1;
+  }
+  undefined
+}
+
 describe("菜单原语的键盘可达性", () => {
   it("MenuItem 是原生 button，不是 div onClick", () => {
     // A `div` with an onClick is not focusable and not activatable by keyboard.
@@ -40,23 +70,40 @@ describe("菜单原语的键盘可达性", () => {
 
 describe("图标按钮都有可访问名", () => {
   it("App.tsx 里每个 icon-btn 都带 aria-label", () => {
-    // Scan the source: a `<button className="icon-btn"` with no `aria-label`
-    // within its opening tag is a button a screen reader announces as "button".
+    // Scan the source for every button whose class list contains `icon-btn`, and
+    // require an accessible name on each.
     //
-    // Static rather than rendered, because the failure is a missing attribute and
-    // a source scan sees all of them at once — including ones behind a route the
-    // rendered tests never visit.
-    const openings = appSource.matchAll(/<button\b[^>]*?className="icon-btn"[^>]*?>/g);
+    // Two things the first version got wrong, both found by review:
+    //
+    // 1. It matched the literal `className="icon-btn"`. That misses every
+    //    compound class — `` className={`icon-btn${active}`} `` and
+    //    `className="icon-btn small"` — which is most of them. Five real
+    //    violations were invisible to it.
+    // 2. `[^>]*?>` cannot cross a `>`, and JSX attribute values contain `=>`. A
+    //    button with an arrow function before its `aria-label` had its match
+    //    truncated mid-tag, so the attribute was never seen. That makes the guard
+    //    cry wolf on a refactor, which is how guards get deleted.
+    //
+    // So: find the `<button`, take everything up to the `>` that closes it
+    // (tracking that `=>` and `>=` are not closers), then look for `icon-btn` in
+    // the class attribute and `aria-label` anywhere in the tag.
     const missing: string[] = [];
-    for (const match of openings) {
-      const tag = match[0];
-      if (!/aria-label=/.test(tag)) missing.push(tag.replace(/\s+/g, " ").slice(0, 160));
+    const tagRe = /<button\b/g;
+    for (const match of appSource.matchAll(tagRe)) {
+      const tag = readTag(appSource, match.index);
+      if (tag === undefined) continue;
+      if (!/className=(?:"[^"]*\bicon-btn\b[^"]*"|\{[^}]*\bicon-btn\b[^}]*\})/.test(tag)) continue;
+      if (!/\baria-label\s*=/.test(tag)) {
+        missing.push(tag.replace(/\s+/g, " ").slice(0, 200));
+      }
     }
     expect(missing, `icon-btn without an accessible name:\n${missing.join("\n")}`).toEqual([]);
   });
 
   it("aria-label 不是空字符串", () => {
-    const empties = appSource.matchAll(/aria-label=\{\s*""\s*\}/g);
+    // `{""}` is the form the codebase uses, but a literal `aria-label=""` and a
+    // template that renders empty are the same defect, so all three are checked.
+    const empties = appSource.matchAll(/aria-label=(?:""|\{\s*""\s*\}|\{\s*`\s*`\s*\})/g);
     expect([...empties].length, "an empty aria-label is the same as none").toBe(0);
   });
 });

@@ -3341,11 +3341,11 @@ function AppTopbar({ state, client, chrome, onRoute, threadTitle, sideOpen, onTo
             </button>
           )}
         </div>
-        <button className={`icon-btn${sideOpen ? " active" : ""}`} data-tip={t("menu.rightPanel")} aria-controls="sidePanel" aria-expanded={sideOpen} onClick={onToggleSide}><Icon name="panel" /></button>
+        <button className={`icon-btn${sideOpen ? " active" : ""}`} data-tip={t("menu.rightPanel")} aria-label={t("menu.rightPanel")} aria-controls="sidePanel" aria-expanded={sideOpen} onClick={onToggleSide}><Icon name="panel" /></button>
         <button className="icon-btn tb-optional" data-tip={t("shell.theme")} onClick={chrome.onToggleTheme} aria-label={t("shell.theme")}>
           <Icon name={chrome.theme === "dark" ? "moon" : "light"} />
         </button>
-        <button className="icon-btn tb-optional" data-tip={t("nav.home")} onClick={() => onRoute("home")}><Icon name="home" /></button>
+        <button className="icon-btn tb-optional" data-tip={t("nav.home")} aria-label={t("nav.home")} onClick={() => onRoute("home")}><Icon name="home" /></button>
       </div>
     </header>
     </>
@@ -6260,7 +6260,7 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
               ) : null}
             </div>
             <span className="spacer" />
-            <button className="icon-btn small" data-tip="关闭" onClick={onCloseSide}><Icon name="x" extra="sm" /></button>
+            <button className="icon-btn small" data-tip="关闭" aria-label="关闭" onClick={onCloseSide}><Icon name="x" extra="sm" /></button>
           </div>
           <div className="sp-body">
             <div className={`sp-page${sideTab === "changes" ? " active" : ""}`} id="spChanges" role="tabpanel">
@@ -6380,12 +6380,13 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
           <button
             className="icon-btn small"
             data-tip={terminalAvailable ? t("terminal.newTerminal") : t("terminal.newTerminal")}
+            aria-label={t("terminal.newTerminal")}
             disabled={!terminalAvailable}
             onClick={() => terminalRef.current?.create()}
           >
             <Icon name="plus" extra="sm" />
           </button>
-          <button className="icon-btn small" data-tip={bottomOpen ? t("common.collapse") : t("common.expand")} aria-expanded={bottomOpen} aria-controls="bottomPanel" onClick={() => onBottomOpenChange(toggleBottomBarOpen({ visible: bottomVisible, open: bottomOpen }).open)}>
+          <button className="icon-btn small" data-tip={bottomOpen ? t("common.collapse") : t("common.expand")} aria-label={bottomOpen ? t("common.collapse") : t("common.expand")} aria-expanded={bottomOpen} aria-controls="bottomPanel" onClick={() => onBottomOpenChange(toggleBottomBarOpen({ visible: bottomVisible, open: bottomOpen }).open)}>
             <Icon name={bottomOpen ? "chevron-d" : "chevron-u"} extra="sm" />
           </button>
         </div>

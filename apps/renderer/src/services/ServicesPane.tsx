@@ -24,7 +24,7 @@ import {
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { useI18n } from "../i18n";
 import "./services.css";
-import { shellSurface } from "../chrome";
+import { shellCapabilities, shellDegradedReason, shellSurface } from "../chrome";
 
 type Definition = {
   id: string;
@@ -158,13 +158,12 @@ export function ServicesPane({
       ]);
       return;
     }
-    if (!workspaceId || !shellSurface()?.listServiceDefinitions) {
+    if (!workspaceId || !shellCapabilities().serviceDefinitions) {
       setDefinitions([]);
       return;
     }
     try {
-      const list = shellSurface()?.listServiceDefinitions;
-      if (!list) throw new Error("Secure desktop storage is unavailable");
+      const list = shellSurface()!.listServiceDefinitions!;
       const value = await list({ workspaceId });
       if (epoch !== generation.current) return;
       if (!value.ok) throw new Error(value.message);
@@ -288,8 +287,9 @@ export function ServicesPane({
         setForm(false);
         return;
       }
-      const save = shellSurface()?.saveServiceDefinition;
-      if (!workspaceId || !save) throw new Error("Secure desktop storage is unavailable");
+      if (!workspaceId || !shellCapabilities().serviceDefinitions)
+        throw new Error(shellDegradedReason("serviceDefinitions"));
+      const save = shellSurface()!.saveServiceDefinition!;
       const result = await save({
         workspaceId,
         spec: value,
@@ -575,11 +575,11 @@ export function ServicesPane({
             </section>
           ) : null}
           <h4>{label("保存的配置", "Saved configurations")}</h4>
-          {!preview && !shellSurface()?.saveServiceDefinition ? (
+          {!preview && !shellCapabilities().serviceDefinitions ? (
             <p className="small muted">
               {label(
-                "此环境不提供加密配置存储。可以直接创建服务。",
-                "Encrypted configuration storage is unavailable here. You can start services directly.",
+                shellDegradedReason("serviceDefinitions") + "可以直接创建服务。",
+                shellDegradedReason("serviceDefinitions") + " You can start services directly.",
               )}
             </p>
           ) : null}
@@ -612,16 +612,14 @@ export function ServicesPane({
                       );
                       return;
                     }
-                    const result =
-                      await shellSurface()?.removeServiceDefinition?.(
-                        {
-                          workspaceId: row.workspaceId,
-                          id: row.id,
-                          revision: row.revision,
-                        },
-                      );
-                    if (!result?.ok)
-                      throw new Error(result?.message ?? "Storage unavailable");
+                    if (!shellCapabilities().serviceDefinitions)
+                      throw new Error(shellDegradedReason("serviceDefinitions"));
+                    const result = await shellSurface()!.removeServiceDefinition!({
+                      workspaceId: row.workspaceId,
+                      id: row.id,
+                      revision: row.revision,
+                    });
+                    if (!result.ok) throw new Error(result.message);
                     setDefinitions(result.definitions);
                   })
                 }
@@ -857,8 +855,7 @@ export function ServicesPane({
                     disabled={
                       busy ||
                       (!preview &&
-                        (!workspaceId ||
-                          !shellSurface()?.saveServiceDefinition))
+                        (!workspaceId || !shellCapabilities().serviceDefinitions))
                     }
                     onClick={() => void save()}
                   >

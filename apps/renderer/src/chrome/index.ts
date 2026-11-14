@@ -43,7 +43,15 @@ export interface ChromeCapabilities {
   readonly liveAudio: boolean;
   readonly microphonePermission: boolean;
   // --- BrowserApi: browser observation. External process, attached on demand. ---
+  // Two bits, not one, because two panes consume two different halves of it and
+  // neither needs the other's members. `browserObservation` is what `BrowserPane`
+  // drives; `computerCapture` is the one-shot screenshot `ComputerPane` drives.
+  // A single bit made both directions wrong at once: omitting `onBrowserObservation`
+  // let a half-wired shell look available and then show no frames forever, while
+  // requiring `readComputerCapture` disabled a fully-working observation pane on a
+  // machine that simply had no capture member.
   readonly browserObservation: boolean;
+  readonly computerCapture: boolean;
   // --- The prediction channel: a transport to a socket the runtime owns. ---
   readonly prediction: boolean;
   // --- PlatformApi: menu, logs, dialogs. Tauri plugins plus an ACL. ---
@@ -90,8 +98,17 @@ export function shellCapabilities(): ChromeCapabilities {
       wired(shell, "beginMediaUpload") && wired(shell, "appendMediaUpload") && wired(shell, "finishMediaUpload") && wired(shell, "abortMediaUpload"),
     liveAudio: wired(shell, "attachLiveAudio") && wired(shell, "appendLiveAudio") && wired(shell, "detachLiveAudio"),
     microphonePermission: wired(shell, "requestMicrophoneAccess") && wired(shell, "openMicrophoneSettings"),
+    // `onBrowserObservation` is in the group: without it no frame, state or error
+    // ever arrives, and the pane would sit on "等待浏览器画面…" with nothing to
+    // say why. It is optional on the surface declaration, which is exactly why a
+    // bit that omits it reports available on a shell that cannot deliver events.
     browserObservation:
-      wired(shell, "attachBrowserObservation") && wired(shell, "readComputerCapture") && wired(shell, "controlBrowserObservation") && wired(shell, "detachBrowserObservation"),
+      wired(shell, "attachBrowserObservation")
+      && wired(shell, "controlBrowserObservation")
+      && wired(shell, "detachBrowserObservation")
+      && wired(shell, "onBrowserObservation"),
+    // One member, one consumer: `ComputerPane`'s screenshot button.
+    computerCapture: wired(shell, "readComputerCapture"),
     // `importPredictionHistory` is deliberately *not* in the group: it needs the
     // file picker, so a shell without it can still attach and steer. Including it
     // would report the whole channel unavailable for a missing import.
@@ -128,6 +145,8 @@ export function shellDegradedReason(capability: keyof ChromeCapabilities): strin
       return "当前外壳不支持麦克风授权管理";
     case "browserObservation":
       return "当前外壳不支持浏览器观测";
+    case "computerCapture":
+      return "当前外壳不支持屏幕截图";
     case "prediction":
       return "当前外壳不支持输入预测";
     case "logs":

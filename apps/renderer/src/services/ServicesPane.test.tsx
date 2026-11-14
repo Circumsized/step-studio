@@ -31,7 +31,15 @@ it("preview creates and controls demo services without calling Host or desktop s
 });
 it("saving a real configuration never starts a process and defaults to session lifetime", async () => {
   const saved = vi.fn(async () => ({ ok: true, definitions: [] }));
-  window.ompStudioChrome = { listServiceDefinitions: vi.fn(async () => ({ ok: true, definitions: [] })), saveServiceDefinition: saved } as unknown as NonNullable<typeof window.ompStudioChrome>;
+  // All three members, because the pane now gates on the `serviceDefinitions`
+  // capability bit and that bit requires the whole group. A stub with two of the
+  // three is a half-wired shell, and the bit correctly reports unavailable — which
+  // is the behaviour the bit exists for, reached here by an incomplete fixture.
+  window.ompStudioChrome = {
+    listServiceDefinitions: vi.fn(async () => ({ ok: true, definitions: [] })),
+    saveServiceDefinition: saved,
+    removeServiceDefinition: vi.fn(async () => ({ ok: true, definitions: [] })),
+  } as unknown as NonNullable<typeof window.ompStudioChrome>;
   const client = mount(false);
   fireEvent.click(await screen.findByRole("button", { name: "新建服务" }));
   fireEvent.change(screen.getByLabelText("名称"), { target: { value: "server" } });

@@ -20,7 +20,7 @@ import { hostErrorMessage, waitReceipt } from "../hostError";
 import { SettingRow, SettingSection } from "../settings/SettingRow";
 import { Icon } from "../icons";
 import "./media.css";
-import { shellSurface } from "../chrome";
+import { shellCapabilities, shellDegradedReason, shellSurface } from "../chrome";
 
 export function artifactUrl(artifactId: string): string {
   return `omp-artifact://library/${encodeURIComponent(artifactId)}`;
@@ -383,8 +383,8 @@ export function ArtifactLibraryPane({
               </button>
             </div>
             {!visible ? null : !preview &&
-              !shellSurface()?.exportArtifact ? (
-              <p className="muted">{t("media.unavailable")}</p>
+              !shellCapabilities().artifacts ? (
+              <p className="muted">{shellDegradedReason("artifacts")}</p>
             ) : selected.kind === "graphic" || graphicFormat(selected.name) ? (
               <GraphicPreview
                 key={selected.artifactId}

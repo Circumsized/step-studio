@@ -63,6 +63,7 @@ const ALL_CAPABILITIES: ReadonlyArray<keyof ChromeCapabilities> = [
   "liveAudio",
   "microphonePermission",
   "browserObservation",
+  "computerCapture",
   "prediction",
   "logs",
   "menu",
@@ -130,6 +131,7 @@ describe("shellCapabilities", () => {
     // And nothing else lights up because an unrelated group is present.
     expect(bits.mediaUpload).toBe(false);
     expect(bits.browserObservation).toBe(false);
+    expect(bits.computerCapture).toBe(false);
   });
 });
 
@@ -148,5 +150,7 @@ describe("shellDegradedReason", () => {
     // failed" is a claim about an attempt that was never made.
     expect(shellDegradedReason("browserObservation")).toContain("不支持");
     expect(shellDegradedReason("browserObservation")).not.toContain("失败");
+    expect(shellDegradedReason("computerCapture")).toContain("不支持");
+    expect(shellDegradedReason("computerCapture")).not.toContain("失败");
   });
 });

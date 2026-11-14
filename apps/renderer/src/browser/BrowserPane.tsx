@@ -6,7 +6,7 @@ import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { WorkspaceEmpty } from "../workspaces/Workspace";
-import { shellSurface, shellCapabilities } from "../chrome";
+import { shellSurface, shellCapabilities, shellDegradedReason } from "../chrome";
 import { PREVIEW_BROWSER_TAB, PREVIEW_BROWSER_IMAGE } from "../preview/browserPreview";
 import "./browser.css";
 
@@ -72,7 +72,7 @@ export function BrowserPane({ client, sessionId, available, visible, capabilitie
       if (generation !== epoch.current || !visible || document.hidden) return; observation.current = result.observationId;
       const attached = await shellSurface()?.attachBrowserObservation?.({ observationId: result.observationId, sessionId: result.sessionId, tabId: result.tabId });
       if (generation !== epoch.current) { void shellSurface()?.detachBrowserObservation?.({ observationId: result.observationId }); return; }
-      if (!attached?.ok) throw new Error(attached?.message ?? "Desktop observation unavailable"); setObserving(true);
+      if (!attached?.ok) throw new Error(attached?.message ?? (zh ? "桌面观测不可用" : "Desktop observation unavailable")); setObserving(true);
     } catch (cause) { if (generation === epoch.current) { detach(); setError(hostErrorMessage(cause, zh ? "无法观察此标签" : "Cannot observe this tab")); } }
     finally { if (generation === epoch.current) setBusy(false); }
   };
@@ -84,7 +84,7 @@ export function BrowserPane({ client, sessionId, available, visible, capabilitie
   }, [human, frame, send]);
   const selectedTab = tabs.find(tab => tab.id === selected);
   return <section className="browser-pane" aria-label={zh ? "浏览器观察" : "Browser observation"}>
-    <div className="browser-toolbar"><AppSelect className="select" aria-label={zh ? "浏览器标签" : "Browser tab"} value={selected} disabled={!enabled || busy} onChange={event => { epoch.current++; detach(); setSelected(event.target.value); }}><option value="">{zh ? "选择 Runtime 标签" : "Select Runtime tab"}</option>{tabs.map(tab => <option value={tab.id} key={tab.id}>{tab.kind} · {tab.title || tab.name}</option>)}</AppSelect><button className="btn small primary" disabled={!selectedTab?.observable || !canObserve || busy} onClick={() => void observe()}>{busy ? "…" : zh ? "观察" : "Observe"}</button></div>
+    <div className="browser-toolbar"><AppSelect className="select" aria-label={zh ? "浏览器标签" : "Browser tab"} value={selected} disabled={!enabled || busy} onChange={event => { epoch.current++; detach(); setSelected(event.target.value); }}><option value="">{zh ? "选择 Runtime 标签" : "Select Runtime tab"}</option>{tabs.map(tab => <option value={tab.id} key={tab.id}>{tab.kind} · {tab.title || tab.name}</option>)}</AppSelect><button className="btn small primary" disabled={!selectedTab?.observable || !canObserve || busy} title={canObserve ? undefined : shellDegradedReason("browserObservation")} onClick={() => void observe()}>{busy ? "…" : zh ? "观察" : "Observe"}</button></div>
     {error ? <p role="alert" className="browser-error">{error}</p> : null}
     {!enabled || !tabs.length ? <WorkspaceEmpty icon="globe" title={zh ? "暂无可观察的浏览器" : "No observable browser"}>{!enabled ? zh ? "连接支持浏览器观察的 Runtime 后重试。" : "Connect a Runtime with browser observation support." : zh ? "Step 打开浏览器后，其主代理和子代理的标签会出现在这里。" : "Tabs created by Step and its subagents appear here."}</WorkspaceEmpty> : null}
     {selectedTab?.reason ? <p role="status">{selectedTab.reason}</p> : null}
