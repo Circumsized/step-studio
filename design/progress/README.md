@@ -20,4 +20,5 @@
 | `m5.md` | M5 Windows 硬化与分发 |
 | `m6.md` | M6a TUI + M6b 插件沙箱 |
 | `blockers.md` | 跨里程碑的阻塞，及解除它需要什么 |
+| `audit-2026-11-14.md` | 独立评估：方案完成度的时点快照 + finding 台账（append-only，附复现命令） |
 
