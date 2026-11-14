@@ -121,6 +121,15 @@ Playwright 直接驱活 UI（点页签、开侧栏、收底栏、按 Ctrl+K）�
 | 更新提示条 / Runtime 版本信息格 / 环境检测清单 | **齐** |
 | 平台显示 | **待确认**：图上是 `win32 · x64`，捕获机是 Linux。预览模式走 fixture 所以是演示值；要确认真实模式下 `platform` 位读的是真值 |
 
+### 覆盖不到的一处（如实记账）
+
+侧栏 Agents 卡片的**真实态**（非预览）没有测试。它在 `App.tsx` 的渲染树里，
+而 `AgentHub.test.tsx` 测的是 Agent Hub 页，不是这个侧栏；harness 强制
+`preview=1`，真实态需要 Host 才能起来。本轮改的是真实态，所以：
+格式化函数（`formatAgentDuration` / `formatAgentTokens` / `agentStatusLabel`）有
+单测（`agentCardFormat.test.ts`，含 59.999 s 的取整边界），**卡片标记本身没有**。
+截图能看的是预览态。
+
 ### 其余场景
 
 `wb-bottom`（= 默认态）、`wb-terminal`、`wb-problems`、`wb-pvlogs`、`wb-diff-split`、
