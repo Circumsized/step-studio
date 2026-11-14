@@ -97,7 +97,36 @@ fn the_rust_adapter_drives_the_real_step_cli() {
         eprintln!("skipping: no Step CLI installed");
         return;
     };
-    let (config, _dir) = launch("e2e");
+    let (config, dir) = launch("e2e");
+
+    // The CLI's model, pinned here rather than read from the machine's
+    // `~/.omp/agent/config.yml`. This test passed only after the developer's
+    // default model was swapped for one with credit, which made it depend on
+    // state outside the repository and silently edited a personal config to go
+    // green. A `--config` overlay overrides `modelRoles.default` without
+    // touching that file; the shim injects it because the adapter builds its
+    // own argv and has no flag of its own to add.
+    let model = std::env::var("STEP_STUDIO_TEST_MODEL")
+        .unwrap_or_else(|_| "magpie/stepfun-cn/step-3.7-flash".to_string());
+    let overlay = dir.join("model.yml");
+    std::fs::write(&overlay, format!("modelRoles:\n  default: {model}\n"))
+        .expect("write the model overlay");
+    let shim = dir.join("step-under-test");
+    std::fs::write(
+        &shim,
+        format!(
+            "#!/bin/sh\nexec {} --config {} \"$@\"\n",
+            config.step_command,
+            overlay.display()
+        ),
+    )
+    .expect("write the shim");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&shim, std::fs::Permissions::from_mode(0o755));
+    }
+    let step_command = shim.to_string_lossy().to_string();
 
     // The adapter owns its socket, so run it on a thread and connect to it.
     let runtime = Runtime::new(AdapterConfig {
@@ -105,7 +134,7 @@ fn the_rust_adapter_drives_the_real_step_cli() {
         token: config.token.clone(),
         runtime_epoch: config.runtime_epoch,
         cwd: config.cwd.clone(),
-        step_command: config.step_command.clone(),
+        step_command: step_command.clone(),
         step_env: config.step_env.clone(),
         continue_session: false,
         exit_on_disconnect: false,

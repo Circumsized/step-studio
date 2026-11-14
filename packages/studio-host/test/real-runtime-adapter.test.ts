@@ -84,6 +84,28 @@ describeReal("the Rust adapter drives the real Step CLI", { timeout: 180_000 }, 
   // the handshake failed `UNAUTHENTICATED` no matter what the adapter did.
   const token = "step-studio";
   writeFileSync(join(dir, "token"), token);
+
+  // The CLI's model, pinned here rather than taken from the machine's
+  // `~/.omp/agent/config.yml`.
+  //
+  // The first run of this test passed only after the default model on the
+  // developer's machine was swapped for one with credit — which made the test
+  // depend on state outside the repository, so it would pass here and fail
+  // everywhere else, and it silently edited a personal config to go green. A
+  // `--config` overlay overrides `modelRoles.default` without touching the
+  // user's file, and the shim is what injects it: the adapter builds its own
+  // argv (`--mode rpc`) and has no flag to add, so the overlay has to arrive
+  // through the command the daemon was told to spawn.
+  //
+  // A turn still needs a model that answers. `STEP_STUDIO_TEST_MODEL` overrides
+  // it; without it the default below is used, and if that account is out of
+  // credit the assertion on streamed deltas fails rather than the test lying.
+  const model = process.env.STEP_STUDIO_TEST_MODEL ?? "magpie/stepfun-cn/step-3.7-flash";
+  const overlay = join(dir, "model.yml");
+  writeFileSync(overlay, `modelRoles:\n  default: ${model}\n`);
+  const shim = join(dir, "step-under-test");
+  writeFileSync(shim, `#!/bin/sh\nexec ${stepCommand!} --config ${overlay} "$@"\n`, { mode: 0o755 });
+
   const socketPath = join(dir, "bridge.sock");
 
   // `--endpoint` rather than the daemon's default: `default_endpoint()` is
@@ -91,7 +113,7 @@ describeReal("the Rust adapter drives the real Step CLI", { timeout: 180_000 }, 
   // that waited on a path derived from its own temp directory would wait forever
   // on a socket the daemon put somewhere else.
   const child = spawn(daemonBinary()!, ["--cwd", dir, "--endpoint", socketPath], {
-    env: { ...process.env, STEP_STUDIO_STEP_CMD: stepCommand! },
+    env: { ...process.env, STEP_STUDIO_STEP_CMD: shim },
     stdio: ["ignore", "ignore", "inherit"],
   });
 
