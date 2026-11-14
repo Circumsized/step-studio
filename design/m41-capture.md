@@ -30,12 +30,22 @@ XWD 而非 PNG：本机只有 `xwd`/`xwud`，没有 ImageMagick。XWD 是无压�
 找应用窗口 id 再 `-id` 抓，尺寸从 1600×1000（整个 Xvfb 屏幕）变成 1280×800
 （壳自己的 `inner_size`）——这才是画面。
 
-## 仍不能完成比对的原因
+## 本文件的结论已过期（2026-11-14）
 
-参考图是 2160×1350，捕获是 1280×800。**尺寸差 1.7 倍**，逐模块比对前必须先统一
-口径（要么按参考图的分辨率起 Xvfb，要么把捕获缩放），而本机没有 ImageMagick
-（`convert` 缺失），XWD 也无法直接转 PNG。所以「逐模块像素比对」这一项在本机
-**当前工具链下做不了**，不是没做。
+下面这节「仍不能完成比对的原因」不再成立，两处都错了：
+
+1. **参考图不是 2160×1350**。`ui_reference/ver2/__shots/` 的 24 张**全部是
+   1658×846**。尺寸差是 1.3 倍，不是 1.7 倍。
+2. **XWD 可以转 PNG**。`scripts/xwd2png.py` 直接解析 XWD 头部（25 个大端 32 位字
+   + `ncolors`×12 字节颜色表 + 每行 `bytes_per_line` 像素），用 pillow 出图。
+   不需要 ImageMagick。
+
+但更要紧的是：这份文件里「捕获成功」的那张图，转成 PNG 之后是**一张
+「Rendererer error」崩溃页**。所以 M4.1 从来连一张可用捕获都没有，而两份记录都
+写着「捕获成功、比对未做」。
+
+现在的情况见 [`m41-signoff.md`](m41-signoff.md)：仪器修好了，10 张互异截图在
+`design/signoff/`，首轮结构比对已做。
 
 壳 stderr 为空这一条本身是结论：`STEP_STUDIO_SELF_CHECK=1` 下壳应当打印
 `[bridge] session N established` 与逐字流式的 `[self-check]` 行（`main.rs:91`、

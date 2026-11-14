@@ -69,19 +69,49 @@ async function quiet(page) {
 }
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+// 1658x846, the size every one of the 24 reference screensshots in
+// `ui_reference/ver2/__shots/` is. Matching it is what makes a capture
+// comparable at all: the first attempt at this comparison stalled because the
+// captures were 1280x800 against 1658x846 references, a 1.3x mismatch that has
+// to be reconciled by eye before any module can be lined up.
+const page = await browser.newPage({ viewport: { width: 1658, height: 846 } });
 await mkdir(outDir, { recursive: true });
 
 const suffix = `${lang}${dark ? "-dark" : ""}`;
+// Every capture must be a different image. The harness used to discard the
+// `route` parameter when `preserveSettings=1` was set, so all ten pages captured
+// as byte-identical copies of workbench — and nothing in the output said so.
+// A sign-off built on that is worse than no sign-off: it looks like evidence.
+const digests = new Map();
 for (const [route, label] of PAGES) {
-  const url = `${base}&route=${route}&theme=${dark ? "dark" : "light"}&lang=${lang}&preserveSettings=1`;
+  // No `preserveSettings=1`. That flag stops the harness writing its
+  // `appSettings` blob, and the default `startupPage` is `"workbench"`
+  // (`appSettings.ts:78`) — so the persisted route is never consulted and every
+  // page lands on workbench. A sign-off instrument wants the opposite of
+  // preserved preferences: it wants the same deterministic settings on every
+  // run, which is the only way two captures taken a week apart are comparable.
+  const url = `${base}&route=${route}&theme=${dark ? "dark" : "light"}&lang=${lang}`;
   await page.goto(url, { waitUntil: "networkidle" }).catch(() => undefined);
   await page.waitForTimeout(600);
   await quiet(page);
   await page.waitForTimeout(200);
   const dest = path.join(outDir, `${route}.${suffix}.png`);
   await page.screenshot({ path: dest, animations: "disabled" });
-  console.log(`${label} -> ${path.relative(root, dest)}`);
+  const { createHash } = await import("node:crypto");
+  const { readFile } = await import("node:fs/promises");
+  const digest = createHash("sha256").update(await readFile(dest)).digest("hex");
+  const seen = digests.get(digest);
+  if (seen !== undefined) {
+    console.error(`${label} -> ${path.relative(root, dest)}  DUPLICATE of ${seen}: the route did not take effect`);
+  } else {
+    digests.set(digest, route);
+    console.log(`${label} -> ${path.relative(root, dest)}`);
+  }
+}
+if (digests.size !== PAGES.length) {
+  console.error(`\n${PAGES.length - digests.size} page(s) captured an image another page already produced.`);
+  console.error("The sign-off is not evidence until each page is distinct.");
+  process.exitCode = 4;
 }
 
 await browser.close();

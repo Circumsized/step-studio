@@ -47,7 +47,14 @@ const qaRoute = [
   ? qaParams.get("route")!
   : "workbench";
 try {
-  if (qaParams.get("preserveSettings") !== "1") window.localStorage.setItem("omp.lastRoute", qaRoute);
+  // The route is written unconditionally, and `preserveSettings` does not reach
+  // it. That flag exists so a human's own theme/density/language choice survives
+  // a screenshot run; it was also suppressing the route, which meant an explicit
+  // `?route=history` was computed here and then discarded — so every capture of
+  // every page was a capture of whichever page happened to be in localStorage,
+  // which is workbench on a fresh profile. Ten filenames, one image, and no
+  // error anywhere.
+  window.localStorage.setItem("omp.lastRoute", qaRoute);
   window.localStorage.setItem(STARTUP_NOTICE_STORAGE_KEY, STARTUP_NOTICE_ID);
   if (qaParams.get("preserveSettings") !== "1") window.localStorage.setItem(
     "omp.appSettings",
