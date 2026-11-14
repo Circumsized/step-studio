@@ -188,6 +188,53 @@ const SCENARIOS = [
   },
 ];
 
+/**
+ * Whether the page is healthy enough for its screenshot to mean anything.
+ *
+ * This exists because of one specific capture: the 2026-11-12 workbench shot,
+ * recorded as a successful capture of the workbench, which converted to a PNG
+ * reading "Rendererer error — the renderer hit an unexpected error". A
+ * screenshot of a crash is not evidence of anything, and nothing in the
+ * instrument said so.
+ *
+ * `pageErrors()` / `consoleMessages()` / `requests()` are native since
+ * Playwright 1.56, so this needs no extra dependency — and they are the three
+ * signals that would have caught it: the page error names the crash, the console
+ * carries the renderer's own message, and a failed document request is why a
+ * page can be blank without erroring.
+ */
+async function pageHealth(page) {
+  // All three are async in 1.62 — they resolve to the collected arrays. Treating
+  // them as sync throws a TypeError, which is how the first version of this
+  // "check" managed to be both present and useless.
+  const [thrown, messages, requests] = await Promise.all([
+    page.pageErrors(),
+    page.consoleMessages(),
+    page.requests(),
+  ]);
+  return {
+    errors: thrown.map((error) => error.message ?? String(error)),
+    consoleErrors: messages.filter((message) => message.type() === "error").map((message) => message.text()),
+    failed: requests
+      .filter((request) => request.failure() !== null)
+      .map((request) => `${request.method()} ${request.url()} — ${request.failure()?.errorText}`),
+  };
+}
+
+/** Report what `pageHealth` found, and say whether the capture is trustworthy. */
+function reportHealth(label, health) {
+  const problems = [
+    ...health.errors.map((text) => `page error: ${text}`),
+    ...health.consoleErrors.map((text) => `console error: ${text}`),
+    ...health.failed.map((text) => `request failed: ${text}`),
+  ];
+  if (problems.length === 0) return true;
+  console.error(`${label} is NOT a healthy page — the screenshot is not evidence:`);
+  for (const problem of problems.slice(0, 8)) console.error(`    ${problem}`);
+  if (problems.length > 8) console.error(`    … and ${problems.length - 8} more`);
+  return false;
+}
+
 const browser = await chromium.launch();
 // 1658x846, the size every one of the 24 reference screensshots in
 // `ui_reference/ver2/__shots/` is. Matching it is what makes a capture
@@ -228,6 +275,7 @@ for (const [route, label] of PAGES) {
   await page.waitForSelector("[data-qa-ready]", { timeout: 15_000 }).catch(() => undefined);
   const dest = path.join(outDir, `${route}.${suffix}.png`);
   await page.screenshot({ path: dest, animations: "disabled" });
+  if (!(await reportHealth(label, await pageHealth(page)))) process.exitCode = 6;
   const { createHash } = await import("node:crypto");
   const { readFile } = await import("node:fs/promises");
   const digest = createHash("sha256").update(await readFile(dest)).digest("hex");
@@ -278,6 +326,7 @@ for (const scenario of reachable) {
   }
   const dest = path.join(outDir, `${scenario.id}.${suffix}.png`);
   await page.screenshot({ path: dest, animations: "disabled" });
+  if (!(await reportHealth(scenario.label, await pageHealth(page)))) process.exitCode = 6;
   const { createHash } = await import("node:crypto");
   const { readFile } = await import("node:fs/promises");
   const digest = createHash("sha256").update(await readFile(dest)).digest("hex");

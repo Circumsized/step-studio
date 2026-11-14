@@ -86,6 +86,39 @@ Playwright 直接驱活 UI（点页签、开侧栏、收底栏、按 Ctrl+K）�
 - 底部面板**默认就开在 Step Logs**，所以「工作台 · 底部面板」这个场景其实是默认态，
   而 Changes 场景不收起底栏就又是默认态。现在 diff 场景先收底栏，让 diff 成为主体。
 
+## 签收链路的分层接线（2026-11-14 定）
+
+「比 Playwright 更轻更 agent 原生」的调研结论是：**所有 agent 化都在优化驱动层与 token
+效率，没有一个优化像素保真，而它们砍掉的恰好是签收最需要的**（auto-wait、跨引擎一致、
+`toHaveScreenshot` 的连拍+禁动画+stylePath+mask、固定字体/locale/pinned Docker）。
+所以分层接，不换引擎：
+
+| 层 | 选型 | 理由 |
+| --- | --- | --- |
+| 基线出图 | **Playwright 官方 + pinned Docker**（不动） | 唯一还带着像素确定性那一套的 |
+| 驱活 / 复核 | `@playwright/cli`（token 省）或 `npx playwright mcp` | 1.62.0 起 CLI 与 MCP 收进主包，消掉「agent 的 browser build 与 runner 不一致 → 失败表现成推理玄学」 |
+| 判定比对 | `@blazediff/agent` + core-native | 见上文 |
+| 自检断言 | **`pageErrors()` / `consoleMessages()` / `requests()`**（1.56+ 原生） | 已接进 `capture-page-signoff.mjs`，见下 |
+| 极简旁路 | Rustwright 只接 Windows WebView2 | Alpha / 仅 Chromium / Node 绑定是子集，进不了基线链；但支持 `RUSTWRIGHT_CHROMIUM` 指向已有 Chromium，与「不启动第二个浏览器」对位 |
+| 视觉兜底 | Midscene 的 `aiAssert`（旁路内） | AX 树判不了图标颜色/遮挡/canvas 时补一刀；产的是语义结论，**不是可 diff 的基线像素** |
+
+### 自检断言为什么是刚需
+
+2026-11-12 那张被记录为「捕获成功」的工作台图，转成 PNG 是**一张
+"Rendererer error — the renderer hit an unexpected error" 崩溃页**。崩溃页的截图不构成
+任何证据，而仪器对此一言不发。`pageErrors()` / `consoleMessages()` / `requests()` 正是
+能当场抓住它的三个信号，且 1.56 起就是原生 API，不需要外挂。
+
+已接进 `capture-page-signoff.mjs`：每张图拍完都查一遍，有问题即打印
+`<label> is NOT a healthy page — the screenshot is not evidence:` 并列出手工/控制台/请求
+三类失败，退出码 6。非空泛性已验证：喂一个真会抛错的页面，三条信号分别报
+`unexpected error` / `renderer threw` / 请求失败计数。
+
+踩坑：三个 API 在 1.62 **都是异步**的（resolve 成数组）。第一版按同步写，抛 TypeError，
+于是这个「检查」既存在又没用——已修。
+
+装的是 Playwright **1.62.1**，CLI/MCP 收编与 1.56 的三个断言都已具备。
+
 ## 逐场景比对（三态：齐 / 空 / 缺）
 
 只记能从图里直接读出的。**逐模块像素判定仍要人眼**——下面是结构比对。
