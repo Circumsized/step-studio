@@ -3,11 +3,11 @@
 //! A socket in a shared temp directory is reachable by every local user, so a
 //! daemon that serves whoever connects is serving the whole machine. This is the
 //! one fact that tells them apart, and `std` does not expose it:
-//! `UnixStream::peer_cred` is still unstable, and a named pipe on Windows has no
-//! equivalent at all.
+//! `UnixStream::peer_cred` is still unstable.
 //!
-//! Unix only. On Windows the answer is "unknown", and the caller has to decide
-//! what that means — which is why this returns an `Option` rather than assuming.
+//! Unix only. Windows has `GetNamedPipeClientProcessId`, but this crate does not
+//! call it, so there the answer is "unknown" — and the caller has to decide what
+//! that means, which is why this returns an `Option` rather than assuming.
 
 
 /// What the kernel writes for `SO_PEERCRED` on Linux. The field order is the
@@ -38,6 +38,10 @@ const SOL_SOCKET: std::os::raw::c_int = 1;
 const SO_PEERCRED: std::os::raw::c_int = 17;
 
 /// The peer's uid, or `None` where the platform cannot say.
+///
+/// uid only, never the pid: unix(7) says the pid is recorded at socket creation,
+/// gets recycled, and stops describing the peer once that process changes
+/// credentials — so it cannot carry an authorization decision on its own.
 ///
 /// Generic over the socket type rather than taking a `UnixStream`, and that is
 /// what makes this crate compile on Windows at all: `UnixStream` does not exist
