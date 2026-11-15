@@ -27,6 +27,8 @@ use std::sync::Mutex;
 
 use serde_json::{json, Value};
 
+use step_studio_host as host;
+
 /// Whether something is holding the machine awake.
 static POWER_HELD: AtomicBool = AtomicBool::new(false);
 
@@ -47,17 +49,26 @@ static WAKE_LOCK: Mutex<Option<std::process::Child>> = Mutex::new(None);
 pub fn other_instance_running() -> bool {
     crate::app_handle()
         .and_then(|_handle| {
-            let dir = crate::chrome::shell_state_dir();
-            let path = dir.join("daemon.sock");
-            if !path.exists() {
-                return None;
-            }
-            // The socket file existing is not the socket being alive: a daemon
-            // that was killed leaves the file behind. Connecting is the probe.
+            // Connecting is the whole probe. The socket file existing is not
+            // the socket being alive — a daemon that was killed leaves the file
+            // behind — so there is nothing to gain from checking first.
             use std::os::unix::net::UnixStream;
-            UnixStream::connect(&path).ok().map(|_| true)
+            UnixStream::connect(daemon_probe_path()).ok().map(|_| true)
         })
         .unwrap_or(false)
+}
+
+/// Where the probe looks: the daemon's own endpoint.
+///
+/// This used to be `shell_state_dir()/daemon.sock`, which is `<cwd>/.step-studio`
+/// — a directory the daemon never binds, because it binds the machine-level
+/// `default_endpoint()` instead. In production the probe therefore always
+/// answered false, and M5.1's single-instance guard never fired: a second launch
+/// started a second shell rather than exiting. The test that was supposed to
+/// catch this compared the function to its own path, so both sides were wrong
+/// together and it passed anyway.
+pub(crate) fn daemon_probe_path() -> std::path::PathBuf {
+    std::path::PathBuf::from(host::lifecycle::default_endpoint())
 }
 
 /// Ask the running instance to show its window, then get out of the way.
@@ -279,16 +290,28 @@ mod tests {
     }
 
     #[test]
-    fn a_second_instance_is_reported_from_the_daemon_endpoint_not_a_new_lock() {
-        // No daemon on this machine's state dir, so the answer is false — and the
-        // point of the test is that the probe is the endpoint, not a mutex.
-        let probe = other_instance_running();
-        let socket = crate::chrome::shell_state_dir().join("daemon.sock");
+    fn the_probe_looks_where_the_daemon_binds() {
+        // The assertion that matters, and the one the previous version could not
+        // make: it compared `other_instance_running()` against a connect to the
+        // path the function itself had chosen. A wrong path made both sides
+        // false and the test passed. This compares the path to the daemon's
+        // endpoint instead, so a divergence fails here.
         assert_eq!(
-            probe,
-            socket.exists()
-                && std::os::unix::net::UnixStream::connect(&socket).is_ok(),
-            "the answer comes from connecting to the daemon's endpoint"
+            daemon_probe_path(),
+            std::path::PathBuf::from(host::lifecycle::default_endpoint()),
+            "the probe must look where the daemon binds, not at a path of the shell's own"
+        );
+    }
+
+    #[test]
+    fn no_daemon_means_no_other_instance() {
+        // The probe is a connect, so an endpoint nobody is listening on answers
+        // false rather than panicking. This is the production answer on a
+        // machine where the daemon has not been started.
+        assert!(
+            !other_instance_running(),
+            "something is already listening on {}",
+            daemon_probe_path().display()
         );
     }
 }

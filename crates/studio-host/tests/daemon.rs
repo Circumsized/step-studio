@@ -90,7 +90,14 @@ impl Daemon {
                 .expect("make the wrapper executable");
         }
         let log = Arc::new(Mutex::new(Vec::new()));
+        // The daemon's state directory — where the upgrade marker lives — is
+        // derived from `XDG_STATE_HOME`, so the drill points that at a scratch
+        // directory instead of writing into the machine's real one. Setting it
+        // on the child rather than in this process keeps `std::env::set_var`
+        // (and its `unsafe`) out of the workspace.
+        let state_home = dir.join("state-home");
         let mut child = Command::new(daemon_bin)
+            .env("XDG_STATE_HOME", &state_home)
             .stderr(Stdio::piped())
             .arg("--endpoint")
             .arg(&endpoint)
@@ -166,6 +173,18 @@ impl Daemon {
                 .is_none_or(|state| state == "Z"),
             None => true,
         }
+    }
+
+    /// Where this daemon looks for the upgrade marker.
+    ///
+    /// Its own state directory, which the drill isolated under a scratch
+    /// `XDG_STATE_HOME` at spawn time. The shell's per-workspace
+    /// `<cwd>/.step-studio` is a different directory and the daemon never read
+    /// the marker from there — which is the bug these drills would otherwise
+    /// have preserved, because a test that writes the marker where the daemon
+    /// used to look would pass against the old code too.
+    fn state_dir(&self) -> PathBuf {
+        self.dir.join("state-home").join("step-studio").join("daemon")
     }
 
     /// Everything the daemon has written to stderr so far.
@@ -905,10 +924,12 @@ fn two_surfaces_asking_at_the_same_time_each_get_their_own_reply() {
 
 /// Where an updater leaves the marker the daemon polls for.
 ///
-/// The daemon reads `<cwd>/.step-studio/upgrade-requested.json`, so the test's
-/// own `--cwd` decides where the marker goes — no guessing.
-fn marker_in(dir: &Path) -> PathBuf {
-    dir.join(".step-studio")
+/// The daemon's own state directory — machine-level, per `state.rs`, because one
+/// daemon serves every workspace on the machine. An updater therefore does not
+/// need to know which workspace the daemon was started for, which is what makes
+/// an update triggered from a second workspace visible to it.
+fn marker_in(state_dir: &Path) -> PathBuf {
+    state_dir.to_path_buf()
 }
 
 #[test]
@@ -919,7 +940,7 @@ fn an_upgrade_marker_drains_the_daemon_that_is_running() {
     let daemon = Daemon::build("upgrade-drain", 600);
     let instance_id = daemon.instance_id();
 
-    step_studio_host::upgrade::request(&marker_in(&daemon.dir), &instance_id)
+    step_studio_host::upgrade::request(&marker_in(&daemon.state_dir()), &instance_id)
         .expect("write the upgrade marker");
 
     // The watch loop polls every 250 ms, so "immediately" is a quarter second.
@@ -934,7 +955,7 @@ fn an_upgrade_marker_drains_the_daemon_that_is_running() {
         daemon.log()
     );
     assert!(
-        !marker_in(&daemon.dir).join("upgrade-requested.json").exists(),
+        !marker_in(&daemon.state_dir()).join("upgrade-requested.json").exists(),
         "the daemon drained but left the marker behind, so the next daemon would read it as stale"
     );
 }
@@ -950,7 +971,7 @@ fn a_marker_left_by_a_half_finished_update_does_not_stop_the_next_daemon() {
     // test's own invention — the first version did that and asserted against a
     // file the daemon had never been told about.
     let daemon = Daemon::build("upgrade-stale", 600);
-    step_studio_host::upgrade::request(&marker_in(&daemon.dir), "daemon-999999-somebody-else")
+    step_studio_host::upgrade::request(&marker_in(&daemon.state_dir()), "daemon-999999-somebody-else")
         .expect("write the stale marker");
 
     // Long enough to have crossed several poll intervals, so a daemon that meant
@@ -962,7 +983,7 @@ fn a_marker_left_by_a_half_finished_update_does_not_stop_the_next_daemon() {
         daemon.log()
     );
     assert!(
-        marker_in(&daemon.dir).join("upgrade-requested.json").exists(),
+        marker_in(&daemon.state_dir()).join("upgrade-requested.json").exists(),
         "the stale marker was consumed; the operator lost the evidence an update did not land"
     );
     assert!(
@@ -1018,7 +1039,7 @@ fn the_hot_replace_sequence_lands_the_staged_build_and_a_rollback_restores_the_o
 
     // --- first daemon, drained by an update that names it ---
     let first = Daemon::spawn("swap-first", 600, &target, &work, &root);
-    step_studio_host::upgrade::request(&marker_in(&work), &first.instance_id())
+    step_studio_host::upgrade::request(&marker_in(&first.state_dir()), &first.instance_id())
         .expect("write the upgrade marker");
     let deadline = Instant::now() + Duration::from_secs(2);
     while Instant::now() < deadline && !first.exited() {

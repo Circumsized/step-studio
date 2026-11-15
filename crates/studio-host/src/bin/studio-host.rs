@@ -1042,7 +1042,13 @@ fn watch(daemon: Arc<Daemon>) {
         // An upgrade that means *this* daemon: drain now, with the grace period
         // forced to zero. The marker names the daemon, so one left by a
         // half-finished update is stale to the next daemon and does not stop it.
-        let state_dir = std::path::PathBuf::from(&daemon.config.cwd).join(".step-studio");
+        // The daemon's own state directory, not the shell's per-workspace
+        // `<cwd>/.step-studio`. `upgrade.rs` says the marker lives in "the
+        // daemon's own state directory" and `state.rs` says that directory is
+        // machine-level because one daemon serves every workspace — but this
+        // read the workspace one, so an update triggered from any workspace
+        // other than the daemon's own was invisible to it.
+        let state_dir = step_studio_host::state::state_dir();
         match step_studio_host::upgrade::decide(&state_dir, &daemon.instance_id) {
             decision if decision.should_drain() => {
                 eprintln!("step-studio-host: {}", decision.reason());

@@ -95,11 +95,10 @@ impl Breaker {
 pub fn state_dir() -> PathBuf {
     #[cfg(windows)]
     {
-        std::env::var_os("LOCALAPPDATA")
+        let base = std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("Step Studio")
-            .join("daemon")
+            .unwrap_or_else(|| PathBuf::from("."));
+        state_dir_under(&base)
     }
     #[cfg(not(windows))]
     {
@@ -111,6 +110,26 @@ pub fn state_dir() -> PathBuf {
                     .map(|home| PathBuf::from(home).join(".local").join("state"))
             })
             .unwrap_or_else(|| PathBuf::from("."));
+        state_dir_under(&base)
+    }
+}
+
+/// The daemon's state directory, under a given base.
+///
+/// Split from [`state_dir`] so a caller that controls another process's
+/// environment can work out where that process will look without repeating the
+/// layout: the upgrade drill spawns a daemon with its own `XDG_STATE_HOME` and
+/// has to write the marker where *that* daemon reads it. The alternative — the
+/// test writing to `cwd/.step-studio` because that is what the daemon used to
+/// read — is how the marker came to live in the wrong directory in the first
+/// place.
+pub fn state_dir_under(base: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        base.join("Step Studio").join("daemon")
+    }
+    #[cfg(not(windows))]
+    {
         base.join("step-studio").join("daemon")
     }
 }
