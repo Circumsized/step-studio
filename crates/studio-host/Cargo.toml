@@ -7,6 +7,11 @@ license.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+# Emits STEP_STUDIO_BUILD_ID. See build.rs for why the workspace version cannot
+# carry it: every crate shares version.workspace, so the shell and the daemon
+# always report the same string and a skew between them is invisible.
+build = "build.rs"
+
 [lints]
 workspace = true
 
