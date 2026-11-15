@@ -7,19 +7,28 @@
 
 #![cfg(unix)]
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
 use step_studio_bridge::{AdapterLaunch, BridgeSession};
 
 /// A running daemon, killed when the test ends.
+///
+/// `log` holds the daemon's stderr. It is piped rather than inherited so a test
+/// can read what the daemon said — the upgrade marker drill needs the epoch the
+/// daemon logged at startup to name it — and `Drop` echoes it back only when the
+/// test is already failing, so a green run stays quiet and a red one keeps its
+/// evidence.
 struct Daemon {
     child: Child,
     endpoint: String,
     adapter_endpoint: String,
     dir: PathBuf,
+    log: Arc<Mutex<Vec<String>>>,
 }
 
 impl Daemon {
@@ -32,11 +41,21 @@ impl Daemon {
     /// connections, or the daemon correctly drains before the second shell
     /// arrives.
     fn build(tag: &str, grace: u64) -> Self {
-        let dir = std::env::temp_dir().join(format!("host-daemon-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).expect("make a temp dir");
         let root = repo_root();
-        let daemon_bin = root.join("target/debug/step-studio-host");
+        let dir = std::env::temp_dir().join(format!("host-daemon-{tag}-{}", std::process::id()));
+        Self::spawn(tag, grace, &root.join("target/debug/step-studio-host"), &dir, &root)
+    }
+
+    /// Start a daemon from a chosen binary, in a chosen directory.
+    ///
+    /// The upgrade drill needs both: it swaps a *copy* of the daemon inside a
+    /// scratch install directory, and must not disturb the binary the other
+    /// tests in this file run. `dir` is the daemon's cwd, which is also where it
+    /// looks for the upgrade marker, so the drill decides where that lands.
+    fn spawn(tag: &str, grace: u64, daemon_bin: &Path, dir: &Path, root: &Path) -> Self {
+        let _ = tag;
+        let _ = std::fs::remove_dir_all(dir);
+        std::fs::create_dir_all(dir).expect("make a temp dir");
         assert!(
             daemon_bin.is_file(),
             "build the daemon first: cargo build -p step-studio-host"
@@ -44,6 +63,7 @@ impl Daemon {
 
         let endpoint = dir.join("daemon.sock").to_string_lossy().to_string();
         let adapter_endpoint = dir.join("adapter.sock").to_string_lossy().to_string();
+        let _ = root;
         // The Rust runtime takes the CLI as one executable and does not split a
         // command line, so the fake arrives through a wrapper rather than as
         // `node <script>`. (The TypeScript adapter did split it; that divergence
@@ -69,15 +89,17 @@ impl Daemon {
             std::fs::set_permissions(&step, std::fs::Permissions::from_mode(0o755))
                 .expect("make the wrapper executable");
         }
-        let child = Command::new(&daemon_bin)
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let mut child = Command::new(daemon_bin)
+            .stderr(Stdio::piped())
             .arg("--endpoint")
             .arg(&endpoint)
             .arg("--adapter-endpoint")
             .arg(&adapter_endpoint)
             .arg("--cwd")
-            .arg(&dir)
+            .arg(dir)
             .arg("--repo-root")
-            .arg(&root)
+            .arg(root)
             .arg("--step-cmd")
             .arg(&step)
             .arg("--grace")
@@ -85,14 +107,99 @@ impl Daemon {
             .spawn()
             .expect("spawn the daemon");
 
+        // Drain stderr into the shared buffer for as long as the daemon lives.
+        // A daemon that is killed mid-line leaves a partial record, which is
+        // fine: nothing here parses across lines.
+        let mut stderr = child.stderr.take().expect("piped stderr");
+        let log_reader = Arc::clone(&log);
+        std::thread::spawn(move || {
+            let mut buffer = String::new();
+            let mut chunk = [0u8; 4096];
+            loop {
+                match stderr.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(read) => {
+                        buffer.push_str(&String::from_utf8_lossy(&chunk[..read]));
+                        while let Some(index) = buffer.find('\n') {
+                            let line = buffer[..index].trim().to_string();
+                            buffer.drain(..=index);
+                            if !line.is_empty() {
+                                if let Ok(mut held) = log_reader.lock() {
+                                    held.push(line);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
         let daemon = Self {
             child,
             endpoint,
             adapter_endpoint,
-            dir,
+            dir: dir.to_path_buf(),
+            log,
         };
         daemon.wait_until_reachable();
         daemon
+    }
+
+    /// Whether the daemon has exited on its own.
+    ///
+    /// The state field, not the directory's existence: an unreaped child is a
+    /// zombie and `/proc/<pid>` is still there, which made the first version of
+    /// this report a daemon that had just logged "exiting" as still running.
+    /// `Child::try_wait` would be the honest call but needs `&mut self`, and
+    /// several assertions read this at once. This file is `#![cfg(unix)]`
+    /// already, so the probe is available wherever the tests are.
+    fn exited(&self) -> bool {
+        let Ok(stat) = std::fs::read_to_string(format!("/proc/{}/stat", self.child.id())) else {
+            return true;
+        };
+        // `comm` is parenthesised and may itself contain spaces or parentheses,
+        // so the state is the first field after the *last* ')'.
+        match stat.rfind(')') {
+            Some(close) => stat[close + 1..]
+                .split_whitespace()
+                .next()
+                .is_none_or(|state| state == "Z"),
+            None => true,
+        }
+    }
+
+    /// Everything the daemon has written to stderr so far.
+    fn log(&self) -> Vec<String> {
+        self.log.lock().map(|held| held.clone()).unwrap_or_default()
+    }
+
+    /// This daemon's identity, the way an updater has to name it.
+    ///
+    /// The daemon logs its epoch at startup (`studio-host.rs`: "step-studio-host:
+    /// epoch {epoch}, endpoint …") and builds its instance id from that epoch and
+    /// its own pid. Neither is on any query, so the marker a test writes has to be
+    /// assembled from the log plus the pid it already knows — which is exactly
+    /// what the real updater has to do too, since the shell learns the instance
+    /// id the same way.
+    fn instance_id(&self) -> String {
+        let epoch = self
+            .log()
+            .iter()
+            .find_map(|line| {
+                // The line is "step-studio-host: epoch 361, endpoint …", so the
+                // number carries a trailing comma and is not at a fixed index.
+                let mut words = line.split_whitespace();
+                while let Some(word) = words.next() {
+                    if word == "epoch" {
+                        return words
+                            .next()
+                            .and_then(|value| value.trim_end_matches(',').parse::<u64>().ok());
+                    }
+                }
+                None
+            })
+            .unwrap_or_else(|| panic!("no epoch in the daemon log: {:?}", self.log()));
+        format!("daemon-{epoch}-{}", self.child.id())
     }
 
     /// Wait until the daemon answers on its endpoint.
@@ -119,6 +226,14 @@ impl Drop for Daemon {
         // point is that nothing is left behind either way.
         let _ = self.child.kill();
         let _ = self.child.wait();
+        // A daemon that exited on its own is the interesting case for these
+        // tests, and the only place its reasoning exists is stderr. Echo it
+        // only when the test is already failing: a green run must stay quiet.
+        if std::thread::panicking() {
+            for line in self.log() {
+                eprintln!("[daemon] {line}");
+            }
+        }
         let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
@@ -773,4 +888,187 @@ fn two_surfaces_asking_at_the_same_time_each_get_their_own_reply() {
             "{who} got a snapshot with no session"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// §12.4's hot-replace sequence, end to end.
+//
+// The three thirds of the sequence each have unit tests: `upgrade::decide` for
+// the drain decision, `swap`/`rollback` for the package move, `signing` for the
+// manifest. What none of them prove is that the thirds compose — that a real
+// daemon actually leaves when an update names it, that the package that lands is
+// the one that was staged, and that the user's data is still there afterwards.
+// `design/progress/m5.md` recorded these as "卡 B1 (no Windows machine)", which
+// is wrong: the sequence is platform-independent Rust, and the only part that
+// needs Windows is the installer that calls it.
+// ---------------------------------------------------------------------------
+
+/// Where an updater leaves the marker the daemon polls for.
+///
+/// The daemon reads `<cwd>/.step-studio/upgrade-requested.json`, so the test's
+/// own `--cwd` decides where the marker goes — no guessing.
+fn marker_in(dir: &Path) -> PathBuf {
+    dir.join(".step-studio")
+}
+
+#[test]
+fn an_upgrade_marker_drains_the_daemon_that_is_running() {
+    // Grace is deliberately far longer than the test: the only thing that may
+    // end this daemon is the marker. A daemon that left because its grace
+    // expired would make this test pass for the wrong reason.
+    let daemon = Daemon::build("upgrade-drain", 600);
+    let instance_id = daemon.instance_id();
+
+    step_studio_host::upgrade::request(&marker_in(&daemon.dir), &instance_id)
+        .expect("write the upgrade marker");
+
+    // The watch loop polls every 250 ms, so "immediately" is a quarter second.
+    // Two seconds is already eight polls of slack for a loaded machine.
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline && !daemon.exited() {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        daemon.exited(),
+        "the daemon did not drain for an update that named it; log: {:?}",
+        daemon.log()
+    );
+    assert!(
+        !marker_in(&daemon.dir).join("upgrade-requested.json").exists(),
+        "the daemon drained but left the marker behind, so the next daemon would read it as stale"
+    );
+}
+
+#[test]
+fn a_marker_left_by_a_half_finished_update_does_not_stop_the_next_daemon() {
+    // The failure this guards: an update writes a marker, the daemon it named
+    // dies before consuming it, and every daemon after that honours it anyway —
+    // a machine whose daemon never boots, caused by an update that half-finished.
+    //
+    // The marker goes into the daemon's own cwd, which is where it looks, so it
+    // is written after the daemon is up rather than into a directory of the
+    // test's own invention — the first version did that and asserted against a
+    // file the daemon had never been told about.
+    let daemon = Daemon::build("upgrade-stale", 600);
+    step_studio_host::upgrade::request(&marker_in(&daemon.dir), "daemon-999999-somebody-else")
+        .expect("write the stale marker");
+
+    // Long enough to have crossed several poll intervals, so a daemon that meant
+    // to honour the marker has had every chance to.
+    std::thread::sleep(Duration::from_millis(1200));
+    assert!(
+        !daemon.exited(),
+        "the daemon exited for a marker naming another daemon; log: {:?}",
+        daemon.log()
+    );
+    assert!(
+        marker_in(&daemon.dir).join("upgrade-requested.json").exists(),
+        "the stale marker was consumed; the operator lost the evidence an update did not land"
+    );
+    assert!(
+        daemon.log().iter().any(|line| line.contains("which is not this one")),
+        "the daemon did not report the stale marker; log: {:?}",
+        daemon.log()
+    );
+}
+
+#[test]
+fn the_hot_replace_sequence_lands_the_staged_build_and_a_rollback_restores_the_old_one() {
+    // §12.4's four acceptance cases, minus the two `signing` already covers
+    // (downgrade refused) and the two `migrate` already covers (credentials
+    // passed through). What is left is the sequence itself: drain → swap →
+    // restart, then rollback, with the user's data untouched throughout.
+    let root = repo_root();
+    let daemon_bin = root.join("target/debug/step-studio-host");
+    assert!(daemon_bin.is_file(), "build the daemon first");
+
+    let dir = std::env::temp_dir().join(format!("host-daemon-swap-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let install = dir.join("install");
+    let staged = dir.join("staged");
+    let data = dir.join("data");
+    let work = dir.join("work");
+    for each in [&install, &staged, &data, &work] {
+        std::fs::create_dir_all(each).expect("make a scratch dir");
+    }
+
+    // Two distinguishable builds. The swap is a rename, so "which one is live"
+    // is a question about content, not about a version string nothing records.
+    let original = std::fs::read(&daemon_bin).expect("read the daemon binary");
+    let mut staged_bytes = original.clone();
+    staged_bytes.extend_from_slice(b"staged-build");
+    let target = install.join("step-studio-host");
+    let new = staged.join("step-studio-host");
+    std::fs::write(&target, &original).expect("install the current build");
+    std::fs::write(&new, &staged_bytes).expect("stage the new build");
+    // `fs::write` creates a 0644 file, and a daemon nobody can exec is a daemon
+    // that never starts — which would look like a swap failure rather than the
+    // permissions problem it is.
+    #[cfg(unix)]
+    for binary in [&target, &new] {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(binary, std::fs::Permissions::from_mode(0o755))
+            .expect("make the build executable");
+    }
+
+    // The user's data: a file the sequence has no business touching.
+    let kept = data.join("index.sqlite");
+    let kept_bytes = b"the user's index, which no update may rewrite";
+    std::fs::write(&kept, kept_bytes).expect("write the user's data");
+
+    // --- first daemon, drained by an update that names it ---
+    let first = Daemon::spawn("swap-first", 600, &target, &work, &root);
+    step_studio_host::upgrade::request(&marker_in(&work), &first.instance_id())
+        .expect("write the upgrade marker");
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline && !first.exited() {
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    assert!(
+        first.exited(),
+        "the running daemon did not drain for the update; log: {:?}",
+        first.log()
+    );
+
+    // --- the swap ---
+    let outcome = step_studio_host::swap::swap(&new, &target).expect("the swap");
+    assert_eq!(
+        std::fs::read(&target).expect("read the installed build"),
+        staged_bytes,
+        "the staged build did not land"
+    );
+    assert_eq!(
+        std::fs::read(outcome.aside.expect("the old build was moved aside"))
+            .expect("read the aside build"),
+        original,
+        "the previous version was not kept aside for a rollback"
+    );
+    assert_eq!(
+        std::fs::read(&kept).expect("read the user's data"),
+        kept_bytes,
+        "the swap touched the user's data"
+    );
+
+    // --- second daemon, from the swapped-in build ---
+    let second = Daemon::spawn("swap-second", 600, &target, &work, &root);
+    assert!(
+        std::os::unix::net::UnixStream::connect(&second.endpoint).is_ok(),
+        "the new build did not come up; log: {:?}",
+        second.log()
+    );
+
+    // --- and the rollback, which must put the first build back exactly ---
+    step_studio_host::swap::rollback(&target).expect("the rollback");
+    assert_eq!(
+        std::fs::read(&target).expect("read the rolled-back build"),
+        original,
+        "the rollback did not restore the previous build byte for byte"
+    );
+    assert_eq!(
+        std::fs::read(&kept).expect("read the user's data"),
+        kept_bytes,
+        "the rollback touched the user's data"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
 }
