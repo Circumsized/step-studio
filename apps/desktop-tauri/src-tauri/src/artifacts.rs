@@ -467,15 +467,27 @@ impl Library {
         Ok(PathBuf::from(directory))
     }
 
-    /// Register a payload the caller has already written into the active root.
+    /// Register a payload the caller streamed into one of the library's roots.
     ///
     /// Split from [`Self::register`] because the media upload streams chunks in
     /// over IPC rather than copying a file: it owns the payload and the digest,
     /// and this owns the catalog entry. Two writers of the same record would be
     /// two chances to get the digest wrong.
+    ///
+    /// `partial` is the payload's in-progress path, and it decides *where* the
+    /// entry points: the root the payload is actually in, never whichever root
+    /// happens to be active when the last chunk arrives. An upload can stream
+    /// for minutes and the user can move the library while it does, so the
+    /// first version — which re-read the active root at finish — renamed into
+    /// the new location and catalogued the row there. That goes wrong twice:
+    /// when the new location is on another disk the rename is refused with
+    /// `EXDEV` after the whole payload has already arrived, and when it is not,
+    /// the bytes stay in the old root while the row names the new one, which is
+    /// an artifact that resolves to a missing file forever.
     pub fn commit(
         &self,
         input: &Value,
+        partial: &Path,
         filename: &str,
         digest: &str,
         bytes: u64,
@@ -528,7 +540,31 @@ impl Library {
         }
 
         let mut catalog = self.load()?;
-        let root_id = catalog.active_root.clone();
+        // The root the payload is physically in, found by path rather than taken
+        // as the active one: the upload began before the library may have moved,
+        // and the bytes are wherever they were streamed. Compared component by
+        // component, so a location stored with a trailing separator still
+        // matches the one a payload inside it derives.
+        let directory = partial
+            .parent()
+            .ok_or_else(|| ChromeError::failed("the upload has no location"))?;
+        let root_id = catalog
+            .roots
+            .iter()
+            .find(|(_, root)| Path::new(root) == directory)
+            .map(|(id, _)| id.clone())
+            .ok_or_else(|| {
+                ChromeError::failed("the upload's location is no longer in the library")
+            })?;
+        // The payload reaches its final name only once it is whole, and only ever
+        // inside the directory it was streamed into: a rename between two roots
+        // is a rename between two volumes whenever the user keeps their files on
+        // a second disk, and `rename` refuses that with `EXDEV`.
+        let target = directory.join(filename);
+        std::fs::rename(partial, &target).map_err(|error| {
+            let _ = std::fs::remove_file(partial);
+            ChromeError::failed(format!("cannot store the artifact: {error}"))
+        })?;
         catalog.artifacts.push(StoredArtifact {
             record: json!({
                 "artifactId": artifact_id,
@@ -843,6 +879,34 @@ mod tests {
         record
     }
 
+    /// A directory on another filesystem, when this machine has one to spare.
+    ///
+    /// The failure pinned below is a rename across a device boundary, and that
+    /// needs two volumes to reproduce. `/dev/shm` is a tmpfs on every Linux this
+    /// shell builds for and needs no privileges to write to; `None` where it
+    /// turns out to be the same filesystem as the temporary directory, which is
+    /// every macOS — the assertions still hold there, the test just stops being
+    /// able to produce `EXDEV`.
+    fn another_filesystem(tag: &str) -> Option<PathBuf> {
+        let shm = Path::new("/dev/shm");
+        if !shm.is_dir() {
+            return None;
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let here = std::fs::metadata(std::env::temp_dir()).ok()?.dev();
+            let there = std::fs::metadata(shm).ok()?.dev();
+            if here == there {
+                return None;
+            }
+        }
+        let path = shm.join(format!("artifacts-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).ok()?;
+        Some(path)
+    }
+
     #[test]
     fn a_fresh_library_is_empty_and_writable() {
         let (dir, library) = library("empty");
@@ -1123,6 +1187,55 @@ mod tests {
             first_path.display()
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_upload_streamed_into_one_root_lands_there_even_after_the_library_moves() {
+        // The bug this pins: `commit` took the active root at the moment the last
+        // chunk arrived. An upload streams for minutes and the user can move the
+        // library while it does, so the payload was renamed into the new location
+        // and the row catalogued there. With the new location on another disk
+        // that rename is refused with `EXDEV` — after the whole payload has
+        // already arrived — and on the same disk it leaves an artifact whose row
+        // names a root its bytes were never written to, which resolves to a
+        // missing file forever.
+        let (dir, library) = library("streamroot");
+        // Where the upload began: the root this library opened with.
+        let streamed_into = library.active_directory().expect("the root the upload began in");
+        // Where the user moved the library to while it was streaming. Another
+        // filesystem where there is one, because that is the half of the failure
+        // an ordinary directory hides.
+        let moved_to = another_filesystem("streamroot").unwrap_or_else(|| dir.join("location-moved"));
+        library
+            .set_directory(&moved_to.to_string_lossy())
+            .expect("moved");
+
+        let payload = b"streamed while the library moved";
+        let filename = format!("{}.txt", uuid::Uuid::new_v4());
+        let partial = streamed_into.join(format!("{filename}.partial"));
+        std::fs::write(&partial, payload).expect("write the payload");
+
+        let record = library
+            .commit(
+                &json!({ "kind": "export", "name": "moved.txt", "mimeType": "text/plain" }),
+                &partial,
+                &filename,
+                &format!("{:x}", Sha256::digest(payload)),
+                payload.len() as u64,
+            )
+            .expect("committed");
+
+        let artifact_id = record.get("artifactId").and_then(Value::as_str).unwrap_or("");
+        let (_, path) = library.resolve(artifact_id).expect("resolved");
+        assert!(
+            path.starts_with(&streamed_into),
+            "the payload lands where it was streamed, not where the library moved to: {}",
+            path.display()
+        );
+        assert_eq!(std::fs::read(&path).expect("read the payload"), payload);
+        assert!(!partial.exists(), "the partial name is gone once it landed");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&moved_to);
     }
 
     #[test]

@@ -100,7 +100,9 @@ struct Upload {
     mime_type: String,
     workspace_id: Option<String>,
     session_id: Option<String>,
-    /// `<root>/<artifact-id><ext>.partial`. Renamed on finish.
+    /// `<root>/<artifact-id><ext>.partial`, where `<root>` is the location that
+    /// was active when the upload began. Renamed on finish — and it is this path,
+    /// not a second read of the active location, that says where it lands.
     partial: PathBuf,
     filename: String,
     artifact_id: String,
@@ -329,18 +331,13 @@ pub fn finish_upload(window: String, raw: Value) -> ChromeResult<Value> {
     };
     let (kind, name, mime_type, workspace_id, session_id, partial, filename, artifact_id, digest, bytes) = upload;
 
+    // `partial` already names where this upload has been writing all along, so
+    // the destination comes from it rather than from a second read of the active
+    // location: the user can move the library while a payload is streaming, and
+    // a destination re-read at that moment is either a rename onto another disk
+    // — refused with `EXDEV`, after the whole upload has arrived — or a row
+    // catalogued in a location the bytes were never written to.
     let library = crate::artifacts::library();
-    let root = match library.active_directory() {
-        Ok(root) => root,
-        Err(error) => return Ok(json!({ "ok": false, "message": error.message })),
-    };
-    let target = root.join(&filename);
-    // The payload reaches its final name only once it is whole.
-    if std::fs::rename(&partial, &target).is_err() {
-        let _ = std::fs::remove_file(&partial);
-        uploads().get_or_insert_with(HashMap::new).remove(&artifact_id);
-        return Ok(json!({ "ok": false, "message": UPLOAD_FAILED }));
-    }
     let record = library.commit(
         &json!({
             "kind": kind,
@@ -349,6 +346,7 @@ pub fn finish_upload(window: String, raw: Value) -> ChromeResult<Value> {
             "workspaceId": workspace_id,
             "sessionId": session_id,
         }),
+        &partial,
         &filename,
         &digest,
         bytes,
@@ -357,7 +355,8 @@ pub fn finish_upload(window: String, raw: Value) -> ChromeResult<Value> {
     match record {
         Ok(record) => Ok(json!({ "ok": true, "artifact": record })),
         Err(error) => {
-            let _ = std::fs::remove_file(&target);
+            let _ = std::fs::remove_file(&partial);
+            let _ = std::fs::remove_file(partial.with_file_name(&filename));
             Ok(json!({ "ok": false, "message": error.message }))
         }
     }
