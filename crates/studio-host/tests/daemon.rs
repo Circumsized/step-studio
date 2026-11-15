@@ -201,10 +201,21 @@ impl Daemon {
     /// what the real updater has to do too, since the shell learns the instance
     /// id the same way.
     fn instance_id(&self) -> String {
-        let epoch = self
-            .log()
-            .iter()
-            .find_map(|line| {
+        let epoch = self.await_epoch();
+        format!("daemon-{epoch}-{}", self.child.id())
+    }
+
+    /// The epoch this daemon logged at startup, waiting for it to arrive.
+    ///
+    /// Waited for rather than read once: `wait_until_reachable` returns as soon
+    /// as the socket accepts, and the stderr reader is a separate thread, so the
+    /// epoch line can still be in flight. Reading it once made this panic under
+    /// parallel load — `cargo test` runs test binaries concurrently, and the
+    /// extra binaries are exactly what loses the race.
+    fn await_epoch(&self) -> u64 {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(epoch) = self.log().iter().find_map(|line| {
                 // The line is "step-studio-host: epoch 361, endpoint …", so the
                 // number carries a trailing comma and is not at a fixed index.
                 let mut words = line.split_whitespace();
@@ -216,9 +227,16 @@ impl Daemon {
                     }
                 }
                 None
-            })
-            .unwrap_or_else(|| panic!("no epoch in the daemon log: {:?}", self.log()));
-        format!("daemon-{epoch}-{}", self.child.id())
+            }) {
+                return epoch;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the daemon never logged its epoch; log: {:?}",
+                self.log()
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
 
     /// Wait until the daemon answers on its endpoint.
