@@ -441,17 +441,6 @@ export const PREVIEW_DIFF = {
   ] as PreviewDiffLine[],
 };
 
-export const PREVIEW_PREVIEW = {
-  url: "127.0.0.1:30141",
-  path: "/?session=019fac94-5e18-7000",
-  status: "ok" as const,
-  logs: [
-    "[vite] connected.",
-    "[vite] hmr update /components/MermaidBlock.tsx",
-    "[vite] page reload src/App.tsx",
-    "[omp] preview attached, session=019fac94",
-  ],
-};
 
 export const PREVIEW_PROBLEMS: PreviewProblem[] = [
   { sev: "error", src: "TypeScript", msg: "TS2322: Type 'string' is not assignable to type 'MermaidTheme'", file: "components/MermaidBlock.tsx", line: 147 },

@@ -6,7 +6,6 @@
 
 import type { JobInspection, JobWidgetView } from "@omp-studio/studio-protocol";
 
-export type PreviewRetry = { attempt: number; maxAttempts: number; errorMessage?: string };
 export type PreviewMetrics = {
   cost: number;
   durationMs: number;
@@ -25,8 +24,6 @@ export type PreviewAgent = {
   parentId?: string;
   status: "running" | "idle" | "parked" | "aborted";
   task: string;
-  lastIntent?: string | null;
-  retryState?: PreviewRetry | null;
   modelRole?: string;
   resolvedModel?: string;
   fallback?: string | null;
@@ -177,7 +174,6 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
         id: "agent-019fcb01", name: "deps 子 Agent", kind: "sub", parentId: "main",
         status: "running",
         task: "审计 @earendil-works/pi-* 0.82.1 变更，确认 mermaid 类型签名",
-        lastIntent: "先扫 lockfile 定位间接依赖，再对 pi-mermaid 做类型 diff",
         modelRole: "@smol", resolvedModel: "gemini-3.6-flash",
         metrics: { cost: 0.51, durationMs: 167000, durationKind: "active", requests: 9, tools: 14, tokens: 12600, contextTokens: 31200, contextWindow: 128000 },
         children: ["agent-019fcb20"], ircUnread: 2, createdAt: ago(812), lastActivity: ago(3), hasTranscript: true,
@@ -187,7 +183,6 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
         id: "agent-019fcb17", name: "preview 子 Agent", kind: "sub", parentId: "main",
         status: "idle",
         task: "验证 Mermaid 全屏缩放拖拽在 125% DPI 下的表现",
-        lastIntent: "AskUserQuestion 挂起，等待用户选择交互方案",
         modelRole: "@vision", resolvedModel: "gemini-3.6-flash",
         metrics: { cost: 0.22, durationMs: 63000, durationKind: "active", requests: 4, tools: 6, tokens: 5100, contextTokens: 9800, contextWindow: 128000 },
         children: [], createdAt: ago(663), lastActivity: ago(63), hasTranscript: true,
@@ -196,8 +191,6 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
         id: "agent-019fcb55", name: "lint 子 Agent", kind: "sub", parentId: "main",
         status: "idle",
         task: "ESLint 全量扫描（merge 后回归）",
-        lastIntent: "两次扫描均因 .eslintrc 合并冲突失败，已停止重试",
-        retryState: { attempt: 2, maxAttempts: 2, errorMessage: "ESLint exited with code 2" },
         modelRole: "@worker", resolvedModel: "gpt-5-mini",
         metrics: { cost: 0.14, durationMs: 38000, durationKind: "active", requests: 2, tools: 2, tokens: 3300, contextTokens: 6100, contextWindow: 128000 },
         outputPath: "agent-019fcb55.md", children: [], createdAt: ago(438), lastActivity: ago(400), hasTranscript: true,
@@ -216,7 +209,6 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
         id: "agent-019fc9d2", name: "docs 子 Agent", kind: "sub", parentId: "main",
         status: "parked",
         task: "整理 UPSTREAM-SYNC.md 三阶段章节草稿",
-        lastIntent: "草稿 v2 已交付，空闲 TTL 到期自动 park",
         modelRole: "@writer", resolvedModel: "claude-sonnet-4.5", fallback: "anthropic/claude-sonnet-4.5",
         metrics: { cost: 0.96, durationMs: 145000, durationKind: "active", requests: 7, tools: 11, tokens: 18200, contextTokens: 52100, contextWindow: 200000 },
         outputPath: "agent-019fc9d2.md", children: [], createdAt: ago(1445), lastActivity: ago(692), hasTranscript: true,
@@ -225,7 +217,6 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
         id: "agent-019fc8a0", name: "audit 子 Agent", kind: "sub", parentId: "main",
         status: "parked",
         task: "OSS 仓库发布前合规检查（license / NOTICE / 依赖审计）",
-        lastIntent: "报告已生成，等待下一次手动 revive",
         modelRole: "@audit", resolvedModel: "gpt-5.2-codex",
         metrics: { cost: 1.23, durationMs: 412000, durationKind: "active", requests: 15, tools: 21, tokens: 40300, contextTokens: 88200, contextWindow: 200000 },
         outputPath: "agent-019fc8a0.md", patchPath: "agent-019fc8a0.patch",
@@ -236,7 +227,6 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
         id: "agent-019fc77e", name: "spike 子 Agent", kind: "sub", parentId: "main",
         status: "aborted",
         task: "试验 ws 通道替代 stdio 的可行性（spike）",
-        lastIntent: "方案被否决后由用户 kill（tombstone 已写入）",
         modelRole: "@spike", resolvedModel: "gpt-5-mini",
         metrics: { cost: 0.09, durationMs: 41000, durationKind: "active", requests: 3, tools: 4, tokens: 2900 },
         children: [], createdAt: ago(7400), lastActivity: ago(6200), hasTranscript: true,
@@ -245,7 +235,6 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
         id: "advisor-019fab10", name: "advisor", kind: "advisor", parentId: "main",
         status: "idle",
         task: "架构顾问：评审 session 存储层重构方案的风险点",
-        lastIntent: "advisor 是只读观察记录，不参与 agent 间消息",
         modelRole: "@advisor", resolvedModel: "claude-opus-4.8",
         metrics: { cost: 0.44, durationMs: 95000, durationKind: "active", requests: 2, tools: 0, tokens: 9600, contextTokens: 21400, contextWindow: 200000 },
         readOnly: true, outputPath: "advisor-019fab10.md",

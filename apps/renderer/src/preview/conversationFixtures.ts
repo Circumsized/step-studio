@@ -354,7 +354,3 @@ export const PREVIEW_CONVO_LIVE: readonly ConversationRuntimeEvent[] = [
 
 export const PREVIEW_CONVO_IDENTITY = { runtimeEpoch: epoch, sessionId: session };
 
-// TODO: applyLiveEvent / buildTimeline removed — fixture generation needs reimplementation
-export function previewConversationRows(): TimelineRow[] {
-  return [];
-}

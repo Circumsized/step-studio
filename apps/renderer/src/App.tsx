@@ -225,7 +225,6 @@ import {
   PreviewLogs,
   PreviewProblems,
   PreviewSideAgents,
-  PreviewSidePreview,
   PreviewSwitch,
   PreviewTests,
   PreviewTokenPanel,

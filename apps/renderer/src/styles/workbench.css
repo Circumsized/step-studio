@@ -5926,12 +5926,6 @@ button.compact-rule.is-open .compact-rule-chev { transform: rotate(180deg); }
 .diff-split .dl .half + .half { border-left: 1px solid var(--border); }
 
 /* Preview */
-.pv-toolbar {
-  flex: none;
-  display: flex; align-items: center; gap: var(--sp-4);
-  padding: var(--sp-6) var(--sp-10);
-  border-bottom: 1px solid var(--border);
-}
 .pv-url {
   flex: 1; min-width: 0;
   display: flex; align-items: center; gap: var(--sp-6);
@@ -5943,64 +5937,7 @@ button.compact-rule.is-open .compact-rule-chev { transform: rotate(180deg); }
   font-size: var(--fs-11);
   color: var(--text-2);
 }
-.pv-statusbar {
-  flex: none;
-  display: flex; align-items: center; gap: var(--sp-8);
-  padding: 4px var(--sp-12);
-  border-bottom: 1px solid var(--border);
-  font-size: var(--fs-11);
-  color: var(--text-2);
-}
-.pv-view { flex: 1; overflow: auto; background: var(--bg-inset); display: flex; justify-content: center; padding: var(--sp-12); }
-.pv-frame {
-  width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-8);
-  overflow: hidden;
-  align-self: flex-start;
-  min-height: 320px;
-}
-.pv-frame.tablet { max-width: 480px; }
-.pv-frame.phone { max-width: 300px; }
-.pv-console {
-  flex: none; height: 120px; border-top: 1px solid var(--border);
-  overflow-y: auto; padding: var(--sp-8) var(--sp-12);
-  font-family: var(--font-mono); font-size: calc(10.5px * var(--text-font-scale)); line-height: 1.6; color: var(--text-2);
-  background: var(--code-bg);
-}
-/* 模拟页面内容 */
-.mock-page { padding: var(--sp-20); font-size: var(--fs-14); }
-.mock-page .mp-nav { display: flex; gap: var(--sp-12); padding-bottom: var(--sp-12); border-bottom: 1px solid var(--border); margin-bottom: var(--sp-16); font-weight: var(--fw-medium); }
-.mock-page .mp-hero { padding: var(--sp-24); background: var(--accent-soft); border-radius: var(--r-8); margin-bottom: var(--sp-16); }
-.mock-page .mp-btn {
-  display: inline-block; padding: 6px var(--sp-16); border-radius: var(--r-6);
-  background: var(--accent); color: var(--text-on-accent); font-size: var(--fs-12);
-}
 /* 元素选择 */
-.pv-selecting .pv-view { cursor: crosshair; }
-.pv-el-hover { outline: 2px solid var(--accent) !important; outline-offset: 1px; }
-.pv-el-tag {
-  position: absolute; background: var(--accent); color: var(--text-on-accent);
-  font-size: calc(10px * var(--text-font-scale)); padding: 1px 6px; border-radius: var(--r-4); z-index: var(--z-topbar);
-  font-family: var(--font-mono); pointer-events: none;
-}
-/* Preview 错误 */
-.pv-error {
-  margin: var(--sp-16);
-  border: 1px solid var(--red);
-  border-radius: var(--r-8);
-  background: var(--surface);
-  overflow: hidden;
-}
-.pv-error .pe-head {
-  background: var(--red-soft); color: var(--red);
-  padding: var(--sp-10) var(--sp-14);
-  font-weight: var(--fw-semibold); font-size: var(--fs-12);
-  display: flex; align-items: center; gap: var(--sp-8);
-}
-.pv-error .pe-body { padding: var(--sp-12) var(--sp-14); font-size: var(--fs-12); color: var(--text-2); }
-.pv-error pre { margin-top: var(--sp-8); background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-6); padding: var(--sp-8); font-size: calc(10.5px * var(--text-font-scale)); overflow-x: auto; }
 
 /* Agent Hub
    The row is a plain container now — it used to be a clickable div wrapping two

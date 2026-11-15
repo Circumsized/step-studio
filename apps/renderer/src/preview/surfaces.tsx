@@ -17,7 +17,6 @@ import {
   PREVIEW_FILE_TREE,
   PREVIEW_GIT,
   PREVIEW_GIT_LOG,
-  PREVIEW_PREVIEW,
   PREVIEW_PROBLEMS,
   PREVIEW_PV_LOGS,
   PREVIEW_SIDE_AGENTS,
@@ -27,9 +26,7 @@ import {
   type PreviewSideAgent,
 } from "./fixtures";
 import { ChangesPanel, FileStat, type ChangesDiffFile } from "../conversation/ChangesPanel";
-import { ConvoTranscript } from "../conversation/ConvoTranscript";
 import { GIT_STATUS_META } from "../git/treeStatus";
-import { previewConversationRows } from "./conversationFixtures";
 
 function collectOpen(nodes: PreviewFileNode[], prefix: string, into: Set<string>): void {
   for (const node of nodes) {
@@ -218,9 +215,6 @@ function filterPreviewNodes(nodes: PreviewFileNode[], query: string): PreviewFil
   });
 }
 
-export function PreviewTranscript() {
-  return <ConvoTranscript rows={previewConversationRows()} demo />;
-}
 
 export function PreviewTokenTrigger() {
   const t = PREVIEW_TELEMETRY;
@@ -562,55 +556,6 @@ export function PreviewGitPanel() {
   );
 }
 
-export function PreviewSidePreview() {
-  const p = PREVIEW_PREVIEW;
-  const [vp, setVp] = useState<"desktop" | "tablet" | "phone">("desktop");
-  return (
-    <>
-      <div className="pv-toolbar">
-        <button type="button" className="icon-btn small" disabled><Icon name="arrow-l" extra="sm" /></button>
-        <button type="button" className="icon-btn small" disabled><Icon name="arrow-r" extra="sm" /></button>
-        <button type="button" className="icon-btn small" disabled><Icon name="refresh" extra="sm" /></button>
-        <div className="pv-url ellipsis"><Icon name="lock" extra="sm" /><span className="ellipsis">{p.url}{p.path}</span></div>
-        <span className="seg">
-          {(["desktop", "tablet", "phone"] as const).map((id) => (
-            <button key={id} type="button" className={vp === id ? "active" : undefined} onClick={() => setVp(id)}>
-              <Icon name={id === "desktop" ? "monitor" : id === "tablet" ? "tablet" : "phone"} extra="sm" />
-            </button>
-          ))}
-        </span>
-        <span className="chip gray xs demo-badge">演示</span>
-      </div>
-      <div className="pv-statusbar">
-        <span className="dot green" />
-        <span>页面正常 · 热更新已连接</span>
-        <span className="spacer" />
-        <span className="tiny muted mono">vite v5.4.11 · 演示</span>
-      </div>
-      <div className="pv-view">
-        <div className={`pv-frame${vp === "desktop" ? "" : ` ${vp}`}`}>
-          <div className="mock-page">
-            <div className="mp-nav"><span style={{ color: "var(--accent)" }}>Step Web</span><span className="muted">Docs</span><span className="muted">Sessions</span><span className="muted">Settings</span></div>
-            <div className="mp-hero">
-              <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 6 }}>Upstream Sync v0.8.1</div>
-              <div className="muted small" style={{ marginBottom: 12 }}>Mermaid 全屏缩放拖拽 · IDE 风格 Directory Picker · Loopback 安全增强</div>
-              <span className="mp-btn">提交订单</span>
-            </div>
-            <div className="card" style={{ padding: 14, marginBottom: 12 }}>
-              <b>MermaidBlock</b><div className="muted small">全屏缩放 · 拖拽平移 · 主题选择器</div>
-            </div>
-            <div className="card" style={{ padding: 14 }}>
-              <b>DirectoryPicker</b><div className="muted small">IDE 风格目录选择 · 最近路径</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="pv-console">
-        {p.logs.map((line) => <div key={line}>{line}</div>)}
-      </div>
-    </>
-  );
-}
 
 const AGENT_TONE: Record<PreviewSideAgent["status"], string> = {
   running: "blue",

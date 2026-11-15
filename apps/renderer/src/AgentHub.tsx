@@ -84,12 +84,6 @@ type HubAgent = {
   status: HubStatus;
   rawStatus: StudioAgentSnapshot["status"] | HubStatus;
   task: string;
-  lastIntent?: string | null;
-  retryState?: {
-    attempt: number;
-    maxAttempts: number;
-    errorMessage?: string;
-  } | null;
   modelRole?: string;
   resolvedModel?: string;
   fallback?: string | null;
@@ -172,8 +166,6 @@ const HUB_WORDS: Record<string, string> = {
   Task: "任务",
   Current: "当前活动",
   Tool: "工具",
-  "Last intent": "最近意图",
-  Retry: "重试",
   Activity: "当前活动",
   "Active jobs": "运行中的任务",
   Usage: "用量",
@@ -689,8 +681,6 @@ function fromPreviewAgent(agent: PreviewAgent): HubAgent {
     status: agent.status,
     rawStatus: agent.status,
     task: agent.task,
-    lastIntent: agent.lastIntent ?? null,
-    retryState: agent.retryState ?? null,
     ...(agent.modelRole ? { modelRole: agent.modelRole } : {}),
     ...(agent.resolvedModel ? { resolvedModel: agent.resolvedModel } : {}),
     fallback: agent.fallback ?? null,
@@ -2095,9 +2085,12 @@ export function AgentHubPage({
           ),
         )
       : null;
+    // Only rows a live agent can fill. `Last intent` and `Retry` used to sit
+    // here too, gated on `lastIntent`/`retryState` — fields `toHubAgent` never
+    // assigns and `StudioAgentSnapshot` does not even declare, so only the
+    // preview mapper could fill them. Same no-producer class as the activity
+    // pill; the rows are gone rather than left implying a capability.
     const currentEmpty =
-      !agent.lastIntent &&
-      !agent.retryState &&
       agent.activeJobIds.length === 0 &&
       !(agent.status === "running" && agent.task !== "—");
     return (
@@ -2108,19 +2101,6 @@ export function AgentHubPage({
         </div>
         <div className="hub-sec-title">{hubWord("Current", zh)}</div>
         <div className="hub-kv">
-          {agent.lastIntent ? (
-            <Kv label="Last intent">{agent.lastIntent}</Kv>
-          ) : null}
-          {agent.retryState ? (
-            <Kv label="Retry">
-              <span style={{ color: "var(--amber)" }}>
-                retry {agent.retryState.attempt}/{agent.retryState.maxAttempts}
-              </span>
-              {agent.retryState.errorMessage
-                ? ` · ${agent.retryState.errorMessage}`
-                : ""}
-            </Kv>
-          ) : null}
           {agent.status === "running" && agent.task !== "—" ? (
             <Kv label="Activity">{agent.task}</Kv>
           ) : null}
