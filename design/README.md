@@ -9,6 +9,7 @@
 | [`status.md`](status.md) | 实现状态：已可用能力、实测数字、跑起来的方法、尚未完成清单、与上游的结构差异 | 想知道「现在代码到什么程度」；改完代码后更新它 |
 | [`comparison-checklist.md`](comparison-checklist.md) | 九基准面人工比对清单（M1.4）：逐面对照 `docs/images/` 九张官方截图，一条一条过；三态判定（齐 / 空 / 缺）+ 未验证清单 | 验收像素级复刻进度；每修好一项就改一次态 |
 | [`reference/rust-ts-architecture.md`](reference/rust-ts-architecture.md) | 参考资料：用户提供的 Rust + TypeScript 架构参考文档正文（选型与复刻的输入材料之一） | 选型存疑、需要回溯原始参考时 |
+| [`progress/`](progress/README.md) | **完成态台账**：一个里程碑一个文件，一条验收条件一行证据；`summary.md` 是总览，`blockers.md` 是跨里程碑阻塞，`audit-*.md` 是只读评估快照 | 想知道「某条验收到底过了没有、卡什么」 |
 
 不在本目录的相邻文件：
 

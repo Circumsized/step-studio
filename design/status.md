@@ -8,6 +8,11 @@
 `README.md` 仍然是 OMP Studio 的说明书——它描述的复用部分依然准确。本文件只写这个
 fork 的状态与差异。
 
+> **本文件是历史档案，不是当前台账。** 逐条验收的完成态看
+> [`progress/`](progress/README.md)（一个里程碑一个文件）。下文「尚未完成」等节停留在
+> 2026-11-13，未反映 M4 / M5.6 / M6a / M7 与 B2 解除；2026-11-14 的独立评估
+> （`progress/audit-2026-11-14.md` F8）已把这两条具体错误记在案。
+
 ## 已可用
 
 **运行时链路已端到端跑通**（真实 Step CLI + 真实模型，不是 mock）：
@@ -2065,8 +2070,9 @@ WebKitGTK 上实证过。要真正确认需要一台 Windows 机器或 CI。
   `session.handoff`、`mode.plan.*` 未实现；`switch_session`/`clone`/`get_tree`/
   `get_messages`/`get_session_stats`/`compact`/`bash` 等未接（适配器缺口清单
   见 [`design/plan.md`](plan.md) 11.4）
-- **审批 UI**：Rust 壳与 renderer 都还没有审批卡片界面，适配器侧契约已通、
-  界面侧未接（M1 起）
+- ~~**审批 UI**：Rust 壳与 renderer 都还没有审批卡片界面，适配器侧契约已通、
+  界面侧未接（M1 起）~~ **已过时（2026-11-15 更正）**：审批环 9 method 与 dialog
+  往返已在 M0 接通并经真实 CLI 验证，见 `progress/m4.md`
 - **Agent Hub 的子 agent 编排**：Step 有并行 subagent，但 RPC 没暴露列表与状态
 - **Step 没有的能力**：`tui.transfer`、`vibe.mode`、`omfg.commit`、`prewalk`、
   `operator`、`tan` 标为 `unavailable`，Renderer 会隐藏它们
