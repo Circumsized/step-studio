@@ -124,9 +124,17 @@ pub fn migrate_settings(value: &mut Value) -> Outcome {
 
 /// Decide what to do with a credential store.
 ///
-/// A format number, and **an unchanged one is passed through rather than
-/// re-written**: the bytes are encrypted under a key only this machine holds, and
-/// re-writing them is the one operation whose failure cannot be recovered from.
+/// A format number, and **every version this build can open is passed through
+/// rather than re-written**: the bytes are encrypted under a key only this machine
+/// holds, and re-writing them is the one operation whose failure cannot be
+/// recovered from.
+///
+/// An older format is therefore `PassedThrough` and not `Migrated`, even though
+/// `classify` alone would say the latter: there is no credential migration step to
+/// run and there never will be, so `Migrated` would be a claim about a rewrite
+/// that did not happen — and the reason string is what a diagnostic entry
+/// writes down. The one thing that changes across a bump is the sidecar, and the
+/// sidecar is not the ciphertext.
 pub fn migrate_credentials(bytes: &[u8], recorded: Option<u64>) -> Outcome {
     let outcome = classify(recorded);
     match outcome {
@@ -134,6 +142,8 @@ pub fn migrate_credentials(bytes: &[u8], recorded: Option<u64>) -> Outcome {
             let _ = bytes;
             outcome
         }
+        // Older, and left alone on purpose — see above.
+        Outcome::Migrated { from } => Outcome::PassedThrough { from },
         other => other,
     }
 }
