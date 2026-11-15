@@ -83,9 +83,7 @@ type HubAgent = {
   parentId?: string;
   status: HubStatus;
   rawStatus: StudioAgentSnapshot["status"] | HubStatus;
-  activity?: string;
   task: string;
-  currentTool?: { name: string; args?: string } | null;
   lastIntent?: string | null;
   retryState?: {
     attempt: number;
@@ -555,22 +553,20 @@ function activityPill(
           : copy("已中止", "Aborted"),
     };
   }
+  // No `activity`/`currentTool` branches here on purpose. Both used to be read
+  // to pick a "Running tool · <name>" / "Waiting for User" / "Failed" pill, but
+  // nothing in the Host or the Runtime ever wrote either key: the only writer
+  // was `fromPreviewAgent`, fed by fixtures. Every live agent therefore took
+  // the "Thinking" fallback while the code implied a tool-level pill existed.
+  // The contract-sourced equivalent is `agent.stage`, rendered by `AgentStage`
+  // from the running task job's completion probe. The real wire parser for the
+  // Task-record form of this data is `saPill` in conversation/toolMeta.ts,
+  // which stays: it reads a frame that does exist and lights up on its own if
+  // the Runtime ever starts emitting these keys.
   if (agent.status === "running") {
-    if (agent.activity === "tool") {
-      return {
-        cls: "tool",
-        label: agent.currentTool?.name
-          ? `${copy("工具执行中", "Running tool")} · ${agent.currentTool.name}`
-          : copy("工具执行中", "Running tool"),
-      };
-    }
     return { cls: "thinking", label: copy("思考中", "Thinking") };
   }
   if (agent.status === "idle") {
-    if (agent.activity === "waiting")
-      return { cls: "waiting", label: copy("等待输入", "Waiting for User") };
-    if (agent.activity === "failed")
-      return { cls: "aborted", label: copy("失败", "Failed") };
     return { cls: "idle", label: copy("空闲", "Idle") };
   }
   if (agent.status === "parked")
@@ -692,9 +688,7 @@ function fromPreviewAgent(agent: PreviewAgent): HubAgent {
     ...(agent.parentId ? { parentId: agent.parentId } : {}),
     status: agent.status,
     rawStatus: agent.status,
-    activity: agent.activity,
     task: agent.task,
-    currentTool: agent.currentTool ?? null,
     lastIntent: agent.lastIntent ?? null,
     retryState: agent.retryState ?? null,
     ...(agent.modelRole ? { modelRole: agent.modelRole } : {}),
@@ -2102,7 +2096,6 @@ export function AgentHubPage({
         )
       : null;
     const currentEmpty =
-      !agent.currentTool &&
       !agent.lastIntent &&
       !agent.retryState &&
       agent.activeJobIds.length === 0 &&
@@ -2115,12 +2108,6 @@ export function AgentHubPage({
         </div>
         <div className="hub-sec-title">{hubWord("Current", zh)}</div>
         <div className="hub-kv">
-          {agent.currentTool ? (
-            <Kv label="Tool">
-              <span className="chip blue xs">{agent.currentTool.name}</span>
-              {agent.currentTool.args ? ` ${agent.currentTool.args}` : ""}
-            </Kv>
-          ) : null}
           {agent.lastIntent ? (
             <Kv label="Last intent">{agent.lastIntent}</Kv>
           ) : null}
@@ -2143,9 +2130,7 @@ export function AgentHubPage({
             </Kv>
           ) : null}
           {currentEmpty ? (
-            <Kv label="—">
-              {zh ? "无进行中的工具调用" : "No tool is running"}
-            </Kv>
+            <Kv label="—">{zh ? "暂无" : "Nothing yet"}</Kv>
           ) : null}
         </div>
         <div className="hub-sec-title">{hubWord("Usage", zh)}</div>

@@ -6,7 +6,6 @@
 
 import type { JobInspection, JobWidgetView } from "@omp-studio/studio-protocol";
 
-export type PreviewTool = { name: string; args?: string };
 export type PreviewRetry = { attempt: number; maxAttempts: number; errorMessage?: string };
 export type PreviewMetrics = {
   cost: number;
@@ -25,9 +24,7 @@ export type PreviewAgent = {
   kind: string;
   parentId?: string;
   status: "running" | "idle" | "parked" | "aborted";
-  activity: string;
   task: string;
-  currentTool?: PreviewTool | null;
   lastIntent?: string | null;
   retryState?: PreviewRetry | null;
   modelRole?: string;
@@ -45,7 +42,6 @@ export type PreviewAgent = {
   createdAt: number;
   lastActivity: number;
   hasTranscript?: boolean;
-  waitingPrompt?: string;
   stage?: string;
   completionPercent?: number;
 };
@@ -179,9 +175,8 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
     agents: [
       {
         id: "agent-019fcb01", name: "deps 子 Agent", kind: "sub", parentId: "main",
-        status: "running", activity: "thinking",
+        status: "running",
         task: "审计 @earendil-works/pi-* 0.82.1 变更，确认 mermaid 类型签名",
-        currentTool: { name: "Grep", args: '"pi-core" in package-lock.json' },
         lastIntent: "先扫 lockfile 定位间接依赖，再对 pi-mermaid 做类型 diff",
         modelRole: "@smol", resolvedModel: "gemini-3.6-flash",
         metrics: { cost: 0.51, durationMs: 167000, durationKind: "active", requests: 9, tools: 14, tokens: 12600, contextTokens: 31200, contextWindow: 128000 },
@@ -190,7 +185,7 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
       },
       {
         id: "agent-019fcb17", name: "preview 子 Agent", kind: "sub", parentId: "main",
-        status: "idle", activity: "waiting", waitingPrompt: "缩放交互确认：拖拽平移是否需要惯性？",
+        status: "idle",
         task: "验证 Mermaid 全屏缩放拖拽在 125% DPI 下的表现",
         lastIntent: "AskUserQuestion 挂起，等待用户选择交互方案",
         modelRole: "@vision", resolvedModel: "gemini-3.6-flash",
@@ -199,9 +194,8 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
       },
       {
         id: "agent-019fcb55", name: "lint 子 Agent", kind: "sub", parentId: "main",
-        status: "idle", activity: "failed",
+        status: "idle",
         task: "ESLint 全量扫描（merge 后回归）",
-        currentTool: { name: "Bash", args: "eslint . (exit 2)" },
         lastIntent: "两次扫描均因 .eslintrc 合并冲突失败，已停止重试",
         retryState: { attempt: 2, maxAttempts: 2, errorMessage: "ESLint exited with code 2" },
         modelRole: "@worker", resolvedModel: "gpt-5-mini",
@@ -210,9 +204,8 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
       },
       {
         id: "agent-019fcb20", name: "typecheck 子 Agent", kind: "sub", parentId: "agent-019fcb01",
-        status: "running", activity: "tool",
+        status: "running",
         task: "bunx tsc --noEmit 全量类型检查并归类错误",
-        currentTool: { name: "Bash", args: "bunx tsc --noEmit (running 24s)" },
         modelRole: "@worker", resolvedModel: "gpt-5.2-codex",
         metrics: { cost: 0.87, durationMs: 234000, durationKind: "active", requests: 6, tools: 9, tokens: 21400, contextTokens: 44800, contextWindow: 200000 },
         patchPath: "agent-019fcb20.patch", branchName: "agent/typecheck-019fcb20",
@@ -221,7 +214,7 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
       },
       {
         id: "agent-019fc9d2", name: "docs 子 Agent", kind: "sub", parentId: "main",
-        status: "parked", activity: "parked",
+        status: "parked",
         task: "整理 UPSTREAM-SYNC.md 三阶段章节草稿",
         lastIntent: "草稿 v2 已交付，空闲 TTL 到期自动 park",
         modelRole: "@writer", resolvedModel: "claude-sonnet-4.5", fallback: "anthropic/claude-sonnet-4.5",
@@ -230,7 +223,7 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
       },
       {
         id: "agent-019fc8a0", name: "audit 子 Agent", kind: "sub", parentId: "main",
-        status: "parked", activity: "parked",
+        status: "parked",
         task: "OSS 仓库发布前合规检查（license / NOTICE / 依赖审计）",
         lastIntent: "报告已生成，等待下一次手动 revive",
         modelRole: "@audit", resolvedModel: "gpt-5.2-codex",
@@ -241,7 +234,7 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
       },
       {
         id: "agent-019fc77e", name: "spike 子 Agent", kind: "sub", parentId: "main",
-        status: "aborted", activity: "aborted",
+        status: "aborted",
         task: "试验 ws 通道替代 stdio 的可行性（spike）",
         lastIntent: "方案被否决后由用户 kill（tombstone 已写入）",
         modelRole: "@spike", resolvedModel: "gpt-5-mini",
@@ -250,7 +243,7 @@ export function buildPreviewHub(now = Date.now()): PreviewHub {
       },
       {
         id: "advisor-019fab10", name: "advisor", kind: "advisor", parentId: "main",
-        status: "idle", activity: "review",
+        status: "idle",
         task: "架构顾问：评审 session 存储层重构方案的风险点",
         lastIntent: "advisor 是只读观察记录，不参与 agent 间消息",
         modelRole: "@advisor", resolvedModel: "claude-opus-4.8",
