@@ -21,7 +21,7 @@ import { MediaPage } from "./MediaPage";
 import { setMediaIntent } from "./media/MediaWorkbench";
 import { WorkbenchHealth } from "./WorkbenchHealth";
 import { conversationViewLeases } from "./conversation/conversationViews";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { applyTypography } from "./settings/typography";
 import { ConversationWidthProvider, useConversationWidth } from "./settings/ConversationWidthContext";
@@ -210,12 +210,14 @@ import {
   PREVIEW_PROJECTS,
   PREVIEW_QUEUED_MESSAGES,
   PREVIEW_RUN_ACTIVITY,
+  PREVIEW_SIDE_AGENTS,
   PREVIEW_TODOS,
   PREVIEW_TODO_FILES,
   defaultPreviewSelection,
   findPreviewProject,
   findPreviewThread,
 } from "./preview/fixtures";
+import type { PreviewSideAgent } from "./preview/fixtures";
 import {
   PreviewChanges,
   PreviewContextPanel,
@@ -224,7 +226,6 @@ import {
   PreviewGitPanel,
   PreviewLogs,
   PreviewProblems,
-  PreviewSideAgents,
   PreviewSwitch,
   PreviewTests,
   PreviewTokenPanel,
@@ -348,6 +349,15 @@ const AGENT_STATUS_TONE: Record<string, string> = {
   released: "gray",
 };
 
+/** The demo fixture's own status vocabulary mapped to the chip tones the live
+ *  path uses, so a preview row and a live row read alike. */
+const PREVIEW_AGENT_TONE: Record<PreviewSideAgent["status"], string> = {
+  running: "blue",
+  waiting: "amber",
+  failed: "red",
+  done: "green",
+};
+
 /** The status word a card shows. Contract terms are English; the UI is not. */
 export function agentStatusLabel(status: string, t: (key: string) => string): string {
   switch (status) {
@@ -377,6 +387,142 @@ export function formatAgentDuration(ms: number): string {
 export function formatAgentTokens(tokens: number): string {
   if (tokens < 1000) return String(tokens);
   return `${(tokens / 1000).toFixed(1)}k`;
+}
+
+/**
+ * One row of the Agents sidebar.
+ *
+ * Both data paths feed this shape, so the grouping below has exactly one
+ * implementation (AGENTS.md preview discipline: preview and real are both
+ * wired, but the two stories are not merged).
+ * `tone` and `status` arrive already rendered as words because the live path
+ * labels contract terms and the preview labels its own fixture vocabulary.
+ */
+export type AgentSideRow = {
+  readonly key: string;
+  readonly parentKey: string | null;
+  readonly name: string;
+  readonly tone: string;
+  readonly status: string;
+  readonly detail: string;
+  /** What it is doing now: the contract's `stage`, or the fixture's own line. */
+  readonly activity: string | null;
+  readonly meta: readonly string[];
+  readonly onOpen: () => void;
+  /** Only live rows carry actions; the demo rows are read-only. */
+  readonly actions?: ReactNode;
+};
+
+type AgentSideNode = { readonly row: AgentSideRow; readonly children: AgentSideNode[] };
+
+/** Flat roster to tree. A row whose parent is not in the list stays at the top
+ *  level instead of vanishing: the roster can arrive before its parent does. */
+function agentSideTree(rows: readonly AgentSideRow[]): AgentSideNode[] {
+  const nodes = new Map<string, AgentSideNode>();
+  for (const row of rows) nodes.set(row.key, { row, children: [] });
+  const roots: AgentSideNode[] = [];
+  for (const node of nodes.values()) {
+    const parent = node.row.parentKey === null ? undefined : nodes.get(node.row.parentKey);
+    if (parent === undefined) roots.push(node);
+    else parent.children.push(node);
+  }
+  return roots;
+}
+
+/** The group head carries one status pill, as the reference does. It is not a
+ *  new vocabulary -- it is the most urgent child's own pill, so a demo row and
+ *  a live row read the same way. `blue` is the running tone in both tone maps. */
+function agentSideGroupPill(children: readonly AgentSideNode[]): AgentSideRow | undefined {
+  return children.find((node) => node.row.tone === "blue")?.row
+    ?? children.find((node) => node.row.tone === "red")?.row
+    ?? children[0]?.row;
+}
+
+/**
+ * The Agents sidebar list.
+ *
+ * Sub-agents used to be flat rows with a tree-character prefix, which said
+ * "this one is nested" and nothing else;
+ * `ui_reference/ver2/js/components/timeline.js:736` puts them under a
+ * collapsible head instead. The head is a real `<button>` inside the parent's
+ * card, so Enter and Space work and `aria-expanded` is the only thing that
+ * decides whether the rows below are shown -- `hidden` on the group follows it,
+ * which is what keeps the two from drifting apart.
+ *
+ * Per-row content is limited to what the contract actually produces:
+ * role/assignment, status, duration, tokens and `stage`. Nothing in the Host or
+ * the Runtime writes a per-tool activity (see `design/progress/m4.md`), so no
+ * row here claims a tool name.
+ */
+export function AgentSideList({ rows }: { rows: readonly AgentSideRow[] }) {
+  return <AgentSideNodes nodes={agentSideTree(rows)} />;
+}
+
+function AgentSideNodes({ nodes }: { nodes: readonly AgentSideNode[] }) {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set<string>());
+  return (
+    <>
+      {nodes.map((node) => {
+        const groupId = `ag-subagents-${node.row.key}`;
+        const open = !collapsed.has(node.row.key);
+        const children = node.children.length;
+        const pill = children === 0 ? undefined : agentSideGroupPill(node.children);
+        return (
+          <Fragment key={node.row.key}>
+            <div className="agent-row">
+              <span className="ag-ic" aria-hidden="true"><Icon name="bot" extra="sm" /></span>
+              <div className="ag-main">
+                <button className="ag-open" type="button" onClick={node.row.onOpen}>
+                  <span className="ag-name">
+                    {node.row.name}
+                    <span className={`chip ${node.row.tone} xs`}>{node.row.status}</span>
+                  </span>
+                  <span className="ag-task">{node.row.detail}</span>
+                  {node.row.activity === null ? null : (
+                    <span className="ag-act"><Icon name="zap" extra="sm" />{node.row.activity}</span>
+                  )}
+                  <span className="ag-meta">
+                    {node.row.meta.map((cell, index) => <span key={index}>{cell}</span>)}
+                  </span>
+                </button>
+                {pill === undefined ? null : (
+                  <button
+                    type="button"
+                    className="ag-group-head"
+                    aria-expanded={open}
+                    aria-controls={groupId}
+                    onClick={() => {
+                      setCollapsed((previous) => {
+                        const next = new Set(previous);
+                        if (next.has(node.row.key)) next.delete(node.row.key);
+                        else next.add(node.row.key);
+                        return next;
+                      });
+                    }}
+                  >
+                    <span className="ag-group-chevron" aria-hidden="true">
+                      <Icon name={open ? "chevron-d" : "chevron-r"} extra="sm" />
+                    </span>
+                    {children} 个子 Agent
+                    <span className={`chip ${pill.tone} xs`}>{pill.status}</span>
+                  </button>
+                )}
+              </div>
+              {node.row.actions}
+            </div>
+            {children === 0 ? null : (
+              /* Recursion carries the subtree, not a flattened row list: passing
+                 `children.map(row)` would re-parent every grandchild to nothing
+                 and silently drop it. */
+              <div className="ag-subagents" id={groupId} hidden={!open}>
+                <AgentSideNodes nodes={node.children} />
+              </div>
+            )}
+          </Fragment>
+        );
+      })}
+    </>
+  );
 }
 
 const SECONDARY_META: Record<SecondaryRoute, { titleKey: string; icon: string }> = {
@@ -6321,55 +6467,69 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
             <div className={`sp-page${sideTab === "computer" ? " active" : ""}`} id="spComputer" role="tabpanel"><ComputerPane client={client} sessionId={snapshot?.sessionId} available={runtimeConnected && executionMatches && !connection?.resyncRequired} visible={sideOpen && sideContentMounted && sideTab === "computer"} capabilities={capabilities} /></div>
             <div className={`sp-page${sideTab === "agents" ? " active" : ""}`} id="spAgents" role="tabpanel">
               {preview ? (
-                <PreviewSideAgents onOpenHub={() => onRoute("agent-hub")} />
+                <>
+                  {/* Every sibling preview surface carries a demo marker; this one
+                      must not be the place demo agent data is indistinguishable
+                      from real. AGENTS.md: preview surfaces carry the badge. */}
+                  <div className="ag-demo-head"><span className="chip gray xs demo-badge">演示</span></div>
+                  <AgentSideList
+                    rows={PREVIEW_SIDE_AGENTS.map((agent) => ({
+                      key: agent.id,
+                      parentKey: agent.parent,
+                      name: agent.name,
+                      tone: PREVIEW_AGENT_TONE[agent.status],
+                      status: agent.statusText,
+                      detail: `${agent.role} · ${agent.task}`,
+                      activity: agent.lastTool,
+                      meta: [agent.time, `${agent.tokens} tok · ${agent.cost}`, `${agent.files} 文件`],
+                      onOpen: () => { setHubIntent(agent.hubId); onRoute("agent-hub"); },
+                    }))}
+                  />
+                </>
               ) : rosterAgents !== undefined ? (
                 rosterAgents.length ? (
-                  rosterAgents.map((agent) => (
-                    <div className="agent-row" key={agent.agentId}>
-                      <span className="ag-tree" aria-hidden="true">{agent.parentAgentId ? "└" : ""}</span>
-                      <span className="ag-ic" aria-hidden="true"><Icon name="bot" extra="sm" /></span>
-                      <div className="ag-main">
-                        <button
-                          className="ag-open"
-                          type="button"
-                          onClick={() => { setHubIntent(agent.agentId); onRoute("agent-hub"); }}
-                        >
-                          <span className="ag-name">
-                            {agent.displayName}
-                            <span className={`chip ${AGENT_STATUS_TONE[agent.status] ?? "gray"} xs`}>{agentStatusLabel(agent.status, t)}</span>
-                          </span>
-                          <span className="ag-task">{agent.assignment ?? agent.summary ?? "—"}</span>
-                          {/* What it is doing now, from the contract's own `stage`.
-                              The preview panel has had this line all along; the live
-                              one was rendering `gen N · of <parent>` here instead,
-                              which is identity, not activity — so the panel that
-                              shows a real agent said strictly less than the demo. */}
-                          <span className="ag-act"><Icon name="zap" extra="sm" />{agent.stage ?? agentStatusLabel(agent.status, t)}</span>
-                          <span className="ag-meta">
-                            {/* `usage` is cumulative per-agent and already in the
-                                contract; dropping it is why the live panel had no
-                                numbers where the reference and the preview both do. */}
-                            {agent.usage ? <span>{formatAgentDuration(agent.usage.durationMs)}</span> : null}
-                            {agent.usage ? <span>{formatAgentTokens(agent.usage.tokens)} tok{agent.usage.cost > 0 ? ` · ¥ ${agent.usage.cost.toFixed(2)}` : ""}</span> : null}
-                            {agent.resolvedModel ? <span>{agent.resolvedModel}</span> : null}
-                            {agent.usage ? null : <span>gen {agent.generation}{agent.parentAgentId ? ` · of ${agent.parentAgentId}` : ""}</span>}
-                          </span>
-                        </button>
-                      </div>
-                      <div className="ag-acts">
-                        <button className="btn small outline" type="button" disabled={!agent.hasLiveSession || !can("agent.btw.read")} onClick={() => { setHubIntent(agent.agentId,"btw"); onRoute("agent-hub"); }}>BTW</button>
-                        <button
-                          className="icon-btn small"
-                          type="button"
-                          data-tip="打开"
-                          aria-label={t("shell.openInAgentHubAria")}
-                          onClick={() => { setHubIntent(agent.agentId); onRoute("agent-hub"); }}
-                        >
-                          <Icon name="external" extra="sm" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                  <AgentSideList
+                    rows={rosterAgents.map((agent) => ({
+                      key: agent.agentId,
+                      parentKey: agent.parentAgentId ?? null,
+                      name: agent.displayName,
+                      tone: AGENT_STATUS_TONE[agent.status] ?? "gray",
+                      status: agentStatusLabel(agent.status, t),
+                      detail: agent.assignment ?? agent.summary ?? "—",
+                      /* What it is doing now, from the contract's own `stage`.
+                         The preview panel has had this line all along; the live
+                         one was rendering `gen N · of <parent>` here instead,
+                         which is identity, not activity — so the panel that
+                         shows a real agent said strictly less than the demo. */
+                      activity: agent.stage ?? agentStatusLabel(agent.status, t),
+                      meta: [
+                        /* `usage` is cumulative per-agent and already in the
+                           contract; dropping it is why the live panel had no
+                           numbers where the reference and the preview both do. */
+                        ...(agent.usage ? [formatAgentDuration(agent.usage.durationMs)] : []),
+                        ...(agent.usage ? [`${formatAgentTokens(agent.usage.tokens)} tok${agent.usage.cost > 0 ? ` · ¥ ${agent.usage.cost.toFixed(2)}` : ""}`] : []),
+                        ...(agent.resolvedModel ? [agent.resolvedModel] : []),
+                        /* Identity, not activity — only when there are no usage
+                           numbers to show instead. */
+                        ...(agent.usage ? [] : [`gen ${agent.generation}${agent.parentAgentId ? ` · of ${agent.parentAgentId}` : ""}`]),
+                      ],
+                      onOpen: () => { setHubIntent(agent.agentId); onRoute("agent-hub"); },
+                      actions: (
+                        <div className="ag-acts">
+                          <button className="btn small outline" type="button" disabled={!agent.hasLiveSession || !can("agent.btw.read")} onClick={() => { setHubIntent(agent.agentId, "btw"); onRoute("agent-hub"); }}>BTW</button>
+                          <button
+                            className="icon-btn small"
+                            type="button"
+                            data-tip="打开"
+                            aria-label={t("shell.openInAgentHubAria")}
+                            onClick={() => { setHubIntent(agent.agentId); onRoute("agent-hub"); }}
+                          >
+                            <Icon name="external" extra="sm" />
+                          </button>
+                        </div>
+                      ),
+                    }))}
+                  />
                 ) : <Deferred title={t("shell.noAgentsTitle")} detail={t("shell.noAgentsDetail")} />
               ) : <Deferred title={t("shell.agentsDeferredTitle")} detail={t("shell.agentsDeferredDetail")} />}
             </div>

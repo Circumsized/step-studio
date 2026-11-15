@@ -19,7 +19,6 @@ import {
   PREVIEW_GIT_LOG,
   PREVIEW_PROBLEMS,
   PREVIEW_PV_LOGS,
-  PREVIEW_SIDE_AGENTS,
   PREVIEW_TELEMETRY,
   PREVIEW_TESTS,
   type PreviewFileNode,
@@ -564,38 +563,6 @@ const AGENT_TONE: Record<PreviewSideAgent["status"], string> = {
   done: "green",
 };
 
-export function PreviewSideAgents({ onOpenHub }: { onOpenHub: (id: string) => void }) {
-  return (
-    <>
-      {/* Every sibling preview surface carries a 演示 marker; this one did not,
-          so the Agents panel was the one place demo agent data was
-          indistinguishable from real. AGENTS.md:87 — 预览面带「演示」标记. */}
-      <div className="ag-demo-head"><span className="chip gray xs demo-badge">演示</span></div>
-      {PREVIEW_SIDE_AGENTS.map((agent) => (
-        <div className="agent-row" key={agent.id}>
-          <span className="ag-tree" aria-hidden="true">{agent.parent ? "└" : ""}</span>
-          <span className="ag-ic" aria-hidden="true"><Icon name="bot" extra="sm" /></span>
-          <div className="ag-main">
-            <button className="ag-open" type="button" onClick={() => { setHubIntent(agent.hubId); onOpenHub(agent.hubId); }}>
-              <span className="ag-name">
-                {agent.name}
-                <span className={`chip ${AGENT_TONE[agent.status]} xs`}>{agent.statusText}</span>
-              </span>
-              <span className="ag-task">{agent.role} · {agent.task}</span>
-              {/* The current action, not the last one. `light-wb-agents.png` has a
-                  line per card reading `⚡ Write · CapabilityProbe.tsx` — icon, tool,
-                  target — sitting between the description and the metrics, and it is
-                  what the agent is doing *now*. This was `最近工具：…` below the
-                  metrics, which answers a different question and reads as history. */}
-              <span className="ag-act"><Icon name="zap" extra="sm" />{agent.lastTool}</span>
-              <span className="ag-meta"><span>{agent.time}</span><span>{agent.tokens} tok · {agent.cost}</span><span>{agent.files} 文件</span></span>
-            </button>
-          </div>
-        </div>
-      ))}
-    </>
-  );
-}
 
 const SEV = {
   error: { icon: "alert-c", tone: "red", label: "错误" },

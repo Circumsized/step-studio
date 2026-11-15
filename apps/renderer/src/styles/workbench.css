@@ -5994,8 +5994,37 @@ button.compact-rule.is-open .compact-rule-chev { transform: rotate(180deg); }
   color: var(--text-1);
 }
 .agent-row .ag-act svg { flex: none; color: var(--text-3); }
-.agent-row .ag-tree { width: 14px; flex: none; color: var(--glyph-faint); font-family: var(--font-mono); align-self: center; }
 .agent-row .ag-acts { display: flex; flex-direction: column; gap: 2px; flex: none; }
+/* The demo marker sits above the list, not inside a row (it used to be
+   `.agent-row .ag-demo-head` when the preview panel rendered its own rows). */
+.ag-demo-head { padding: var(--sp-6) var(--sp-12) var(--sp-2); }
+
+/* The collapsible sub-agent group — reference
+   `ui_reference/ver2/js/components/timeline.js:736` (renderSubagentGroup). The
+   parent card stays a card; the head is a button inside it, so Enter and Space
+   work and `aria-expanded` alone decides what is shown. */
+.agent-row .ag-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  align-self: flex-start;
+  margin-top: 3px;
+  padding: 2px var(--sp-6) 2px 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: var(--fs-11);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.agent-row .ag-group-head:hover { color: var(--text-1); }
+.ag-group-chevron { display: flex; flex: none; color: var(--text-3); }
+/* Rows under a parent sit in its own column: indented past the parent's icon
+   (28px) plus the row gap, and with no separators, so the group reads as one
+   block rather than as more top-level rows. */
+.ag-subagents { padding-left: calc(28px + var(--sp-10)); }
+.ag-subagents .agent-row { border-bottom: none; padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
+.ag-subagents .agent-row:last-child { padding-bottom: var(--sp-10); }
 
 /* The failure card, previously inline styles. */
 .ag-fail { margin: var(--sp-12); padding: var(--sp-10) var(--sp-12); font-size: var(--fs-12); }
