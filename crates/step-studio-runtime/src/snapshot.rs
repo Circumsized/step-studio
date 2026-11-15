@@ -54,7 +54,7 @@ pub fn build_snapshot(step: &mut StepRpc, epoch: u64, session_id: &str) -> Value
         if let Some(compacting) = state.get("isCompacting").and_then(|v| v.as_bool()) {
             snapshot["isCompacting"] = json!(compacting);
         }
-        if let Some(pending) = state.get("pendingMessageCount").and_then(|v| v.as_i64()) {
+        if let Some(pending) = state.get("queuedMessageCount").and_then(|v| v.as_i64()) {
             snapshot["pendingMessages"] = json!(pending);
         }
     }

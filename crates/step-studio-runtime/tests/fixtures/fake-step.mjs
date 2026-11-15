@@ -52,7 +52,7 @@ rl.on("line", line => {
         sessionId: state.sessionId,
         isStreaming: false,
         isCompacting: false,
-        pendingMessageCount: 0,
+        queuedMessageCount: 0,
         model: { id: state.model.modelId, provider: state.model.provider },
         thinkingLevel: state.thinkingLevel,
       },
@@ -94,12 +94,8 @@ rl.on("line", line => {
     // agent turn starts, so there is no session_settled for this one.
     if (text === "/usage") {
       write({
-        type: "extension_ui_request",
-        id: "fake-usage",
-        method: "notify",
-        extensionPath: "command:usage",
-        notifyType: "info",
-        message: [
+        type: "command_output",
+        text: [
           "Usage",
           "[1 Overview]   2 Account",
           "",
@@ -142,8 +138,8 @@ rl.on("line", line => {
     }
     // Compaction is Runtime-initiated, not a Host command.
     if (text === "compact") {
-      write({ type: "compaction_start", reason: "auto" });
-      setTimeout(() => write({ type: "compaction_end", reason: "auto", aborted: false, willRetry: false }), 5);
+      write({ type: "auto_compaction_start", reason: "auto" });
+      setTimeout(() => write({ type: "auto_compaction_end", reason: "auto", aborted: false, willRetry: false }), 5);
       setTimeout(() => write({ type: "prompt_result", id: message.id, status: "completed" }), 5);
       setTimeout(() => write({ type: "session_settled" }), 10);
       return;
@@ -168,6 +164,51 @@ rl.on("line", line => {
         });
         write({ type: "message_start", message: { role: "assistant", content: [], stopReason: "pending", timestamp: Date.now() } });
         write({ type: "message_update", usage: {}, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: verdict } });
+        write({ type: "message_end", message: state.entries.find((entry) => entry.id === assistantEntry.id).message });
+        write({ type: "turn_end", messageRole: "assistant", toolResultCount: 0 });
+        write({ type: "agent_end", willRetry: false, messageCount: 3 });
+        write({ type: "prompt_result", id: message.id, status: "completed" });
+        write({ type: "session_settled" });
+      });
+      return;
+    }
+    // The multi-question dialog. It blocks the agent like `confirm` does, so
+    // the fixture holds the turn open until the client answers — the mapping
+    // used to drop it as fire-and-forget, which left the turn waiting on a card
+    // the shell was never shown.
+    if (text === "ask") {
+      write({ type: "agent_start" });
+      write({ type: "message_start", message: userMessage(text) });
+      write({ type: "message_end", message: userMessage(text) });
+      write({
+        type: "extension_ui_request",
+        id: "fake-ui-ask",
+        method: "ask",
+        questions: [
+          {
+            id: "q1",
+            question: "Which scope?",
+            header: "Scope",
+            multi: false,
+            recommended: 0,
+            options: [{ label: "This session" }, { label: "Always", description: "Every session" }],
+          },
+          { id: "q2", question: "Pick tools", multi: true, options: [{ label: "read" }, { label: "write" }] },
+        ],
+      });
+      const timedOut = new Promise((resolve) => setTimeout(() => resolve(null), 10000));
+      Promise.race([waitForResponse("fake-ui-ask"), timedOut]).then((answer) => {
+        const answers = answer?.answers;
+        const assistantEntry = appendEntry("message", {
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: JSON.stringify(answers ?? null) }],
+            stopReason: "stop",
+            timestamp: Date.now(),
+          },
+        });
+        write({ type: "message_start", message: { role: "assistant", content: [], stopReason: "pending", timestamp: Date.now() } });
+        write({ type: "message_update", usage: {}, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: JSON.stringify(answers ?? null) } });
         write({ type: "message_end", message: state.entries.find((entry) => entry.id === assistantEntry.id).message });
         write({ type: "turn_end", messageRole: "assistant", toolResultCount: 0 });
         write({ type: "agent_end", willRetry: false, messageCount: 3 });
@@ -206,7 +247,7 @@ rl.on("line", line => {
     write({ type: "message_update", usage: {}, assistantMessageEvent: { type: "toolcall_start", contentIndex: 0, id: "call-1", toolName: "list_directory" } });
     write({ type: "message_update", usage: {}, assistantMessageEvent: { type: "toolcall_end", contentIndex: 0, toolCall: { type: "toolCall", id: "call-1", name: "list_directory", arguments: { path: "." } } } });
     write({ type: "tool_execution_start", toolCallId: "call-1", toolName: "list_directory", args: { path: "." } });
-    write({ type: "tool_execution_end", toolCallId: "call-1", toolName: "list_directory", result: { content: [{ type: "text", text: "dir apps/" }], isError: false } });
+    write({ type: "tool_execution_end", toolCallId: "call-1", toolName: "list_directory", result: { content: [{ type: "text", text: "dir apps/" }] }, isError: false });
     setTimeout(
       () =>
         write({

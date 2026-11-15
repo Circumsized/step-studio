@@ -357,6 +357,244 @@ fn an_approval_round_trips_through_the_rust_adapter() {
 /// A cancel decision reaches the CLI as `cancelled` and resolves the dialog
 /// as cancelled, which is how the CLI tells "denied" from "unanswered".
 #[test]
+fn an_ask_dialog_round_trips_its_questions() {
+    if !has_node() {
+        eprintln!("skipping: no node for the fake CLI");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rust-ask-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let (config, _dir) = config_in(&dir, fake_step_wrapper(&dir).to_string_lossy().to_string());
+
+    let runtime = Runtime::new(AdapterConfig {
+        endpoint: config.endpoint.clone(),
+        token: config.token.clone(),
+        runtime_epoch: config.runtime_epoch,
+        cwd: config.cwd.clone(),
+        step_command: config.step_command.clone(),
+        step_env: config.step_env.clone(),
+        continue_session: config.continue_session,
+        exit_on_disconnect: false,
+    });
+    std::thread::spawn(move || {
+        let _ = runtime.serve();
+    });
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !std::path::Path::new(&config.endpoint).exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    let session = BridgeSession::connect(&AdapterLaunch {
+        node: String::new(),
+        adapter_script: String::new(),
+        socket_path: config.endpoint.clone(),
+        token_file: String::new(),
+        cwd: config.cwd.clone(),
+        runtime_epoch: config.runtime_epoch,
+        env: Vec::new(),
+        token: Some(config.token.clone()),
+        command: Vec::new(),
+    })
+    .expect("connect to the Rust adapter");
+
+    let mut saw_required = false;
+    let answers = serde_json::json!([
+        { "id": "q1", "selectedOptions": ["This session"] },
+        { "id": "q2", "selectedOptions": ["read", "write"], "customInput": "and grep" },
+    ]);
+    let receipt = session
+        .invoke_with(
+            serde_json::json!({ "kind": "core.prompt", "text": "ask" }),
+            |event| match event.get("kind").and_then(|k| k.as_str()) {
+                Some("interaction.required") => {
+                    saw_required = true;
+                    let request = event.pointer("/request").expect("nested request");
+                    // `ask` blocks the agent exactly like `confirm`, so it must
+                    // reach the Host as a dialog. It used to be dropped as
+                    // fire-and-forget, and the turn waited forever on a card the
+                    // shell was never shown.
+                    assert_eq!(
+                        request.get("kind").and_then(|k| k.as_str()),
+                        Some("ask"),
+                        "the multi-question dialog must reach the Host"
+                    );
+                    let questions = request
+                        .pointer("/questions")
+                        .and_then(|q| q.as_array())
+                        .expect("questions");
+                    assert_eq!(questions.len(), 2, "both questions must be mapped");
+                    // The CLI validates answers by option *label*, so id and
+                    // label must both be the label.
+                    assert_eq!(questions[0].get("id").and_then(|v| v.as_str()), Some("q1"));
+                    assert_eq!(
+                        questions[0].pointer("/options/0/id").and_then(|v| v.as_str()),
+                        Some("This session")
+                    );
+                    assert_eq!(
+                        questions[0].pointer("/options/0/label").and_then(|v| v.as_str()),
+                        Some("This session")
+                    );
+                    assert_eq!(
+                        questions[0].pointer("/options/1/description").and_then(|v| v.as_str()),
+                        Some("Every session")
+                    );
+                    assert_eq!(
+                        questions[0].get("multiple").and_then(|v| v.as_bool()),
+                        Some(false),
+                        "`multi:false` must map to multiple:false"
+                    );
+                    assert_eq!(
+                        questions[1].get("multiple").and_then(|v| v.as_bool()),
+                        Some(true),
+                        "`multi:true` must map to multiple:true"
+                    );
+                    assert_eq!(
+                        questions[0].get("recommended").and_then(|v| v.as_i64()),
+                        Some(0)
+                    );
+                    assert_eq!(
+                        questions[0].get("header").and_then(|v| v.as_str()),
+                        Some("Scope")
+                    );
+                    let interaction_id = request
+                        .get("interactionId")
+                        .and_then(|v| v.as_str())
+                        .expect("interactionId")
+                        .to_string();
+                    session
+                        .send_command(serde_json::json!({
+                            "kind": "interaction.respond",
+                            "interactionId": interaction_id,
+                            "commandId": request.get("commandId").and_then(|v| v.as_str()).unwrap_or(""),
+                            "decision": "submit",
+                            "value": answers,
+                        }))
+                        .expect("the adapter accepted the answer frame");
+                }
+                Some("interaction.resolved") => {}
+                Some(other) if other.starts_with("conversation.") => {}
+                Some(other) => panic!("unexpected host event kind: {other}"),
+                None => {}
+            },
+        )
+        .expect("the ask turn");
+
+    assert!(saw_required, "the ask dialog never reached the Host");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed"),
+        "the turn did not settle after the answer: {}",
+        receipt
+            .pointer("/error/message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown")
+    );
+
+    // The transcript proves the CLI got `{answers:[...]}` rather than the
+    // single-value `{value:...}` shape the other dialogs use: it echoes back
+    // exactly what it parsed.
+    let page = session
+        .invoke(serde_json::json!({ "kind": "session.transcript.read" }))
+        .expect("transcript")
+        .0;
+    let text = page
+        .pointer("/result/items")
+        .and_then(|i| i.as_array())
+        .and_then(|items| items.last())
+        .and_then(|item| item.pointer("/content"))
+        .and_then(|c| c.as_array())
+        .and_then(|blocks| blocks.first())
+        .and_then(|block| block.get("text"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+    let echoed: serde_json::Value =
+        serde_json::from_str(text).expect("the CLI echoed the answers it parsed");
+    assert_eq!(
+        echoed, answers,
+        "the CLI must receive the answers, not a single value"
+    );
+}
+
+#[test]
+fn the_usage_panel_arrives_as_a_command_output_frame() {
+    if !has_node() {
+        eprintln!("skipping: no node for the fake CLI");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rust-usage-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let (config, _dir) = config_in(&dir, fake_step_wrapper(&dir).to_string_lossy().to_string());
+
+    let runtime = Runtime::new(AdapterConfig {
+        endpoint: config.endpoint.clone(),
+        token: config.token.clone(),
+        runtime_epoch: config.runtime_epoch,
+        cwd: config.cwd.clone(),
+        step_command: config.step_command.clone(),
+        step_env: config.step_env.clone(),
+        continue_session: config.continue_session,
+        exit_on_disconnect: false,
+    });
+    std::thread::spawn(move || {
+        let _ = runtime.serve();
+    });
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while !std::path::Path::new(&config.endpoint).exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the adapter never bound its socket"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    let session = BridgeSession::connect(&AdapterLaunch {
+        node: String::new(),
+        adapter_script: String::new(),
+        socket_path: config.endpoint.clone(),
+        token_file: String::new(),
+        cwd: config.cwd.clone(),
+        runtime_epoch: config.runtime_epoch,
+        env: Vec::new(),
+        token: Some(config.token.clone()),
+        command: Vec::new(),
+    })
+    .expect("connect to the Rust adapter");
+
+    // `/usage` is a slash command: the CLI dispatches it and writes the panel on
+    // the fire-and-forget channel as `{type:"command_output", text}`. The adapter
+    // used to wait for an `extension_ui_request` with
+    // `extensionPath:"command:usage"`, which the pinned Runtime never emits — so
+    // every `usage.panel` ran out its 30 s timeout and the shell got an
+    // unavailableReason instead of the panel.
+    let (receipt, _events) = session
+        .invoke(serde_json::json!({ "kind": "usage.panel" }))
+        .expect("the usage panel query");
+    assert_eq!(
+        receipt.get("status").and_then(|s| s.as_str()),
+        Some("completed"),
+        "usage.panel did not complete: {}",
+        receipt
+            .pointer("/error/message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("unknown")
+    );
+    let panel = receipt
+        .pointer("/result/panel")
+        .and_then(|p| p.as_str())
+        .unwrap_or("");
+    assert!(
+        panel.contains("Total tokens"),
+        "the panel text never arrived, got: {panel:?}"
+    );
+}
+
+#[test]
 fn a_cancelled_answer_reaches_the_cli_as_cancelled() {
     if !has_node() {
         eprintln!("skipping: no node for the fake CLI");

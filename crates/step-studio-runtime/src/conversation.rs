@@ -197,7 +197,7 @@ pub fn map_event(event: &Value, context: &MapContext) -> Option<Mapped> {
                         "toolCallId": str_field(event, "toolCallId"),
                         "toolName": str_field(event, "toolName"),
                         "output": content,
-                        "isError": result.and_then(|r| r.get("isError")).and_then(|v| v.as_bool()).unwrap_or(false),
+                        "isError": event.get("isError").and_then(|v| v.as_bool()).unwrap_or(false),
                     },
                     "completedAt": now_iso(),
                 }),
@@ -215,8 +215,8 @@ pub fn map_event(event: &Value, context: &MapContext) -> Option<Mapped> {
         // The extension UI sub-protocol, mapped onto the Studio interaction
         // contract (packages/studio-protocol/src/contracts/interactions.ts):
         // a dialog becomes `interaction.required` with a nested request whose
-        // kind is confirm/select/input/editor. The client keeps no clock; the
-        // agent side resolves a timeout on its own.
+        // kind is confirm/select/input/editor/ask. The client keeps no clock;
+        // the agent side resolves a timeout on its own.
         "extension_ui_request" => {
             let method = str_field(event, "method");
             if !is_dialog_method(&method) {
@@ -264,7 +264,44 @@ pub fn map_event(event: &Value, context: &MapContext) -> Option<Mapped> {
                     "title": title,
                     "content": event.get("prefill"),
                 }),
-                // is_dialog_method gates this arm to these four.
+                // `ask` is the multi-question dialog
+                // (`requestRpcAskDialog`). It blocks the agent exactly like the
+                // other four, so dropping it as "fire-and-forget" left the turn
+                // waiting on a card the shell was never shown. The Studio
+                // contract already declares this kind; only the mapping was
+                // missing.
+                "ask" => json!({
+                    "kind": "ask",
+                    "interactionId": interaction_id,
+                    "commandId": command_id,
+                    "title": title,
+                    "questions": event.get("questions").and_then(|q| q.as_array()).map(|list| {
+                        list.iter().map(|question| {
+                            json!({
+                                // The CLI validates answers by option *label*
+                                // and rejects a label it was not offered, so id
+                                // and label must both be the label.
+                                "id": question.get("id").and_then(|v| v.as_str()).unwrap_or(""),
+                                "question": question.get("question").and_then(|v| v.as_str()).unwrap_or(""),
+                                "header": question.get("header"),
+                                "multiple": question.get("multi").and_then(|v| v.as_bool()).unwrap_or(false),
+                                "recommended": question.get("recommended"),
+                                "options": question.get("options").and_then(|o| o.as_array()).map(|list| {
+                                    list.iter().map(|option| {
+                                        let label = option.get("label").and_then(|v| v.as_str()).unwrap_or("");
+                                        json!({
+                                            "id": label,
+                                            "label": label,
+                                            "description": option.get("description"),
+                                            "preview": option.get("preview"),
+                                        })
+                                    }).collect::<Vec<_>>()
+                                }).unwrap_or_default(),
+                            })
+                        }).collect::<Vec<_>>()
+                    }).unwrap_or_default(),
+                }),
+                // is_dialog_method gates this arm to these five.
                 _ => return None,
             };
             Some(Mapped {
@@ -280,7 +317,7 @@ pub fn map_event(event: &Value, context: &MapContext) -> Option<Mapped> {
                 advances_state: true,
             })
         }
-        "compaction_start" => Some(Mapped {
+        "auto_compaction_start" => Some(Mapped {
             event: json!({
                 "kind": "conversation.compaction.started",
                 "sessionId": context.session_id,
@@ -288,7 +325,7 @@ pub fn map_event(event: &Value, context: &MapContext) -> Option<Mapped> {
             }),
             advances_state: false,
         }),
-        "compaction_end" => Some(Mapped {
+        "auto_compaction_end" => Some(Mapped {
             event: json!({
                 "kind": "conversation.compaction.completed",
                 "sessionId": context.session_id,
@@ -304,7 +341,7 @@ pub fn map_event(event: &Value, context: &MapContext) -> Option<Mapped> {
 /// fire-and-forget. Kept beside the mapping so the dispatcher and the mapping
 /// cannot disagree about which is which.
 pub fn is_dialog_method(method: &str) -> bool {
-    matches!(method, "select" | "confirm" | "input" | "editor")
+    matches!(method, "select" | "confirm" | "input" | "editor" | "ask")
 }
 
 /// Step content blocks onto Studio content blocks.

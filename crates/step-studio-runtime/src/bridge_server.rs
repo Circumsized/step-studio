@@ -255,7 +255,17 @@ impl Session {
         let kind = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
         if kind == "extension_ui_request" {
             let method = event.get("method").and_then(|v| v.as_str()).unwrap_or("");
-            if crate::conversation::is_dialog_method(method) {
+            if method == "cancel" {
+                // The CLI resolved a dialog on its own — abort or timeout — and
+                // is telling the host to close the card. Dropping this silently
+                // left the card up and let a late answer be accepted for a
+                // dialog that no longer existed upstream.
+                let target = event.get("targetId").and_then(|v| v.as_str()).unwrap_or("");
+                if self.interactions.close(target).is_some() {
+                    let command_id = format!("cmd-{target}");
+                    self.resolved(target, &command_id, "expired");
+                }
+            } else if crate::conversation::is_dialog_method(method) {
                 if let Some(id) = event.get("id").and_then(|v| v.as_str()) {
                     self.interactions.open(id, method);
                 }
@@ -290,24 +300,42 @@ impl Session {
         self.pending_usage = Some((request_id.to_string(), Instant::now() + USAGE_PANEL_TIMEOUT));
     }
 
-    /// Complete a parked `usage.panel` request if its panel has arrived, or fail
-    /// it if the CLI has gone quiet for too long.
+    /// Complete a parked `usage.panel` request if its panel has arrived.
     ///
-    /// Called from the main loop, which already runs every 50 ms — so waiting
-    /// for the panel costs no thread and blocks no command.
+    /// The deadline is not checked here — `expire_usage` owns it. Checking it
+    /// only when an event happened to arrive meant a CLI that went quiet hung
+    /// the request forever, which is the only state a timeout can fire in.
     fn settle_usage(&mut self, event: &Value) {
+        let Some((request_id, _)) = self.pending_usage.clone() else {
+            return;
+        };
+        // `/usage` is a slash command, not a message: the CLI dispatches it and
+        // writes the panel on the fire-and-forget channel as a `command_output`
+        // frame carrying `text` — `rpc-mode.ts` wires
+        // `output: commandOutput => output({ type: "command_output", text })`.
+        // This used to wait for an `extension_ui_request` with `method:"notify"`
+        // and `extensionPath:"command:usage"` — a frame the pinned Runtime never
+        // emits — so every `usage.panel` ran out its whole timeout.
+        // `command_output` carries no id and no command name; the connection is
+        // serial and nothing else sends a slash command while this request is
+        // parked, so the first one is the panel.
+        let is_panel = event.get("type").and_then(|v| v.as_str()) == Some("command_output");
+        if is_panel {
+            self.pending_usage = None;
+            let panel = event.get("text").and_then(|v| v.as_str()).unwrap_or("");
+            self.receipt(&request_id, "completed", Some(json!({ "panel": panel })));
+        }
+    }
+
+    /// Fail a parked `usage.panel` whose deadline has passed.
+    ///
+    /// Called from the main loop, which ticks every 50 ms, rather than from
+    /// `route_event`: the deadline has to be evaluated when the CLI has gone
+    /// quiet, and quiet is the only state the timeout can fire in.
+    fn expire_usage(&mut self) {
         let Some((request_id, deadline)) = self.pending_usage.clone() else {
             return;
         };
-        let is_panel = event.get("type").and_then(|v| v.as_str()) == Some("extension_ui_request")
-            && event.get("method").and_then(|v| v.as_str()) == Some("notify")
-            && event.get("extensionPath").and_then(|v| v.as_str()) == Some("command:usage");
-        if is_panel {
-            self.pending_usage = None;
-            let panel = event.get("message").and_then(|v| v.as_str()).unwrap_or("");
-            self.receipt(&request_id, "completed", Some(json!({ "panel": panel })));
-            return;
-        }
         if Instant::now() >= deadline {
             self.pending_usage = None;
             self.failed(
@@ -725,6 +753,11 @@ impl Session {
                     "cancel" => json!({ "cancelled": true }),
                     "submit" => match method.as_str() {
                         "confirm" => json!({ "confirmed": is_affirmative(value) }),
+                        // `ask` holds several questions in one dialog, so it
+                        // cannot reuse the single-value shape. The CLI validates
+                        // the answer against the questions it sent: one entry per
+                        // question, in order, each naming its question id.
+                        "ask" => json!({ "answers": value.cloned().unwrap_or(json!([])) }),
                         _ => json!({ "value": value.cloned().unwrap_or(Value::Null) }),
                     },
                     _ => {
@@ -792,20 +825,25 @@ impl Session {
                 );
             }
             self.route_event(&event);
-            // `session_settled`, not `agent_settled`: the pinned Runtime emits
-            // the former (`rpc-session-settle.ts`) and has no frame by the
-            // latter's name anywhere in its source. Matching the invented one
-            // meant no prompt ever settled, so the Host waited out its whole
-            // timeout and the shell sat on "streaming" with a Stop button wired
-            // to a finished turn. `prompt_result` is also watched because it
-            // carries the turn's own status, which is what a failed turn needs
-            // to report: `session_settled` says only that the session is quiet.
-            if kind == "session_settled" || (kind == "prompt_result" && event.get("id").and_then(|v| v.as_str()) == Some(&self.prompt_request_id)) {
-                // The turn's own verdict comes from `prompt_result`, which is the
-                // only frame carrying one (`RpcPromptResultFrame`: `status` plus
-                // `error{message, provider, model, httpStatus, retable}`).
-                // `session_settled` says only that the session went quiet, so it
-                // cannot distinguish a finished turn from a failed one.
+            // `prompt_result`, correlated on the id the prompt was sent under —
+            // upstream calls it the "terminal frame emitted exactly once per
+            // accepted prompt/abort_and_prompt". `session_settled` is *not* a
+            // substitute for it: that frame is session-scoped and carries no id,
+            // so it fires whenever the session goes quiet — including when a
+            // queued prompt's work finishes while this turn is still live.
+            // Matching it unconditionally ended live turns early.
+            //
+            // (`agent_settled` was the first thing matched here. It appears
+            // nowhere in the Runtime's source; no prompt ever settled, the Host
+            // waited out its whole timeout, and the shell sat on "streaming"
+            // with a Stop button wired to a finished turn.)
+            if kind == "prompt_result"
+                && event.get("id").and_then(|v| v.as_str()) == Some(&self.prompt_request_id)
+            {
+                // The turn's own verdict comes from the same frame
+                // (`RpcPromptResultFrame`: `status` plus
+                // `error{message, provider, model, httpStatus, retryable}`), and
+                // its `sessionSettled` flag says whether more work will follow.
                 //
                 // This used to read a `turn_error` field that was declared,
                 // initialised to `None` and never written anywhere in the crate —
@@ -1182,6 +1220,9 @@ fn serve_connection(
         // Pumped for a parked `usage.panel` as well as for a turn. Without the
         // second condition an idle connection never drains the CLI's events, so
         // the panel a query is waiting for would never be read.
+        // A parked `usage.panel` has to time out even when the CLI has gone
+        // quiet — that is the only state its deadline can fire in.
+        session.expire_usage();
         if (session.pending_prompt.is_some() || session.pending_usage.is_some())
             && session.pump_events(std::time::Duration::from_millis(50))
         {
