@@ -21,11 +21,11 @@
 
 | 维度 | 门禁执行 | 仓库内总数（静态，下界） |
 | --- | --- | --- |
-| Rust 测试 | **335** passed / 0 failed / 0 ignored | 335 个 `#[test]` |
+| Rust 测试 | **340** passed / 0 failed / 0 ignored | 340 个 `#[test]` |
 | TypeScript 测试 | `npm run check` 12.2 s 全绿 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
-| Rust 行数 | — | 27,358 |
-| TypeScript 行数 | — | 175,810 |
-| 提交 | — | 212 |
+| Rust 行数 | — | 27,799 |
+| TypeScript 行数 | — | 175,704 |
+| 提交 | — | 218 |
 | signoff 截图 | — | 19 文件 / 19 个唯一 sha256（`git ls-files design/signoff` = 0，不跟踪） |
 
 生成命令：
