@@ -20,7 +20,7 @@
 //! What is left is what a unit test can actually prove: that the proof is built the
 //! way the protocol says, and that the decoder survives fragmentation.
 
-use step_studio_bridge::frame::{FrameDecoder, FrameEncoder};
+use step_studio_bridge::frame::{FrameDecoder, FrameEncoder, MAX_FRAME_BYTES};
 use step_studio_bridge::handshake::{challenge_proof, PROTOCOL_VERSION};
 
 #[test]
@@ -135,6 +135,124 @@ fn a_frame_split_at_any_boundary_decodes_the_same() {
         assert_eq!(second.len(), 1, "split at {split}: lost the frame");
         assert_eq!(second[0].body, body, "split at {split}: a different body");
     }
+}
+
+/// The decoder survives adversarial input without panicking.
+///
+/// This is the one property the round-trip table cannot cover: a table of valid
+/// bodies exercises the happy path, and the security review named this decoder the
+/// codebase's single best fuzz target precisely because of the hand-rolled
+/// `u32` length to allocation path. Stateful fuzzing was decided against (the
+/// decoder is stateless, so it buys a stateful tool's cost for a stateless
+/// problem), but "never panics" is a one-loop property and needs no harness.
+///
+/// A panic here is not a crashed test: the decoder runs on the daemon's connection
+/// thread, so a panic takes the daemon down with it.
+#[test]
+fn the_decoder_survives_adversarial_input_without_panicking() {
+    let good = FrameEncoder::encode(1, &serde_json::json!({"n": 1})).expect("encode");
+    let mut cases: Vec<(&str, Vec<u8>)> = vec![
+        ("empty", Vec::new()),
+        ("one byte", vec![0]),
+        ("seven bytes, short of both prefixes", vec![0; 7]),
+        ("exactly the two prefixes, nothing else", vec![0; 8]),
+        ("zero payload length", vec![0, 0, 0, 0, 0, 0, 0, 0]),
+        ("payload length above the cap", {
+            let mut v = (MAX_FRAME_BYTES as u32 + 1).to_be_bytes().to_vec();
+            v.extend_from_slice(&0u32.to_be_bytes());
+            v
+        }),
+        ("payload length at the cap, no body", {
+            let mut v = MAX_FRAME_BYTES.to_be_bytes().to_vec();
+            v.extend_from_slice(&0u32.to_be_bytes());
+            v
+        }),
+        ("header length zero", {
+            let mut v = 8u32.to_be_bytes().to_vec();
+            v.extend_from_slice(&0u32.to_be_bytes());
+            v
+        }),
+        ("header length past the payload", {
+            let mut v = 8u32.to_be_bytes().to_vec();
+            v.extend_from_slice(&9999u32.to_be_bytes());
+            v
+        }),
+        ("valid frame then garbage", {
+            let mut v = good.clone();
+            v.extend_from_slice(&[0xff, 0xfe, 0x00, 0x01]);
+            v
+        }),
+        ("valid frame truncated mid-body", good[..good.len() - 3].to_vec()),
+        ("non-utf8 in the body", {
+            let mut v = 30u32.to_be_bytes().to_vec();
+            v.extend_from_slice(&24u32.to_be_bytes());
+            v.extend_from_slice(b"{\"protocol\":\"omp-studio\",");
+            v.extend_from_slice(&[0xff, 0xfe, 0xfd]);
+            v
+        }),
+    ];
+
+    // A deterministic sweep, so a failure is reproducible rather than a seed.
+    // Splitmix64: one line, no dependency, and the sequence is fixed.
+    let mut state = 0x9e3779b97f4a7c15u64;
+    for length in 0..600usize {
+        let mut bytes = Vec::with_capacity(length);
+        for _ in 0..length {
+            state = state.wrapping_add(0x9e3779b97f4a7c15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+            bytes.push((z ^ (z >> 31)) as u8);
+        }
+        cases.push(("sweep", bytes));
+    }
+
+    for (label, bytes) in &cases {
+        // The whole assertion is that this returns rather than unwinds. A
+        // decoder that closed on an earlier error must also refuse cleanly.
+        let mut decoder = FrameDecoder::new();
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            decoder.push(bytes).map(|frames| frames.len())
+        }));
+        assert!(
+            outcome.is_ok(),
+            "{label}: the decoder panicked on {} bytes",
+            bytes.len()
+        );
+        // And a closed decoder stays closed rather than recovering.
+        let _ = decoder.push(&good);
+        let _ = decoder.push(&good);
+    }
+
+    // Panic-safety alone is not enough, and the first version of this test
+    // learned that the hard way: disabling the `payload_length > MAX_FRAME_BYTES`
+    // guard changed nothing observable, because an oversized length then merely
+    // makes the decoder wait for bytes that will never come. So the rejection has
+    // to be asserted on its own, or the cap is a control no test can lose.
+    let mut over = (MAX_FRAME_BYTES as u32 + 1).to_be_bytes().to_vec();
+    over.extend_from_slice(&0u32.to_be_bytes());
+    let refused = FrameDecoder::new().push(&over);
+    assert!(
+        matches!(refused, Err(step_studio_bridge::frame::FrameError::TooLarge { .. })),
+        "a frame over the cap must be refused, got {refused:?}"
+    );
+    let mut decoder = FrameDecoder::new();
+    assert!(decoder.push(&over).is_err(), "the first refusal");
+    assert!(
+        decoder.push(&good).is_err(),
+        "a decoder that refused one frame stays closed"
+    );
+
+    // And at the cap itself is accepted as a length, not refused as oversized.
+    let mut at_cap = MAX_FRAME_BYTES.to_be_bytes().to_vec();
+    at_cap.extend_from_slice(&0u32.to_be_bytes());
+    assert!(
+        !matches!(
+            FrameDecoder::new().push(&at_cap),
+            Err(step_studio_bridge::frame::FrameError::TooLarge { .. })
+        ),
+        "a frame exactly at the cap is not over it"
+    );
 }
 
 #[test]
