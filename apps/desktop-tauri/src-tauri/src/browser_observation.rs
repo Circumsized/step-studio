@@ -26,6 +26,7 @@
 //!   after a successful read, so a capture cannot be replayed.
 
 use std::collections::HashMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -749,22 +750,48 @@ fn read_capture(input: Value) -> ChromeResult<Value> {
         claims.push(capture_id.to_string());
     }
 
+/// Read at most `limit` bytes from an open file.
+///
+/// A size checked on a *path* bounds nothing: between the check and the read the
+/// file can grow, or be replaced. Reading through the handle that was measured,
+/// with an explicit cap, means the budget holds even then.
+fn read_bounded(file: &std::fs::File, limit: u64) -> std::io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    file.take(limit).read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
     let root = descriptor_root("computer");
     let metadata_path = root.join(format!("{capture_id}.json"));
     let payload_path = root.join(format!("{capture_id}.png"));
     let unavailable =
         || ChromeError::failed("computer capture unavailable, expired, or outside the resource budget");
     let outcome = (|| -> ChromeResult<Value> {
-        let metadata = std::fs::symlink_metadata(&metadata_path).map_err(|_| unavailable())?;
-        let payload = std::fs::symlink_metadata(&payload_path).map_err(|_| unavailable())?;
-        if !metadata.is_file()
-            || metadata.len() > DESCRIPTOR_MAX_BYTES
-            || !payload.is_file()
-            || payload.len() > CAPTURE_MAX_BYTES
-        {
+        // Two stats, on purpose, because they answer different questions.
+        //
+        // `symlink_metadata` answers "is this a regular file, not a link" — a
+        // rejection, so a race there can only fail closed. The size budget is
+        // read from the *handle* the bytes are then read through, because
+        // checking the size on the path and reading the path afterwards leaves a
+        // window in which the file grows, and the budget is the one thing here
+        // that must not be bypassable. `read_bounded` closes the rest of it.
+        let metadata_link = std::fs::symlink_metadata(&metadata_path).map_err(|_| unavailable())?;
+        let payload_link = std::fs::symlink_metadata(&payload_path).map_err(|_| unavailable())?;
+        if !metadata_link.is_file() || !payload_link.is_file() {
             return Err(unavailable());
         }
-        let text = std::fs::read_to_string(&metadata_path).map_err(|_| unavailable())?;
+        let metadata_file = std::fs::File::open(&metadata_path).map_err(|_| unavailable())?;
+        let payload_file = std::fs::File::open(&payload_path).map_err(|_| unavailable())?;
+        // `metadata()` on a handle is `fstat`: the same inode the read will use.
+        let metadata_size = metadata_file.metadata().map_err(|_| unavailable())?.len();
+        let payload_size = payload_file.metadata().map_err(|_| unavailable())?.len();
+        if metadata_size > DESCRIPTOR_MAX_BYTES || payload_size > CAPTURE_MAX_BYTES {
+            return Err(unavailable());
+        }
+        let text = String::from_utf8(
+            read_bounded(&metadata_file, DESCRIPTOR_MAX_BYTES).map_err(|_| unavailable())?,
+        )
+        .map_err(|_| unavailable())?;
         let descriptor: Value = serde_json::from_str(&text).map_err(|_| unavailable())?;
         let Some(descriptor) = descriptor.as_object() else {
             return Err(unavailable());
@@ -792,7 +819,7 @@ fn read_capture(input: Value) -> ChromeResult<Value> {
             return Err(unavailable());
         }
 
-        let bytes = std::fs::read(&payload_path).map_err(|_| unavailable())?;
+        let bytes = read_bounded(&payload_file, CAPTURE_MAX_BYTES).map_err(|_| unavailable())?;
         // PNG magic, then IHDR's length and type, then the two dimensions the
         // descriptor claims. Anything else is not a PNG this handoff wrote.
         if bytes.len() < CAPTURE_MIN_BYTES
@@ -922,6 +949,7 @@ mod tests {
     const ID: &str = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
     const TAB: &str = "3f2504e0-4f89-11d3-9a0c-0305e82c3302";
     const OTHER: &str = "3f2504e0-4f89-11d3-9a0c-0305e82c3303";
+    const BIG: &str = "3f2504e0-4f89-11d3-9a0c-0305e82c3305";
 
     #[test]
     fn a_descriptor_the_runtime_wrote_is_accepted() {
@@ -1133,6 +1161,52 @@ mod tests {
                 wrong.get("ok").and_then(Value::as_bool),
                 Some(false),
                 "a file that is not a PNG is refused"
+            );
+        });
+    }
+
+    #[test]
+    fn a_capture_over_the_resource_budget_is_refused() {
+        with_state_dir("capturebudget", |_| {
+            let root = descriptor_root("computer");
+            std::fs::create_dir_all(&root).expect("make the capture directory");
+            let request = json!({ "captureId": BIG, "sessionId": "session-1", "targetId": "display-1" });
+            std::fs::write(
+                root.join(format!("{BIG}.json")),
+                serde_json::to_string(&json!({
+                    "captureId": BIG,
+                    "sessionId": "session-1",
+                    "targetId": "display-1",
+                    "width": 1,
+                    "height": 1,
+                    "expiresAt": now_millis() + 30_000,
+                }))
+                .expect("serialise"),
+            )
+            .expect("write the descriptor");
+            // Over `CAPTURE_MAX_BYTES`. The size used to be checked on the path
+            // and the bytes then read from the path, so a file that grew between
+            // the two — or was swapped for a bigger one — was read whole. The
+            // budget is the one thing this handoff must not let through, so it is
+            // now read off the handle the bytes come through, and capped.
+            std::fs::write(
+                root.join(format!("{BIG}.png")),
+                vec![0u8; (CAPTURE_MAX_BYTES + 1) as usize],
+            )
+            .expect("write the oversized payload");
+
+            let outcome = read_capture(request).expect("read");
+            assert_eq!(
+                outcome.get("ok").and_then(Value::as_bool),
+                Some(false),
+                "a payload over the capture budget must be refused, not read"
+            );
+            // A refused capture is not consumed, so the file is still there for
+            // the reaper. Unlinking on the way out would be a second thing this
+            // path does, and "refuse" is the only thing it claims.
+            assert!(
+                root.join(format!("{BIG}.png")).exists(),
+                "a refused capture was consumed anyway"
             );
         });
     }
