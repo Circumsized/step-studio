@@ -22,6 +22,7 @@
 
 use step_studio_bridge::frame::{FrameDecoder, FrameEncoder, MAX_FRAME_BYTES};
 use step_studio_bridge::handshake::{challenge_proof, PROTOCOL_VERSION};
+use step_studio_bridge::transport;
 
 #[test]
 fn challenge_proof_matches_the_protocol_construction() {
@@ -261,4 +262,108 @@ fn the_protocol_version_is_the_one_both_sides_declare() {
     // version, and a client speaking a newer one than the adapter must fail rather
     // than silently misparse.
     assert_eq!(PROTOCOL_VERSION, 1);
+}
+
+/// The connection contract both platforms rest on: a second usable handle on the
+/// *same* connection, and one end going away so the other sees it.
+///
+/// Written against `transport` rather than `UnixStream` on purpose, so it runs on
+/// Windows too. On Unix the second handle is `try_clone`; on Windows it is an
+/// `Arc` clone of one pipe, because `miow` implements `Read` and `Write` on
+/// `&self` — the daemon's writer thread and reader thread each hold a clone.
+/// Either way this is what `serve_surface` and `stream_for_reader` are built on,
+/// and until now nothing exercised it.
+///
+/// On Windows these are also the only automated checks that the `miow` swap
+/// works at runtime — `FILE_FLAG_FIRST_PIPE_INSTANCE` cleared, `max_instances`
+/// pinned, and a pipe carrying bytes both ways. CI's Windows job is clippy-only,
+/// so they need a real machine to run there.
+#[test]
+fn a_duplicated_connection_is_usable_from_both_ends() {
+    use std::io::{Read, Write};
+
+    let endpoint = scratch("duplicate").join("bridge.sock");
+    let listener = transport::bind(&endpoint.to_string_lossy()).expect("bind");
+
+    // Connect from a thread: on Windows `bind` returns immediately and it is
+    // `accept` that waits, so the two have to be concurrent.
+    let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
+    let connector = std::thread::spawn(move || transport::connect(&for_client));
+
+    let accepted = transport::accept(listener).expect("accept");
+    let mut client = connector
+        .join()
+        .expect("the connector finished")
+        .expect("connect");
+    // So a broken `duplicate` fails rather than hangs the suite. A no-op on
+    // Windows — `set_read_timeout` has no named-pipe equivalent — which means
+    // that platform relies on the read eventually erroring.
+    transport::set_read_timeout(&client, Some(std::time::Duration::from_secs(10)))
+        .expect("a read timeout");
+
+    let connection = accepted.into_connection();
+    let mut second = transport::connection_duplicate(&connection).expect("a second handle");
+
+    // Write through the duplicate, read through the client: two handles, one
+    // connection, both directions live.
+    second.write_all(b"through-the-second-handle").expect("write");
+    let mut seen = [0u8; 25];
+    client.read_exact(&mut seen).expect("read what was written");
+    assert_eq!(&seen, b"through-the-second-handle");
+}
+
+#[test]
+fn closing_one_end_makes_the_other_see_a_closed_connection() {
+    use std::io::Read;
+
+    let endpoint = scratch("closed").join("bridge.sock");
+    let listener = transport::bind(&endpoint.to_string_lossy()).expect("bind");
+
+    let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
+    let connector = std::thread::spawn(move || transport::connect(&for_client));
+
+    let accepted = transport::accept(listener).expect("accept");
+    let mut client = connector
+        .join()
+        .expect("the connector finished")
+        .expect("connect");
+    transport::set_read_timeout(&client, Some(std::time::Duration::from_secs(10)))
+        .expect("a read timeout");
+
+    let connection = accepted.into_connection();
+    transport::close_connection(&connection).expect("close one end");
+
+    // Microsoft, on DisconnectNamedPipe: the client "receives an error the next
+    // time it attempts to access the pipe" — not a clean EOF. So either shape is
+    // accepted, and only the read *returning* is asserted.
+    let mut buffer = [0u8; 8];
+    let started = std::time::Instant::now();
+    match client.read(&mut buffer) {
+        Ok(0) => {}
+        Ok(_) => panic!("a closed connection yielded bytes"),
+        // A timeout is NOT a close. The first version accepted any error, so
+        // removing the close above left it passing: the read blocked for the
+        // full timeout and the timeout error was read as "closed". Rejecting it
+        // is what makes the assertion mean "the read returned".
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+            ) =>
+        {
+            panic!(
+                "the read never returned after {:?}: the close was not observed",
+                started.elapsed()
+            );
+        }
+        Err(_) => {}
+    }
+}
+
+/// A directory to bind an endpoint in, thrown away by the next call.
+fn scratch(tag: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("ss-transport-{tag}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("make a temp dir");
+    dir
 }

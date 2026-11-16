@@ -207,6 +207,27 @@ pub type Transport = Stream;
 // the path a normal disconnect takes. Anything added later that matches only on
 // `Ok(None)` will silently miss a closed pipe.
 
+/// Close one end of a connection so the other side observes it.
+///
+/// `shutdown(Both)` on Unix; `DisconnectNamedPipe` on Windows. This is the
+/// operation the daemon's `close_socket` performs, lifted here so the platform
+/// difference lives with all the others instead of in a caller.
+///
+/// What the peer sees differs, and that is worth knowing before relying on it:
+/// Microsoft documents that after `DisconnectNamedPipe` the client "receives an
+/// error the next time it attempts to access the pipe" — not a clean EOF. Every
+/// reader in the tree treats a read error as closed, but that is now the path a
+/// normal disconnect takes rather than a fallback.
+#[cfg(unix)]
+pub fn close_connection(connection: &Connection) -> io::Result<()> {
+    connection.shutdown(std::net::Shutdown::Both)
+}
+
+#[cfg(windows)]
+pub fn close_connection(connection: &Connection) -> io::Result<()> {
+    connection.disconnect()
+}
+
 /// A second usable handle on an accepted connection, so one thread can read
 /// while another writes.
 ///
