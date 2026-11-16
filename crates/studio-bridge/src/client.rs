@@ -119,15 +119,6 @@ pub struct AdapterLaunch {
 impl BridgeSession {
     /// Launch the adapter, wait for its socket, and complete the handshake.
     pub fn connect(launch: &AdapterLaunch) -> Result<Self, BridgeError> {
-        let token = match launch.token.clone() {
-            Some(token) => token,
-            None => {
-                std::fs::write(&launch.token_file, "step-studio")
-                    .map_err(|e| BridgeError::Io(format!("token file: {e}")))?;
-                "step-studio".to_string()
-            }
-        };
-
         // Nothing to spawn means the peer is already running and this session is
         // only a client — used when the runtime under test is not one we spawn.
         //
@@ -137,6 +128,28 @@ impl BridgeSession {
         // the session decided the peer was already up, never spawned anything, and
         // then waited twenty seconds for a socket nobody was going to create.
         let spawnable = !launch.node.is_empty() || !launch.command.is_empty();
+
+        // Minting belongs to whoever launches the runtime: that session chooses
+        // the secret and the spawned process reads it back from the file. A
+        // client-only session has nothing to choose — the peer published its
+        // token already, and minting here would write a file nobody reads and
+        // then fail the handshake as a proof mismatch, which says nothing about
+        // the real cause (the daemon never published a token).
+        let token = match launch.token.clone() {
+            Some(token) => token,
+            None if spawnable => {
+                let token = crate::token::generate_token();
+                std::fs::write(&launch.token_file, &token)
+                    .map_err(|e| BridgeError::Io(format!("token file: {e}")))?;
+                token
+            }
+            None => {
+                return Err(BridgeError::Protocol(
+                    "no bridge token: the peer published none".to_string(),
+                ));
+            }
+        };
+
         let child = if !spawnable {
             None
         } else {

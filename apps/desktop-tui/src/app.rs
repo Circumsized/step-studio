@@ -60,8 +60,12 @@ impl App {
                 .unwrap_or_default(),
             runtime_epoch: 1,
             env: Vec::new(),
-            // The daemon owns the adapter and therefore the token.
-            token: Some("step-studio".to_string()),
+            // The daemon owns the adapter and therefore the token, and
+            // publishes it where a surface can read it. A missing file means no
+            // daemon is up, which is the error this already reports.
+            token: step_studio_bridge::token::read_token_file(
+                &step_studio_host::state::token_path(),
+            ),
             command: Vec::new(),
         };
         let session = BridgeSession::connect(&launch)

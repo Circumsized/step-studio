@@ -312,7 +312,10 @@ fn connect_with(config: &ConnectionConfig) -> Option<Connected> {
         cwd: config.cwd.to_string_lossy().to_string(),
         runtime_epoch: 1,
         env: Vec::new(),
-        token: Some(BRIDGE_TOKEN.to_string()),
+        // No token means no daemon published one, and connecting anyway would
+        // fail at the handshake with a proof mismatch that says nothing about
+        // the real cause.
+        token: bridge_token(),
         command: Vec::new(),
     };
 
@@ -502,10 +505,15 @@ mod tests {
 /// owns, so a surface that already knows it does not have to read the file.
 /// The bridge token. The daemon writes the same value into the token file it
 /// owns, so a surface that already knows it does not have to read the file.
+/// The bridge token the daemon published, or `None` when it cannot be read.
 ///
-/// `pub` so the diagnostics test can assert it never appears as a value: a
-/// diagnostic is what a user pastes into a bug report.
-pub const BRIDGE_TOKEN: &str = "step-studio";
+/// Read from the daemon's own state directory rather than compiled in: the
+/// value is minted per daemon start, so a surface authenticates against the
+/// daemon it actually reached. `None` means no daemon has published one, and
+/// the caller reports that instead of guessing.
+fn bridge_token() -> Option<String> {
+    step_studio_bridge::token::read_token_file(&host::state::token_path())
+}
 
 /// Make sure a daemon is answering on `endpoint`, starting one when it is not.
 ///

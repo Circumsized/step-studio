@@ -93,24 +93,32 @@ impl Breaker {
 /// not reused for this — that is per-workspace and would give one daemon per
 /// checkout.
 pub fn state_dir() -> PathBuf {
+    state_dir_under(&state_base())
+}
+
+/// Where the state directory is rooted, before the `step-studio/daemon` suffix.
+///
+/// Split from [`state_dir`] so a helper that takes a *base* can be handed the
+/// real one. Passing `state_dir()` to such a helper suffixes it twice — which
+/// is how the token came to be written to
+/// `step-studio/daemon/step-studio/daemon/token`, a path nothing reads.
+fn state_base() -> PathBuf {
     #[cfg(windows)]
     {
-        let base = std::env::var_os("LOCALAPPDATA")
+        std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."));
-        state_dir_under(&base)
+            .unwrap_or_else(|| PathBuf::from("."))
     }
     #[cfg(not(windows))]
     {
-        let base = std::env::var_os("XDG_STATE_HOME")
+        std::env::var_os("XDG_STATE_HOME")
             .map(PathBuf::from)
             .filter(|path| path.is_absolute())
             .or_else(|| {
                 std::env::var_os("HOME")
                     .map(|home| PathBuf::from(home).join(".local").join("state"))
             })
-            .unwrap_or_else(|| PathBuf::from("."));
-        state_dir_under(&base)
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 }
 
@@ -134,6 +142,69 @@ pub fn state_dir_under(base: &Path) -> PathBuf {
     }
 }
 
+/// Create the state directory `0700`, or refuse when somebody else owns it.
+///
+/// `create_dir_all` derives its mode from the umask, so under `umask 000` the
+/// directory that now holds the bridge token ends up world-writable — which
+/// hands back exactly what the token replaced. Same discipline, and same
+/// reason, as `lifecycle`'s endpoint directory.
+pub fn prepare_dir() -> io::Result<()> {
+    prepare_dir_at(&state_base())
+}
+
+/// [`prepare_dir`] under a chosen base.
+pub fn prepare_dir_at(base: &Path) -> io::Result<()> {
+    let dir = state_dir_under(base);
+    fs::create_dir_all(&dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let owner = fs::metadata(&dir)?.uid();
+        if owner != crate::lifecycle::own_uid() {
+            return Err(io::Error::other(format!(
+                "{} is owned by uid {owner}, not uid {}",
+                dir.display(),
+                crate::lifecycle::own_uid()
+            )));
+        }
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(())
+}
+
+/// Where the running daemon publishes its bridge token.
+pub fn token_path() -> PathBuf {
+    state_dir().join("token")
+}
+
+/// Publish the token `0600` inside the `0700` directory.
+///
+/// A surface reads this to authenticate; the daemon mints the value and is the
+/// only writer. Plain `write` rather than the temp-plus-rename `save` uses,
+/// because a torn token is a surface that cannot connect — which it reports —
+/// rather than a daemon that silently runs on yesterday's epoch.
+pub fn write_token(token: &str) -> io::Result<()> {
+    write_token_at(&state_base(), token)
+}
+
+/// [`write_token`] under a chosen base.
+///
+/// Split for the same reason `state_dir_under` is: a test has to publish where
+/// a process it spawned will look, and `std::env::set_var` is `unsafe` in the
+/// 2024 edition. The alternative — the test writing to the machine's real state
+/// directory — is how the upgrade marker came to live in the wrong place.
+pub fn write_token_at(base: &Path, token: &str) -> io::Result<()> {
+    prepare_dir_at(base)?;
+    let path = state_dir_under(base).join("token");
+    fs::write(&path, token)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
+}
+
 fn state_path() -> PathBuf {
     state_dir().join("state.json")
 }
@@ -151,8 +222,8 @@ pub fn load() -> DaemonState {
 
 /// Write the state, replacing whatever was there.
 pub fn save(state: &DaemonState) -> io::Result<()> {
+    prepare_dir()?;
     let dir = state_dir();
-    fs::create_dir_all(&dir)?;
     let path = state_path();
     // A per-process temp name, so two daemons racing do not clobber each
     // other's half-written file. `create_new` makes the collision loud rather
@@ -283,4 +354,54 @@ mod tests {
 
         let _ = fs::remove_dir_all(&dir);
     }
+        /// Where a token lives, under a base the test controls.
+        ///
+        /// `write_token` reads `XDG_STATE_HOME` from the process, and `std::env::set_var`
+        /// is `unsafe` in the 2024 edition — so the test drives `state_dir_under`
+        /// directly instead of going through the environment.
+        fn token_under(base: &Path) -> PathBuf {
+            state_dir_under(base).join("token")
+        }
+
+        #[test]
+        #[cfg(unix)]
+        fn the_published_token_is_not_a_constant_and_is_owner_only() {
+            use std::os::unix::fs::MetadataExt;
+
+            let first = std::env::temp_dir().join(format!("ss-token-a-{}", std::process::id()));
+            let second = std::env::temp_dir().join(format!("ss-token-b-{}", std::process::id()));
+            let _ = fs::remove_dir_all(&first);
+            let _ = fs::remove_dir_all(&second);
+
+            let one = step_studio_bridge::token::generate_token();
+            let two = step_studio_bridge::token::generate_token();
+            write_token_at(&first, &one).expect("publish the first token");
+            write_token_at(&second, &two).expect("publish the second token");
+
+            // Not the source constant it replaced: that value shipped in every
+            // build, so any local process could compute a valid proof. A token that
+            // went back to being shared would pass every handshake test above.
+            assert_ne!(one, "step-studio");
+            assert_ne!(one, two, "two daemons minted the same token");
+
+            // `0600`, and inside a `0700` directory: a token any local user can read
+            // is the constant again with extra steps.
+            let file = token_under(&first);
+            let mode = fs::metadata(&file).expect("stat the token").mode();
+            assert_eq!(mode & 0o777, 0o600, "token is {:o}", mode & 0o777);
+            let dir_mode = fs::metadata(state_dir_under(&first))
+                .expect("stat the state dir")
+                .mode();
+            assert_eq!(dir_mode & 0o777, 0o700, "state dir is {:o}", dir_mode & 0o777);
+
+            // And it is the daemon's own uid, not whatever the umask left behind.
+            assert_eq!(
+                fs::metadata(&file).expect("stat the token").uid(),
+                crate::lifecycle::own_uid()
+            );
+
+            let _ = fs::remove_dir_all(&first);
+            let _ = fs::remove_dir_all(&second);
+        }
+
 }

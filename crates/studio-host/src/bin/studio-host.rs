@@ -69,6 +69,10 @@ struct Daemon {
     config: Config,
     started: Instant,
     epoch: u64,
+    /// The bridge token this daemon mints and publishes at startup. One value
+    /// per daemon, so a surface authenticates against the daemon it actually
+    /// reached rather than against a constant every installation shares.
+    token: String,
     /// The adapter while one is alive. `None` between attempts.
     adapter: Mutex<Option<AdapterHandle>>,
     /// Where the adapter's pump thread puts each frame for the surface that
@@ -167,6 +171,20 @@ fn main() {
     // client can tell this daemon from the one it was talking to. The shell
     // used to hardcode `1`, which made the client's epoch rule dead code.
     let epoch = state::next_epoch();
+    // Minted and published *before* the listener exists, so a surface that
+    // connects the moment the endpoint answers always finds the file. Minting
+    // it inside `bring_up` instead would race: the supervisor thread spawns the
+    // adapter while `serve` binds, so the token would appear at an
+    // unpredictable moment — and again on every adapter retry.
+    //
+    // Refusing to start is the honest outcome. A daemon whose token never
+    // reached the disk serves surfaces that cannot authenticate it, and every
+    // one of them would report a confusing handshake failure instead of this.
+    let token = step_studio_bridge::token::generate_token();
+    if let Err(error) = state::write_token(&token) {
+        eprintln!("step-studio-host: could not publish the bridge token: {error}");
+        std::process::exit(1);
+    }
     // Read before `config` moves into the daemon: the grace period is a
     // deployment choice, not a constant, and the drain clock has to see the
     // one that was asked for.
@@ -175,6 +193,7 @@ fn main() {
         config,
         started: Instant::now(),
         epoch,
+        token,
         adapter: Mutex::new(None),
         to_surface: Mutex::new(Vec::new()),
         pending: Mutex::new(Routes::new()),
@@ -302,16 +321,17 @@ fn supervise(daemon: Arc<Daemon>) {
 
 /// Spawn the adapter and complete the handshake.
 fn bring_up(daemon: &Daemon) -> Result<(AdapterHandle, transport::Stream), adapter::AdapterError> {
-    let cwd = std::path::PathBuf::from(&daemon.config.cwd);
     let launch = AdapterLaunch {
         // Empty: the daemon spawns the adapter itself, so `node` is only used
         // when the runtime is a Node script rather than the native binary.
         node: String::new(),
         adapter_script: String::new(),
         socket_path: daemon.config.adapter_endpoint.clone(),
-        token_file: cwd
-            .join(".step-studio")
-            .join("token")
+        // The same file the daemon published and the surfaces read: one token,
+        // one writer, two readers. It used to be `cwd/.step-studio/token`,
+        // which is per-workspace — so a second workspace on the machine got a
+        // second token file for a daemon that only ever minted one.
+        token_file: step_studio_host::state::token_path()
             .to_string_lossy()
             .to_string(),
         cwd: daemon.config.cwd.clone(),
@@ -336,8 +356,9 @@ fn bring_up(daemon: &Daemon) -> Result<(AdapterHandle, transport::Stream), adapt
                 "1".to_string(),
             ),
         ],
-        // The daemon writes the token file, because it launches the adapter.
-        token: None,
+        // The daemon's own token, the one it published: the adapter proves it
+        // knows this value, and `hello_result` re-signs with it for surfaces.
+        token: Some(daemon.token.clone()),
         command: native_runtime_command(&daemon.config.repo_root),
     };
     adapter::launch(&launch, &adapter::challenge_for(daemon.epoch))

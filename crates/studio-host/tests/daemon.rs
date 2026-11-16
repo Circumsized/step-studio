@@ -28,6 +28,9 @@ struct Daemon {
     endpoint: String,
     adapter_endpoint: String,
     dir: PathBuf,
+    /// The `XDG_STATE_HOME` this daemon was started with, so a test can work
+    /// out where it published its token without repeating the layout.
+    state_home: PathBuf,
     log: Arc<Mutex<Vec<String>>>,
 }
 
@@ -146,6 +149,7 @@ impl Daemon {
             endpoint,
             adapter_endpoint,
             dir: dir.to_path_buf(),
+            state_home,
             log,
         };
         daemon.wait_until_reachable();
@@ -294,8 +298,13 @@ fn connect(daemon: &Daemon) -> BridgeSession {
         cwd: daemon.dir.to_string_lossy().to_string(),
         runtime_epoch: 1,
         env: Vec::new(),
-        // The daemon owns the adapter and therefore the token.
-        token: Some("step-studio".to_string()),
+        // The daemon owns the adapter and therefore the token, and published it
+        // under the state directory it was started with — which is this test's
+        // own, not the machine's, because `Daemon::start` gives it a private
+        // `XDG_STATE_HOME`.
+        token: step_studio_bridge::token::read_token_file(
+            &step_studio_host::state::state_dir_under(&daemon.state_home).join("token"),
+        ),
         command: Vec::new(),
     };
     BridgeSession::connect(&launch).expect("connect to the daemon")
@@ -748,6 +757,29 @@ fn a_surface_from_another_uid_is_refused() {
         snapshot.pointer("/snapshot/sessionId").is_some(),
         "a surface from the daemon's own user must not be refused"
     );
+}
+
+#[test]
+fn the_daemon_publishes_a_token_where_a_surface_reads_it() {
+    // The contract between the two halves of S4: the daemon mints a token and
+    // publishes it at the path every surface reads. Wiring this wrong is silent
+    // in a way no other test names — the surface gets `None`, and the failure
+    // surfaces as a handshake proof mismatch that says nothing about the real
+    // cause. This test failed exactly that way when `write_token` passed an
+    // already-suffixed `state_dir()` to a helper that suffixes again, putting
+    // the file at `step-studio/daemon/step-studio/daemon/token`.
+    let daemon = Daemon::start("published-token");
+    let path = step_studio_host::state::state_dir_under(&daemon.state_home).join("token");
+    let published = step_studio_bridge::token::read_token_file(&path)
+        .unwrap_or_else(|| panic!("no token published at {}", path.display()));
+
+    // Not the source constant it replaced: that value shipped in every build,
+    // so any local process could compute a valid proof.
+    assert_ne!(published, "step-studio", "the token went back to being a constant");
+
+    // And it is the token the daemon actually uses, which `connect` proves: a
+    // mismatch fails the handshake.
+    let _ = connect(&daemon);
 }
 
 #[test]

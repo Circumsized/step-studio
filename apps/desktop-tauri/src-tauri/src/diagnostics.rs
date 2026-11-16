@@ -199,15 +199,21 @@ mod tests {
         // The one secret in this system is the bridge token, and diagnostics are
         // what a user pastes into a bug report — so it must never be a value.
         //
-        // Checked as an exact value rather than a substring: the token happens to
-        // be a prefix of the daemon's own directory name (`step-studio-<uid>`),
-        // which the endpoint entry legitimately reports, and a substring check
-        // would flag that.
+        // Checked as an exact value rather than a substring: a token is 64 hex
+        // characters and shares no prefix with the daemon's own directory name
+        // (`step-studio-<uid>`), which the endpoint entry legitimately reports,
+        // so a substring check would flag that.
+        //
+        // Against a freshly minted token rather than a constant: the token is no
+        // longer compiled in, so the value that could leak is whatever the
+        // running daemon happened to mint — and a minted one is a stand-in for
+        // exactly that.
         let model = report("step-runtime-1".to_string(), 3);
         let mut values: Vec<String> = Vec::new();
         collect_strings(&model, &mut values);
+        let token = step_studio_bridge::token::generate_token();
         assert!(
-            !values.iter().any(|value| value == crate::bridge::BRIDGE_TOKEN),
+            !values.iter().any(|value| value == &token),
             "the token value leaked as a diagnostic value"
         );
     }

@@ -4348,6 +4348,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "criterion",
+ "getrandom 0.2.17",
  "hmac",
  "named_pipe",
  "serde",

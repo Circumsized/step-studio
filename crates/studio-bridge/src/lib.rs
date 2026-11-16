@@ -5,6 +5,7 @@
 pub mod client;
 pub mod frame;
 pub mod handshake;
+pub mod token;
 pub mod transport;
 
 pub use frame::{FrameDecoder, FrameEncoder};

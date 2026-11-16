@@ -104,9 +104,10 @@ pub fn launch(
     let token = match launch.token.clone() {
         Some(token) => token,
         None => {
-            fs::write(&launch.token_file, "step-studio")
+            let token = step_studio_bridge::token::generate_token();
+            fs::write(&launch.token_file, &token)
                 .map_err(|e| AdapterError::Spawn(format!("token file: {e}")))?;
-            "step-studio".to_string()
+            token
         }
     };
 
