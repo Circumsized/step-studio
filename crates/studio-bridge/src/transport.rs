@@ -12,11 +12,15 @@
 //! A Windows pipe is **duplex**, and `miow::pipe::NamedPipe` implements both
 //! `Read` and `Write` on `&self`. So one connection is shared behind an `Arc`
 //! and the reader and writer threads each hold a clone of that — the same shape
-//! Unix gets from `try_clone`. This module used to claim the opposite ("a pipe
-//! handle serves one direction") and built `reopen` plus a
-//! `STEP_STUDIO_TRANSPORT_ENDPOINT` environment variable to work around it.
-//! Both were deleted: the premise was wrong, so the workaround had nothing to
-//! work around.
+//! Unix gets from `try_clone`.
+//!
+//! This module used to claim the opposite ("a pipe handle serves one direction")
+//! and built `reopen` plus a `STEP_STUDIO_TRANSPORT_ENDPOINT` environment
+//! variable to work around it. Both are deleted. The premise was wrong — but
+//! under `named_pipe 0.4.1`, the crate this used to depend on, the workaround
+//! was *forced*: its `PipeServer` was not `Clone`, exposed no raw handle, and
+//! took `&mut self` for both directions. What was wrong was blaming Windows for
+//! a crate's API, not the instinct that something had to be worked around.
 
 use std::io;
 use std::time::Duration;
@@ -146,8 +150,10 @@ pub type Connection = Stream;
 ///
 /// `miow::pipe::NamedPipe` implements `Read` and `Write` for `&NamedPipe`
 /// rather than for itself, so the `Arc` does not implement either. This wrapper
-/// forwards both, which is what keeps the daemon's read/write split identical
-/// on both platforms.
+/// forwards both onto `&mut self`, which is what keeps the daemon's read/write
+/// split identical on both platforms — `UnixStream` takes `&self` for both, but
+/// a caller holding either type writes `x.write_all(..)` and reads
+/// `next_frame(&mut x)` the same way.
 #[cfg(windows)]
 pub struct PipeHandle(std::sync::Arc<miow::pipe::NamedPipe>);
 
@@ -166,6 +172,18 @@ impl std::io::Write for PipeHandle {
 
     fn flush(&mut self) -> io::Result<()> {
         std::io::Write::flush(&mut &*self.0)
+    }
+}
+
+#[cfg(windows)]
+impl PipeHandle {
+    /// Half-close the pipe, the Windows counterpart of `shutdown(Both)`.
+    ///
+    /// `DisconnectNamedPipe`: the client's next read returns EOF, which is what
+    /// lets the other side notice this one went away. Without it a Windows
+    /// surface's reader blocks in `read` forever after the daemon stops writing.
+    pub fn disconnect(&self) -> io::Result<()> {
+        self.0.disconnect()
     }
 }
 
@@ -243,9 +261,10 @@ pub fn set_read_timeout(stream: &Stream, timeout: Option<Duration>) -> io::Resul
 /// the socket.
 ///
 /// On Unix the stream is duplicable, so this is a second handle to the same
-/// socket. A Windows pipe handle is not `Clone`, so the caller lends the one it
-/// already holds: the handshake frame is the only thing written before the
-/// reader thread starts, so there is nothing to collide with.
+/// socket. On Windows the client side is a `std::fs::File`, which is `Clone`
+/// through `try_clone`, but the handshake frame is the only thing written before
+/// the reader thread starts — so the caller lends the one it already holds
+/// rather than spending a duplicate.
 #[cfg(unix)]
 pub fn handshake_writer(stream: &Stream) -> Stream {
     stream
@@ -264,6 +283,10 @@ pub fn handshake_writer(stream: &mut Stream) -> &mut Stream {
 /// is a listener. On Windows the pipe is created here and [`accept`] is what
 /// waits for a client, because `NamedPipe::connect` takes `&self` — so the
 /// listener survives the wait and the serve loop re-accepts on the same one.
+///
+/// Note that on Windows a *second* `bind` for the same name needs
+/// `FILE_FLAG_FIRST_PIPE_INSTANCE` cleared, which is why the Windows arm builds
+/// the pipe explicitly. See the comment there.
 pub fn bind(endpoint: &str) -> io::Result<Listener> {
     #[cfg(unix)]
     {
@@ -271,16 +294,43 @@ pub fn bind(endpoint: &str) -> io::Result<Listener> {
     }
     #[cfg(windows)]
     {
-        Ok(std::sync::Arc::new(miow::pipe::NamedPipe::new(endpoint)?))
+        // `first(false)`, not `NamedPipe::new`: the builder defaults to
+        // `FILE_FLAG_FIRST_PIPE_INSTANCE`, which makes a *second* instance of
+        // the same name fail with ERROR_ACCESS_DENIED — so the rebind both
+        // serve loops do before handing a connection off would die after the
+        // first client, and the daemon would stop being resident.
+        //
+        // What that gives up: "fail if this name is already taken". On Unix
+        // `lifecycle::acquire` provides that by probing the endpoint before
+        // binding; on Windows the probe still runs, but nothing stops a second
+        // process from creating another instance of the name, and the default
+        // DACL lets anyone try. That is S1, and it is open.
+        // `max_instances(1)`, because the builder defaults to
+        // `PIPE_UNLIMITED_INSTANCES` (255) and that default is inert only while
+        // `first(true)` caps the pipe at one. Clearing the flag — which the
+        // rebind needs — makes 255 live, and `serve_surface` is deliberately
+        // one-surface-at-a-time: a second surface waits rather than competing.
+        // 255 instances of one name would let it compete.
+        Ok(std::sync::Arc::new(
+            miow::pipe::NamedPipeBuilder::new(endpoint)
+                .first(false)
+                .max_instances(1)
+                .create()?,
+        ))
     }
 }
 
 /// The connection the listener is holding.
 ///
 /// On Unix this blocks until a client connects, as many times as it is called.
-/// On Windows it blocks in `NamedPipe::connect`, which is `ConnectNamedPipe` —
-/// callable again after a `disconnect`, so one listener serves client after
-/// client.
+/// On Windows it blocks in `NamedPipe::connect`, which is `ConnectNamedPipe`.
+///
+/// Two things this does not do, both pre-existing and both unverified on
+/// Windows: it has no timeout, so a Windows serve loop parked here never
+/// observes `stopping` (the Unix arm sets the listener non-blocking for exactly
+/// that reason); and no caller ever calls `disconnect`, so the
+/// "re-accept on the same listener" path is reasoned about rather than
+/// exercised.
 pub fn accept(listener: Listener) -> io::Result<Accepted> {
     #[cfg(unix)]
     {
@@ -300,9 +350,9 @@ pub fn accept(listener: Listener) -> io::Result<Accepted> {
 ///
 /// On Unix the stream is duplicable and `Read` is on `&self`, so this is a
 /// second handle to the same socket. On Windows `Read` is on `&self` too, so the
-/// accepted connection is lent as-is; the handshake is the only read before the
-/// reader thread starts, and the handle comes back through [`take_handshake`]
-/// once the frame has been read.
+/// accepted connection is lent as-is: this returns the *same* handle reborrowed,
+/// not a second one, and the handshake is the only read before the reader thread
+/// starts so there is nothing to collide with.
 #[cfg(unix)]
 pub fn handshake_reader(stream: &mut Accepted) -> impl std::io::Read + '_ {
     stream

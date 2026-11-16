@@ -187,12 +187,14 @@ struct Identity {
 /// `NamedPipe` implements `Read` and `Write` on `&self` and is shared behind an
 /// `Arc`, which is exactly this shape (see `transport::connection_duplicate`).
 ///
-/// What is left is wiring: this path waits for the adapter's socket and then
-/// connects as a *client*, while `miow`'s server side is the one that blocks in
-/// `connect()`. Getting the two ends to meet on Windows means deciding which
-/// side binds, and that is a change to the adapter's serve loop as well as this
-/// function — and it needs a Windows machine to validate, which is why this is
-/// M5.1 and not a stub. What it must not be is a path that compiles and then
+/// What is left is wiring, and it is narrower than it looks: the roles are
+/// already fixed — the adapter binds and accepts (`bridge_server.rs`), this side
+/// connects as a client (`miow::pipe::connect`, a `File`). Two concrete
+/// obstacles remain, neither of them a design question: splitting the single
+/// `File` the client gets into a writer the supervisor holds and a reader that
+/// moves into the pump, and the fact that `transport::accept` blocks with no
+/// timeout, so a Windows daemon parked there never observes `stopping`. Both
+/// need a Windows machine to validate, which is why this is M5.1 and not a stub. What it must not be is a path that compiles and then
 /// deadlocks: a pump blocked in `read` while holding the only handle would hang
 /// the daemon with nothing in the log. Refusing here is recoverable and visible;
 /// a hang is neither.

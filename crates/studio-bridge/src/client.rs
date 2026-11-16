@@ -173,9 +173,9 @@ impl BridgeSession {
             "challenge": challenge,
         });
         // The shape differs per platform: a Unix socket is duplicable, so this
-        // is a second handle; a Windows pipe handle is not, so the one already
-        // held is lent. Either way this is the only frame written before the
-        // reader thread takes over.
+        // is a second handle; on Windows the client side is a `File` and the one
+        // already held is lent, because this is the only frame written before
+        // the reader thread takes over.
         #[cfg(unix)]
         write_frame(&mut transport::handshake_writer(&stream), 1, &hello)?;
         #[cfg(windows)]

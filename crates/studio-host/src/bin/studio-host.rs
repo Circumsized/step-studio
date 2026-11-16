@@ -598,7 +598,11 @@ fn serve(daemon: Arc<Daemon>) {
                 }
             };
             // Re-bind before serving, so the next client is not kept waiting
-            // behind this one.
+            // behind this one. On Windows this needs `FILE_FLAG_FIRST_PIPE_INSTANCE`
+            // cleared in `transport::bind` — with the crate default set, the
+            // second `CreateNamedPipeW` on a live name fails with
+            // ERROR_ACCESS_DENIED and this arm ends the serve loop after one
+            // surface.
             listener = match transport::bind(&endpoint) {
                 Ok(next) => next,
                 Err(error) => {
@@ -918,10 +922,17 @@ fn close_socket(stream: &transport::Connection) {
     let _ = stream.shutdown(std::net::Shutdown::Both);
 }
 
-/// A named pipe handle has no equivalent, so a Windows surface learns the
-/// adapter ended when the daemon's own process goes away.
+/// Half-close a Windows pipe, the counterpart of `shutdown(Both)`.
+///
+/// The old body was an empty function justified by "a named pipe handle has no
+/// equivalent" — which is not true: `DisconnectNamedPipe` is exactly that, and
+/// `miow` exposes it as `NamedPipe::disconnect`. Without it a Windows surface's
+/// reader blocks in `read` forever once the daemon stops writing, so the shell
+/// waits on a peer that will never speak instead of reconnecting.
 #[cfg(not(unix))]
-fn close_socket(_stream: &transport::Connection) {}
+fn close_socket(stream: &transport::Connection) {
+    let _ = stream.disconnect();
+}
 
 impl Daemon {
     /// Undo everything a surface's attach set up.

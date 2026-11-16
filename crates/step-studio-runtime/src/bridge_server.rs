@@ -154,8 +154,10 @@ impl Runtime {
         }
         #[cfg(windows)]
         {
-            // The listener is consumed: a single-instance pipe serves one client
-            // and is then recreated for the next.
+            // The listener is not consumed on Windows: `NamedPipe::connect`
+            // takes `&self`, so the same pipe is re-accepted for the next
+            // client. The rebind below still needs
+            // `FILE_FLAG_FIRST_PIPE_INSTANCE` cleared — see `transport::bind`.
             let mut listener = listener;
             loop {
                 let connection = match transport::accept(listener) {
