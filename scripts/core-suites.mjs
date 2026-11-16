@@ -42,6 +42,7 @@ export const CORE_NODE_SUITES = [
   "apps/desktop-tauri/dist/test/terminal-bridge.test.js",
   "packages/runtime-installer/dist/test/installer.test.js",
   "packages/runtime-installer/dist/test/update-v2.test.js",
+  "packages/runtime-installer/dist/test/update-index.test.js",
 ];
 
 export const CORE_RENDERER_SUITES = [
