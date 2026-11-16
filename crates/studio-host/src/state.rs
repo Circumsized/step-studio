@@ -354,15 +354,6 @@ mod tests {
 
         let _ = fs::remove_dir_all(&dir);
     }
-        /// Where a token lives, under a base the test controls.
-        ///
-        /// `write_token` reads `XDG_STATE_HOME` from the process, and `std::env::set_var`
-        /// is `unsafe` in the 2024 edition — so the test drives `state_dir_under`
-        /// directly instead of going through the environment.
-        fn token_under(base: &Path) -> PathBuf {
-            state_dir_under(base).join("token")
-        }
-
         #[test]
         #[cfg(unix)]
         fn the_published_token_is_not_a_constant_and_is_owner_only() {
@@ -386,7 +377,12 @@ mod tests {
 
             // `0600`, and inside a `0700` directory: a token any local user can read
             // is the constant again with extra steps.
-            let file = token_under(&first);
+            // `write_token` reads the process environment, and `std::env::set_var`
+            // is `unsafe` in the 2024 edition, so the test drives the base
+            // directly. Inlined rather than a helper because the only caller is
+            // this `#[cfg(unix)]` test, and a helper would be dead code on the
+            // Windows target — which the rust-windows job compiles.
+            let file = state_dir_under(&first).join("token");
             let mode = fs::metadata(&file).expect("stat the token").mode();
             assert_eq!(mode & 0o777, 0o600, "token is {:o}", mode & 0o777);
             let dir_mode = fs::metadata(state_dir_under(&first))
