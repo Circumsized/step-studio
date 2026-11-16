@@ -1008,6 +1008,9 @@ mod tests {
         // `symlink_metadata` succeed and the `is_file` check refuse, which is a
         // different branch. The first version of this test used a directory and so
         // passed with the `Err(_)` bug still in place.
+        // Used only inside the `#[cfg(unix)]` block below, which is what makes
+        // the case real; on Windows the block is not there and neither is the use.
+        #[cfg_attr(not(unix), allow(unused_variables))]
         let (dir, library) = library("unreadable");
         #[cfg(unix)]
         {

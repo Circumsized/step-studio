@@ -7,19 +7,29 @@
 
 mod artifacts;
 mod bridge;
-mod browser_observation;
 mod chrome;
 mod diagnostics;
 mod git;
 mod history;
 mod media;
 mod menu;
-mod prediction;
 mod platform;
 mod pump;
 mod service_definitions;
 mod terminal;
 mod tray;
+
+// Computer use and prompt prediction reach the runtime over a Unix domain
+// socket, which has no `std` Windows counterpart and no drop-in substitute.
+// Their Windows arms answer honestly instead of disappearing; see that file.
+#[cfg(unix)]
+mod browser_observation;
+#[cfg(unix)]
+mod prediction;
+#[cfg(not(unix))]
+mod unsupported;
+#[cfg(not(unix))]
+use unsupported::{browser_observation, prediction};
 
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, OnceLock};

@@ -25,7 +25,9 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+#[cfg(unix)]
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -39,8 +41,10 @@ const MAX_CHUNK_BYTES: usize = 262_144;
 const MAX_UPLOAD_BYTES: u64 = 64 * 1024 * 1024;
 
 /// One PCM chunk: 100 ms of 32 kHz stereo float, so a multiple of four bytes.
+#[cfg(unix)]
 const MAX_AUDIO_CHUNK_BYTES: usize = 12_800;
 /// One float sample, little-endian.
+#[cfg_attr(not(unix), allow(dead_code))]
 const SAMPLE_BYTES: usize = 4;
 
 /// An idle upload is abandoned after this, so a renderer that crashes mid-upload
@@ -51,15 +55,19 @@ const UPLOAD_IDLE_MS: i64 = 60_000;
 const MAX_UPLOADS_PER_WINDOW: usize = 2;
 
 /// The descriptor is a handful of fields.
+#[cfg(unix)]
 const DESCRIPTOR_MAX_BYTES: u64 = 4096;
 
 /// How long an audio descriptor stays usable, and how far ahead it may claim to.
+#[cfg(unix)]
 const DESCRIPTOR_WINDOW_MS: i64 = 60_000;
 
 /// Seconds to wait for the runtime to accept one PCM frame.
+#[cfg(unix)]
 const AUDIO_WRITE_TIMEOUT_MS: u64 = 2_000;
 
 /// Whether a string is a canonical UUID.
+#[cfg(unix)]
 fn is_id(value: &str) -> bool {
     let bytes = value.as_bytes();
     if bytes.len() != 36 {
@@ -426,6 +434,7 @@ pub fn reap_idle_uploads() {
 
 // ------------------------------------------------------------------- live audio
 
+#[cfg(unix)]
 /// One live-audio connection.
 struct AudioConnection {
     owner: String,
@@ -434,14 +443,17 @@ struct AudioConnection {
     busy: bool,
 }
 
+#[cfg(unix)]
 static AUDIO: Mutex<Option<HashMap<String, AudioConnection>>> = Mutex::new(None);
 
+#[cfg(unix)]
 fn audio() -> std::sync::MutexGuard<'static, Option<HashMap<String, AudioConnection>>> {
     AUDIO
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
+#[cfg(unix)]
 /// The socket the runtime listens on for one audio id.
 ///
 /// Same derivation the runtime's overlay uses (`liveAudioSocketName`), so the
@@ -457,6 +469,7 @@ fn audio_socket(audio_id: &str) -> PathBuf {
 }
 
 /// Read and validate `<state>/audio/<id>.json`.
+#[cfg(unix)]
 fn read_audio_descriptor(audio_id: &str, session_id: &str) -> ChromeResult<String> {
     if !is_id(audio_id) {
         return Err(ChromeError::invalid("invalid audio id"));
@@ -506,6 +519,7 @@ fn read_audio_descriptor(audio_id: &str, session_id: &str) -> ChromeResult<Strin
     Ok(token.to_string())
 }
 
+#[cfg(unix)]
 /// Attach to one live-audio channel.
 pub fn attach_audio(window: String, raw: Value) -> ChromeResult<Value> {
     let Some(object) = raw.as_object() else {
@@ -577,6 +591,7 @@ pub fn attach_audio(window: String, raw: Value) -> ChromeResult<Value> {
     Ok(json!({ "ok": true }))
 }
 
+#[cfg(unix)]
 /// Append one PCM chunk.
 pub fn append_audio(window: String, raw: Value) -> ChromeResult<Value> {
     let Some(object) = raw.as_object() else {
@@ -658,6 +673,7 @@ pub fn append_audio(window: String, raw: Value) -> ChromeResult<Value> {
 /// drove this rule through it asserted only "it failed" — which it also does for
 /// having no connection. The first version of that test passed every mutation of
 /// this rule.
+#[cfg_attr(not(unix), allow(dead_code))]
 fn is_pcm(bytes: &[u8]) -> bool {
     if !bytes.len().is_multiple_of(SAMPLE_BYTES) {
         return false;
@@ -672,6 +688,7 @@ fn is_pcm(bytes: &[u8]) -> bool {
         })
 }
 
+#[cfg(unix)]
 /// Write one length-prefixed PCM frame, with a timeout.
 fn write_audio_frame(socket: &Arc<Mutex<std::os::unix::net::UnixStream>>, bytes: &[u8]) -> ChromeResult<()> {
     use std::io::Write;
@@ -689,6 +706,7 @@ fn write_audio_frame(socket: &Arc<Mutex<std::os::unix::net::UnixStream>>, bytes:
         .map_err(|_| ChromeError::failed("live audio write timed out"))
 }
 
+#[cfg(unix)]
 /// Detach one live-audio channel.
 pub fn detach_audio(window: String, raw: Value) -> ChromeResult<Value> {
     let audio_id = raw
@@ -712,6 +730,7 @@ pub fn detach_audio(window: String, raw: Value) -> ChromeResult<Value> {
     Ok(json!({ "ok": true }))
 }
 
+#[cfg(unix)]
 /// End every live-audio channel a window owns.
 pub fn dispose_audio(window: &str) {
     let mut guard = audio();
@@ -725,6 +744,38 @@ pub fn dispose_audio(window: &str) {
             table.remove(&id);
         }
     }
+}
+
+// The Windows arm of live audio. Same shape as the Unix arm's "the socket is
+// gone" answer, for the same reason: the renderer already handles it, and a
+// command that vanished would fail with "command not found" instead of a
+// reason. The transport is a Unix socket with no port yet — see
+// `unsupported.rs`, which explains why the two obvious substitutes do not fit.
+#[cfg(not(unix))]
+fn attach_audio(_window: String, _raw: Value) -> ChromeResult<Value> {
+    audio_unavailable()
+}
+
+#[cfg(not(unix))]
+fn append_audio(_window: String, _raw: Value) -> ChromeResult<Value> {
+    audio_unavailable()
+}
+
+#[cfg(not(unix))]
+fn detach_audio(_window: String, _raw: Value) -> ChromeResult<Value> {
+    audio_unavailable()
+}
+
+#[cfg(not(unix))]
+pub fn dispose_audio(_window: &str) {}
+
+#[cfg(not(unix))]
+fn audio_unavailable() -> ChromeResult<Value> {
+    Ok(json!({
+        "ok": false,
+        "message": "Live microphone is not available on Windows yet: it reaches the runtime \
+                    over a Unix domain socket that has not been ported.",
+    }))
 }
 
 // -------------------------------------------------------------- microphone access

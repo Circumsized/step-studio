@@ -47,15 +47,28 @@ static WAKE_LOCK: Mutex<Option<std::process::Child>> = Mutex::new(None);
 /// the same probe the daemon's own supervisor uses to decide whether to start an
 /// adapter, so the two cannot disagree about what "running" means.
 pub fn other_instance_running() -> bool {
-    crate::app_handle()
-        .and_then(|_handle| {
-            // Connecting is the whole probe. The socket file existing is not
-            // the socket being alive — a daemon that was killed leaves the file
-            // behind — so there is nothing to gain from checking first.
-            use std::os::unix::net::UnixStream;
-            UnixStream::connect(daemon_probe_path()).ok().map(|_| true)
-        })
-        .unwrap_or(false)
+    crate::app_handle().is_some_and(|_handle| endpoint_answers(&daemon_probe_path()))
+}
+
+/// Whether anything is accepting connections at `endpoint`.
+///
+/// Connecting is the whole probe. The socket file existing is not the socket
+/// being alive — a daemon that was killed leaves the file behind — so there is
+/// nothing to gain from checking first.
+///
+/// Split from [`other_instance_running`] because that one needs a live
+/// `AppHandle`, which no test has: with the probe inline, the only assertion
+/// available was "no daemon means false", which a function that always answered
+/// false would also pass. This one can be driven both ways.
+///
+/// Through `transport`, not `UnixStream` directly: the daemon's endpoint is a
+/// socket file on Unix and a pipe name on Windows, and `endpoint_for_bind` is
+/// the one place that knows the difference. Same probe `lifecycle::acquire`
+/// makes, minus the stale-file removal a probe has no business doing.
+fn endpoint_answers(endpoint: &std::path::Path) -> bool {
+    let target =
+        step_studio_bridge::transport::endpoint_for_bind(&endpoint.to_string_lossy());
+    step_studio_bridge::transport::connect(&target).is_ok()
 }
 
 /// Where the probe looks: the daemon's own endpoint.
@@ -300,6 +313,37 @@ mod tests {
             daemon_probe_path(),
             std::path::PathBuf::from(host::lifecycle::default_endpoint()),
             "the probe must look where the daemon binds, not at a path of the shell's own"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn something_listening_at_the_endpoint_is_another_instance() {
+        use std::os::unix::net::UnixListener;
+
+        // The half of the probe that had no test: with nothing bound the answer
+        // is false, which a function hardwired to `false` also passes.
+        let endpoint = daemon_probe_path();
+        if let Some(parent) = endpoint.parent() {
+            std::fs::create_dir_all(parent).expect("make the endpoint directory");
+        }
+        let _ = std::fs::remove_file(&endpoint);
+        let listener = UnixListener::bind(&endpoint).expect("bind the probe endpoint");
+
+        assert!(
+            endpoint_answers(&endpoint),
+            "a live daemon at {} was not seen",
+            endpoint.display()
+        );
+        // No `accept`: a Unix `connect` completes on the backlog alone, and
+        // dropping the listener closes whatever is pending. Calling it here
+        // would also hang the test the moment the probe stopped connecting.
+
+        drop(listener);
+        let _ = std::fs::remove_file(&endpoint);
+        assert!(
+            !endpoint_answers(&endpoint),
+            "a removed endpoint still answered"
         );
     }
 
