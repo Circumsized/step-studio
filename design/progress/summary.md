@@ -49,6 +49,9 @@ sha256sum design/signoff/*.png | awk '{print $1}' | sort -u | wc -l
 **Windows target 全绿**（2026-11-16 首次）：`cargo clippy --workspace --all-targets
 --target x86_64-pc-windows-msvc -- -D warnings` exit 0。此前 `src-tauri` 因
 `std::os::unix` 未设门有 18 个 error，整个壳二进制在 Windows 上建不出来 ·
+**但这个绿有一部分是空的**：365 个测试里 **25 个在 Windows 上编译成 nothing**
+（含 `daemon.rs` 整个 18 条端到端套件、token 权限属性那条）。
+详见 `review/plan-2026-11-15.md` §11 ·
 **真 CLI 端到端**：`real-runtime-adapter.test.js` 2.7 s 通过（跨语言，TS 客户端 ↔ Rust 适配器 ↔ omp）·
 Xvfb 实机启动 30 秒无 panic
 
