@@ -29,7 +29,14 @@ use step_studio_bridge::frame::read_frame;
 use step_studio_bridge::frame::write_frame;
 #[cfg(unix)]
 use step_studio_bridge::handshake::verify_hello;
-use step_studio_bridge::handshake::{challenge_proof, PROTOCOL_VERSION};
+use step_studio_bridge::handshake::challenge_proof;
+// `PROTOCOL_VERSION` is only read inside `connect_and_handshake`, which is
+// `#[cfg(unix)]`: on Windows the adapter has no duplex transport to handshake
+// over, so importing it unconditionally makes the Windows clippy job — the one
+// whose whole purpose is keeping the pipe path compiling — fail on an unused
+// import.
+#[cfg(unix)]
+use step_studio_bridge::handshake::PROTOCOL_VERSION;
 #[cfg(unix)]
 use step_studio_bridge::transport;
 use step_studio_bridge::transport::Stream;
