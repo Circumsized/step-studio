@@ -21,7 +21,7 @@
 
 | 维度 | 门禁执行 | 仓库内总数（静态，下界） |
 | --- | --- | --- |
-| Rust 测试 | **353** passed / 0 failed / 0 ignored | 353 个 `#[test]` |
+| Rust 测试 | **359** passed / 0 failed / 0 ignored | 359 个 `#[test]` |
 | TypeScript 测试 | `npm run check` 12.4 s 全绿 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
 | Rust 行数 | — | 28,583 |
 | TypeScript 行数 | — | 176,027 |
@@ -42,7 +42,7 @@ sha256sum design/signoff/*.png | awk '{print $1}' | sort -u | wc -l
 
 ## 门禁（全绿）
 
-`cargo clippy --all-targets -D warnings` 全 workspace 干净 · `cargo test --workspace` **353 passed / 0 failed / 0 ignored**
+`cargo clippy --all-targets -D warnings` 全 workspace 干净 · `cargo test --workspace` **359 passed / 0 failed / 0 ignored**
 （11 个 e2e + 2 个真 CLI）· contracts 2/2 · architecture 7/7 · `npm run check` 12.4 s 全绿 ·
 **真 CLI 端到端**：`real-runtime-adapter.test.js` 2.7 s 通过（跨语言，TS 客户端 ↔ Rust 适配器 ↔ omp）·
 Xvfb 实机启动 30 秒无 panic
@@ -52,6 +52,11 @@ Xvfb 实机启动 30 秒无 panic
 方案与执行记录在 `design/review/plan-2026-11-15.md`。本轮不改任何认证模型
 （跨 crate，按纪律记决策不擅自落码），只出结论：
 
+- **S4 已执行**（提交 `e0dccb5`）：bridge token 从源码常量改为 daemon 每次启动 mint 的
+  32 字节 OS CSPRNG 值，`0600` 发布在 daemon 自己的 state 目录，壳 / TUI / 测试夹具改为读文件。
+  lock 包数 595 → 595。接线过程中修掉两个 bug（token 路径双后缀、客户端无 token 时白 mint），
+  各有一条具名测试钉住，且都验过非空泛。
+- **T6 决策：不设覆盖门禁**——`AGENTS.md:63` 的测试哲学与门禁相冲，且本轮证明覆盖类指标在此误导。
 - **S2 的真实状态被纠正**：对等身份做主授权在 **Unix 上早已建成**
   （`peer-uid/` + `studio-host.rs:615` + `daemon.rs:744`），不是「未执行」。
   Windows 侧没有这道闸门，而缺失的理由（「Windows 没有 equivalent」）是错的。
