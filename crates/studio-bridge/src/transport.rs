@@ -193,6 +193,20 @@ pub type Connection = PipeHandle;
 /// What a client connects as, on either platform.
 pub type Transport = Stream;
 
+// A behaviour difference the `named_pipe` → `miow` swap introduced, worth naming
+// because it is silent.
+//
+// `named_pipe 0.4.1` normalised `ERROR_BROKEN_PIPE` into `Ok(0)` — a clean EOF —
+// in both its `Read` and `Write` impls (`lib.rs:450`, `:1029`). `miow` does not:
+// a read on a pipe whose peer has disconnected returns `Err(ERROR_BROKEN_PIPE)`.
+//
+// So a reader that used to see `Ok(0)` now sees an error. All three readers in
+// the tree handle the error path as "closed" — the shell's `spawn_reader`
+// (`client.rs`), the daemon's relay loop (`bin/studio-host.rs`), the runtime's
+// pump (`bridge_server.rs`) — but that handling used to be a fallback and is now
+// the path a normal disconnect takes. Anything added later that matches only on
+// `Ok(None)` will silently miss a closed pipe.
+
 /// A second usable handle on an accepted connection, so one thread can read
 /// while another writes.
 ///

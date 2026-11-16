@@ -929,6 +929,13 @@ fn close_socket(stream: &transport::Connection) {
 /// `miow` exposes it as `NamedPipe::disconnect`. Without it a Windows surface's
 /// reader blocks in `read` forever once the daemon stops writing, so the shell
 /// waits on a peer that will never speak instead of reconnecting.
+///
+/// What the client sees is an **error**, not EOF: Microsoft — "the client
+/// receives an error the next time it attempts to access the pipe". Every reader
+/// on this path already treats a read error as closed (the shell's
+/// `spawn_reader`, this file's relay loop, the runtime's pump), so the outcome
+/// is the same — but that is now load-bearing rather than incidental; see the
+/// note in `transport.rs` about broken-pipe normalisation.
 #[cfg(not(unix))]
 fn close_socket(stream: &transport::Connection) {
     let _ = stream.disconnect();
