@@ -355,6 +355,79 @@ pub fn bind(endpoint: &str) -> io::Result<Listener> {
     }
 }
 
+/// How long each wait lasts before the stop flag is re-read.
+///
+/// Long enough that an arriving client does not wait on the poll, short enough
+/// that a stop is observed without a perceptible delay.
+const STOP_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+
+/// Run `blocked` on a thread and wait for it, giving up when `stop` says so.
+///
+/// `None` means stopped; `Some(result)` is whatever `blocked` produced.
+///
+/// This exists for the Windows accept. `NamedPipe::connect` is
+/// `ConnectNamedPipe`, which blocks with no timeout, so a serve loop calling it
+/// directly cannot observe its own stop flag — and this daemon's `serve` runs on
+/// the main thread with `shutdown` after it, so a daemon parked there never
+/// exited: not on the grace clock, not on an upgrade marker.
+///
+/// The thread is abandoned when `stop` fires. That is sound because the caller is
+/// on its way out and the process takes the blocked syscall with it when `main`
+/// returns — a thread stuck in a syscall does not hold a process open.
+///
+/// Generic over the blocking call rather than naming either platform's type, so
+/// the part that can actually be wrong — the poll, the flag, the channel — is one
+/// implementation with one test, and only the syscall differs per platform.
+pub fn wait_or_stop<T, F>(blocked: F, stop: &std::sync::atomic::AtomicBool) -> Option<io::Result<T>>
+where
+    F: FnOnce() -> io::Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    use std::sync::atomic::Ordering;
+    use std::sync::mpsc;
+
+    let (produced_tx, produced_rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        // The receiver may already be gone, which is the stop case: a failed
+        // send is the expected outcome there, not something to report.
+        let _ = produced_tx.send(blocked());
+    });
+
+    loop {
+        if stop.load(Ordering::Relaxed) {
+            return None;
+        }
+        match produced_rx.recv_timeout(STOP_POLL) {
+            Ok(produced) => return Some(produced),
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            // The waiter vanished without sending, which means it panicked.
+            // Reporting that beats spinning on a channel nobody will write to.
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Some(Err(io::Error::other("the blocking call's thread ended")));
+            }
+        }
+    }
+}
+
+/// Wait for a client, giving up when `stop` says so.
+///
+/// The Windows counterpart of [`accept`], which blocks in `ConnectNamedPipe`
+/// with no timeout and so cannot honour a stop flag. See [`wait_or_stop`].
+#[cfg(windows)]
+pub fn accept_until(
+    listener: &Listener,
+    stop: &std::sync::atomic::AtomicBool,
+) -> io::Result<Option<Accepted>> {
+    // `connect` takes `&self`, so the listener is shared rather than moved —
+    // the same reason the reader and writer threads can hold one pipe.
+    let shared = std::sync::Arc::clone(listener);
+    match wait_or_stop(move || shared.connect(), stop) {
+        None => Ok(None),
+        Some(Ok(())) => Ok(Some(Accepted::Server(std::sync::Arc::clone(listener)))),
+        Some(Err(error)) => Err(error),
+    }
+}
+
 /// The connection the listener is holding.
 ///
 /// On Unix this blocks until a client connects, as many times as it is called.
@@ -396,4 +469,68 @@ pub fn handshake_reader(stream: &mut Accepted) -> impl std::io::Read + '_ {
 #[cfg(windows)]
 pub fn handshake_reader(stream: &mut Accepted) -> &mut Accepted {
     stream
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A stop flag nobody has set yet.
+    fn running() -> std::sync::atomic::AtomicBool {
+        std::sync::atomic::AtomicBool::new(false)
+    }
+
+    #[test]
+    fn wait_or_stop_returns_what_the_blocking_call_produced() {
+        let stop = running();
+        let produced = wait_or_stop(|| Ok(7u32), &stop).expect("not stopped");
+        assert_eq!(produced.expect("the call succeeded"), 7);
+    }
+
+    #[test]
+    fn wait_or_stop_passes_the_error_through_rather_than_swallowing_it() {
+        let stop = running();
+        let produced = wait_or_stop(
+            || Err::<u32, _>(io::Error::other("the call failed")),
+            &stop,
+        )
+        .expect("not stopped");
+        assert!(produced.is_err(), "the error was dropped");
+    }
+
+    #[test]
+    fn wait_or_stop_gives_up_once_the_stop_flag_is_set() {
+        // The whole point of the helper: a call that would block forever must
+        // still return once the flag is set.
+        let stop = std::sync::Arc::new(running());
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+
+        // The flag has to be set by another thread while `wait_or_stop` is
+        // running. Setting it after the call returns is the deadlock this test
+        // first shipped with: the call only returns *because* the flag was set.
+        let setter = std::sync::Arc::clone(&stop);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            setter.store(true, std::sync::atomic::Ordering::Relaxed);
+        });
+
+        let started = std::time::Instant::now();
+        let outcome = wait_or_stop(
+            move || {
+                // Never sends, so this blocks until the thread is abandoned.
+                let _ = release_rx.recv();
+                Ok(())
+            },
+            &stop,
+        );
+        // Let the abandoned waiter finish, so the test does not leak a thread.
+        let _ = release_tx.send(());
+
+        assert!(outcome.is_none(), "the stop was not honoured");
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "the stop took {:?}",
+            started.elapsed()
+        );
+    }
 }

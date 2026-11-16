@@ -586,28 +586,20 @@ fn serve(daemon: Arc<Daemon>) {
                 return;
             }
         };
-        // Known Windows defect, recorded rather than papered over: this arm
-        // blocks in `transport::accept`, which is `ConnectNamedPipe` with no
-        // timeout, and `stopping` is checked only once per iteration — before
-        // the block. The Unix arm above sets its listener non-blocking for
-        // exactly this reason, and its comment names the failure.
-        //
-        // Consequence on Windows: `serve` is called on the main thread and
-        // `shutdown` runs only after it returns, so a daemon parked here never
-        // exits — not on the grace clock, not on an upgrade marker. It has to be
-        // killed from outside. Because `bind` returns immediately, that is the
-        // daemon's entire idle life, not an edge case.
-        //
-        // Two ways out, neither testable here: give the loop a bounded wait, or
-        // move `serve` onto a spawned thread and let process exit take the
-        // blocked one with it. The second is smaller but changes the lifecycle,
-        // so it wants a Windows machine before it is written, not after.
+        // This arm used to call `transport::accept`, which is `ConnectNamedPipe`
+        // with no timeout — so `stopping` was checked once, before a block that
+        // never ended, and a parked daemon never exited: not on the grace clock,
+        // not on an upgrade marker, because `serve` runs on the main thread and
+        // `shutdown` only runs after it returns. `accept_until` bounds the wait
+        // so the flag is re-read; see its comment for why that is sound.
         loop {
             if daemon.stopping.load(Ordering::Relaxed) {
                 return;
             }
-            let connection = match transport::accept(listener) {
-                Ok(connection) => connection,
+            let connection = match transport::accept_until(&listener, &daemon.stopping) {
+                Ok(Some(connection)) => connection,
+                // Stopping, or the connect failed: either way this loop is over.
+                Ok(None) => return,
                 Err(error) => {
                     eprintln!("step-studio-host: accept failed: {error}");
                     return;

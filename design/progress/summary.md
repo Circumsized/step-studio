@@ -21,11 +21,11 @@
 
 | 维度 | 门禁执行 | 仓库内总数（静态，下界） |
 | --- | --- | --- |
-| Rust 测试 | **359** passed / 0 failed / 0 ignored | 359 个 `#[test]` |
+| Rust 测试 | **364** passed / 0 failed / 0 ignored | 364 个 `#[test]` |
 | TypeScript 测试 | `npm run check` 12.4 s 全绿 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
 | Rust 行数 | — | 28,583 |
 | TypeScript 行数 | — | 176,027 |
-| 提交 | — | 239 |
+| 提交 | — | 253 |
 | signoff 截图 | — | 19 文件 / 19 个唯一 sha256（`git ls-files design/signoff` = 0，不跟踪） |
 
 生成命令：
@@ -40,10 +40,13 @@ cargo test --workspace          # 各 result 行的 passed 求和
 sha256sum design/signoff/*.png | awk '{print $1}' | sort -u | wc -l
 ```
 
-## 门禁（全绿）
+## 门禁（Linux 全绿；Windows target 见下）
 
-`cargo clippy --all-targets -D warnings` 全 workspace 干净 · `cargo test --workspace` **359 passed / 0 failed / 0 ignored**
-（11 个 e2e + 2 个真 CLI）· contracts 2/2 · architecture 7/7 · `npm run check` 12.4 s 全绿 ·
+`cargo clippy --all-targets -D warnings` **Linux 全 workspace 干净** · `cargo test --workspace`
+**364 passed / 0 failed / 0 ignored**
+（11 个 e2e + 2 个真 CLI）· contracts 2/2 · architecture 7/7 · `npm run check` 12.2 s 全绿 ·
+**Windows target 未全绿**：`cargo check --target x86_64-pc-windows-msvc` 下
+`src-tauri` 18 个 error（`std::os::unix` 未设门），内核四个 crate 干净 ·
 **真 CLI 端到端**：`real-runtime-adapter.test.js` 2.7 s 通过（跨语言，TS 客户端 ↔ Rust 适配器 ↔ omp）·
 Xvfb 实机启动 30 秒无 panic
 
@@ -66,6 +69,12 @@ Xvfb 实机启动 30 秒无 panic
   sequence 水位线），Rust `signing.rs` 更弱且**无任何生产调用方**；
   `fetchUpdateIndex` 是唯一强制水位线的函数，`lastSequence` 无人传入。
 - **威胁模型产物**已落地（TH1–TH12，每条带 response 与理由）。
+- **Windows daemon 无法干净退出已修**：`serve` 主线程阻塞在 `ConnectNamedPipe`，
+  `stopping` 永不重读。改为 `transport::wait_or_stop`（线程 + 50 ms 轮询），
+  平台无关，三条测试、第三条变异验证过。真机退出仍未验（卡 B1）。
+- **新阻塞：`src-tauri` 在 Windows 上编译不过**（18 error，`std::os::unix` 未设门）。
+  这条**不需要 Windows 真机**就能发现和修，却一直红着——此前所有验证都在 Linux 上跑。
+  详见 `m5.md` 顶部与 `review/plan-2026-11-15.md` §10。
 - 测试侧：T1/T2/T3/T4/T5/T7 收口，T4 是**阴性结果**（未发现伪测试方法）；
   S8 决定不做（帧解码器是无状态解析器，AFLNet 的优势在有状态）。
 
