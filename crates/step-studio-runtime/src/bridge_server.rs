@@ -1259,20 +1259,22 @@ fn stream_for_reader(session: &Session) -> Result<Accepted, String> {
     .map_err(|e| format!("could not duplicate the bridge socket: {e}"))
 }
 
-/// On Windows a pipe handle is one direction, so the reader takes the accepted
-/// connection and the writer keeps a second one it opened itself.
+/// On Windows the accepted connection is a pipe behind an `Arc`, so the reader
+/// gets a clone of the same handle rather than a second connection to the same
+/// name.
 #[cfg(windows)]
-#[allow(unused_variables)]
 fn stream_for_reader(session: &Session) -> Result<Accepted, String> {
-    // The Host already holds the other end of the accepted pipe, and a pipe
-    // handle is one direction: the reader keeps the connection it was handed and
-    // the writer opens its own. Both ends name the same pipe.
-    let endpoint = transport::endpoint_for_bind(
-        &std::env::var("STEP_STUDIO_TRANSPORT_ENDPOINT").unwrap_or_default(),
-    );
-    transport::reopen(&endpoint)
-        .map(Accepted::Stream)
-        .map_err(|e| format!("could not open the bridge pipe: {e}"))
+    // `Read` and `Write` are both on `&self` for `miow::pipe::NamedPipe`, and
+    // the listener is an `Arc`, so one connection serves both threads. This
+    // used to open a second pipe to the same name on the premise that a pipe
+    // handle could not be shared — which was wrong, and needed
+    // `STEP_STUDIO_TRANSPORT_ENDPOINT` plumbed through the environment to find
+    // the name again.
+    match &session.stream {
+        Accepted::Server(server) => Ok(Accepted::Server(std::sync::Arc::clone(server))),
+        Accepted::Stream(stream) => transport::duplicate(stream).map(Accepted::Stream),
+    }
+    .map_err(|e| format!("could not duplicate the bridge socket: {e}"))
 }
 
 /// Errors from the CLI that must not crash the adapter.

@@ -701,7 +701,7 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     // waits forever, because `await_reply` has no timeout of its own.
     let (writer_dead, writer_dead_rx) = mpsc::channel::<()>();
     let writer = std::thread::spawn({
-        let mut surface_writer = match stream.try_clone() {
+        let mut surface_writer = match transport::connection_duplicate(&stream) {
             Ok(stream) => stream,
             Err(error) => {
                 eprintln!("step-studio-host: {error}");
@@ -725,7 +725,7 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         }
     });
 
-    let mut surface_reader = match stream.try_clone() {
+    let mut surface_reader = match transport::connection_duplicate(&stream) {
         Ok(stream) => stream,
         Err(error) => {
             eprintln!("step-studio-host: {error}");
@@ -914,14 +914,14 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
 /// reports closed, and the pump reconnects. Leaving the socket open leaves the
 /// shell waiting on a peer that will never speak again.
 #[cfg(unix)]
-fn close_socket(stream: &transport::Stream) {
+fn close_socket(stream: &transport::Connection) {
     let _ = stream.shutdown(std::net::Shutdown::Both);
 }
 
 /// A named pipe handle has no equivalent, so a Windows surface learns the
 /// adapter ended when the daemon's own process goes away.
 #[cfg(not(unix))]
-fn close_socket(_stream: &transport::Stream) {}
+fn close_socket(_stream: &transport::Connection) {}
 
 impl Daemon {
     /// Undo everything a surface's attach set up.

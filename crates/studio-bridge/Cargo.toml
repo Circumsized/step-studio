@@ -12,8 +12,17 @@ workspace = true
 
 # Named pipes on Windows only; `std` has no pipe API. The transport module is
 # the sole consumer, so Unix builds carry none of it.
+#
+# `miow`, not `named_pipe`: that crate is archived upstream (last release
+# 2019-04-06) and its `PipeServer` is neither `Clone` nor handle-exposing, with
+# `Read` and `Write` both on `&mut self` — so a reader thread and a writer
+# thread cannot share one connection, which is the shape this bridge uses on
+# Unix. `miow::pipe::NamedPipe` implements `Read` and `Write` on `&self` and
+# exposes `AsRawHandle`/`FromRawHandle`, so `Arc<NamedPipe>` gives both threads
+# one handle. It is also synchronous, where `mio-named-pipes` would have pulled
+# an IOCP event loop into a crate that has no other async code.
 [target.'cfg(windows)'.dependencies]
-named_pipe = "0.4"
+miow = "0.3"
 
 [dev-dependencies]
 criterion.workspace = true

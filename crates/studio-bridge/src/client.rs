@@ -13,8 +13,6 @@ use serde_json::{json, Value};
 
 use crate::frame::{read_frame, write_frame, FrameError};
 use crate::handshake::{verify_hello, PROTOCOL_VERSION};
-#[cfg(windows)]
-use named_pipe;
 
 /// Receipt statuses that settle a command.
 pub const TERMINAL_STATUSES: [&str; 4] = ["completed", "failed", "rejected", "outcome_unknown"];
@@ -522,36 +520,27 @@ pub fn wait_for_socket(path: &str, timeout: Duration) -> Result<Stream, BridgeEr
     }
 }
 
+/// Connect to the bridge endpoint.
+///
+/// Delegates to [`transport::connect`] rather than naming either platform's
+/// type: on Unix that is `UnixStream::connect`, on Windows it is
+/// `miow::pipe::connect`, which blocks until the server is reachable and hands
+/// back the read+write `File` the client talks over.
 fn connect(endpoint: &str) -> Result<Stream, BridgeError> {
-    #[cfg(unix)]
-    {
-        std::os::unix::net::UnixStream::connect(endpoint)
-            .map_err(|e| BridgeError::Io(e.to_string()))
-    }
-    #[cfg(windows)]
-    {
-        named_pipe::PipeClient::connect(endpoint).map_err(|e| BridgeError::Io(e.to_string()))
-    }
+    transport::connect(endpoint).map_err(|e| BridgeError::Io(e.to_string()))
 }
 
 /// A second handle on the same socket, so the reader thread can own one while
 /// the session writes through the other.
-#[allow(unused_variables)]
+///
+/// The same call on both platforms: a Unix socket with `try_clone`, a Windows
+/// pipe because the client side is a `File` and `File::try_clone` is
+/// `DuplicateHandle`. This used to open a *second connection* to the same pipe
+/// name on Windows, on the premise that a pipe handle could not be duplicated —
+/// which was wrong, and cost an environment variable to plumb the endpoint
+/// through.
 fn stream_clone(stream: &Stream) -> Result<Stream, BridgeError> {
-    #[cfg(unix)]
-    {
-        stream
-            .try_clone()
-            .map_err(|e| BridgeError::Io(e.to_string()))
-    }
-    #[cfg(windows)]
-    {
-        // A pipe handle is single-threaded for reads and writes together, so the
-        // reader thread is given a fresh connection to the same pipe instead.
-        connect(&transport::endpoint_for_bind(
-            &std::env::var("STEP_STUDIO_TRANSPORT_ENDPOINT").unwrap_or_default(),
-        ))
-    }
+    transport::duplicate(stream).map_err(|e| BridgeError::Io(e.to_string()))
 }
 
 /// Build and launch the adapter process.

@@ -8,6 +8,15 @@
 //! The endpoint string stays a plain path on both: on Windows it is translated
 //! to the `\\.\pipe\<name>` form the pipe API expects, so the caller never has
 //! to know either shape.
+//!
+//! A Windows pipe is **duplex**, and `miow::pipe::NamedPipe` implements both
+//! `Read` and `Write` on `&self`. So one connection is shared behind an `Arc`
+//! and the reader and writer threads each hold a clone of that — the same shape
+//! Unix gets from `try_clone`. This module used to claim the opposite ("a pipe
+//! handle serves one direction") and built `reopen` plus a
+//! `STEP_STUDIO_TRANSPORT_ENDPOINT` environment variable to work around it.
+//! Both were deleted: the premise was wrong, so the workaround had nothing to
+//! work around.
 
 use std::io;
 use std::time::Duration;
@@ -21,13 +30,16 @@ mod imp {
 
 #[cfg(windows)]
 mod imp {
-    /// The connecting side. Named pipes are asymmetric — a client and a server
-    /// are different types — so these stay separate rather than being papered
-    /// over with one alias.
-    pub type Stream = named_pipe::PipeClient;
-    /// What `bind` hands back: a single-instance pipe that has already waited
-    /// for its one client, so it is the accepted connection.
-    pub type Listener = named_pipe::PipeServer;
+    /// The connecting side. `miow::pipe::connect` hands back a `File` opened
+    /// read+write, and a `File` is already `Read + Write` and clones with
+    /// `try_clone` — so the client needs nothing pipe-specific and never has to
+    /// reach for a raw handle. (`miow::pipe::NamedPipe` could only be built from
+    /// one, and the workspace forbids `unsafe`.)
+    pub type Stream = std::fs::File;
+    /// What `bind` hands back: the server's pipe, behind an `Arc` because
+    /// `Read` and `Write` are both on `&self`, so the reader thread and the
+    /// writer thread each hold a clone of this instead of a handle each.
+    pub type Listener = std::sync::Arc<miow::pipe::NamedPipe>;
 }
 
 /// Both ends of a pipe read and write the same bytes, and so does a Unix socket,
@@ -41,7 +53,7 @@ impl std::io::Read for Accepted {
             #[cfg(windows)]
             Self::Stream(stream) => stream.read(buf),
             #[cfg(windows)]
-            Self::Server(server) => server.read(buf),
+            Self::Server(server) => std::io::Read::read(&mut &**server, buf),
         }
     }
 }
@@ -54,7 +66,7 @@ impl std::io::Write for Accepted {
             #[cfg(windows)]
             Self::Stream(stream) => stream.write(buf),
             #[cfg(windows)]
-            Self::Server(server) => server.write(buf),
+            Self::Server(server) => std::io::Write::write(&mut &**server, buf),
         }
     }
 
@@ -65,7 +77,7 @@ impl std::io::Write for Accepted {
             #[cfg(windows)]
             Self::Stream(stream) => stream.flush(),
             #[cfg(windows)]
-            Self::Server(server) => server.flush(),
+            Self::Server(server) => std::io::Write::flush(&mut &**server),
         }
     }
 }
@@ -73,50 +85,38 @@ impl std::io::Write for Accepted {
 /// A second handle on the same connection, so a reader thread can own one while
 /// the session writes through the other.
 ///
-/// A Unix socket duplicates. A Windows pipe handle does not, and serves one
-/// direction — so there the caller opens its own pipe to the same name instead,
-/// which is what [`reopen`] is for.
-#[cfg(unix)]
+/// Both platforms duplicate: a Unix socket with `try_clone`, a Windows pipe
+/// because `miow::pipe::connect` returns a `File`, and `File::try_clone` is
+/// `DuplicateHandle` under the hood. The server side shares an `Arc` instead —
+/// see [`Listener`].
 pub fn duplicate(stream: &Stream) -> io::Result<Stream> {
     stream.try_clone()
-}
-
-/// On Windows a pipe handle is one direction and cannot be duplicated, so the
-/// reader opens its own pipe to the same name — see [`reopen`].
-#[cfg(windows)]
-pub fn duplicate(accepted: &Accepted) -> io::Result<Accepted> {
-    let _ = accepted;
-    Err(io::Error::other(
-        "a pipe handle cannot be duplicated; open a second one with `reopen`",
-    ))
 }
 
 impl Accepted {
     /// Whatever the platform accepted, as the stream the session talks over.
     #[cfg(unix)]
-    pub fn into_connection(self) -> Stream {
+    pub fn into_connection(self) -> Connection {
         match self {
             Self::Stream(stream) => stream,
         }
     }
 
     #[cfg(windows)]
-    pub fn into_connection(self) -> Listener {
-        // A pipe's two ends are different types that read and write the same
-        // bytes, so the accepted server handle stands in for either. The client
-        // variant exists only so one enum covers both call sites.
+    pub fn into_connection(self) -> Connection {
+        // Only the server variant is produced by `accept`; the client variant
+        // exists so one enum covers both platforms' call sites.
         match self {
             Self::Stream(_) => unreachable!("the Windows accept yields a server"),
-            Self::Server(server) => server,
+            Self::Server(server) => PipeHandle(server),
         }
     }
 }
 
 /// A connection the runtime accepted.
 ///
-/// On Unix both ends are the same type. On Windows a pipe's two ends are
-/// different types, so the accepted one is carried as itself rather than being
-/// forced into the client's shape.
+/// On Unix both ends are the same type. On Windows they are too, so the enum
+/// keeps both variants only to give the two platforms one shape.
 #[cfg(windows)]
 pub enum Accepted {
     Stream(Stream),
@@ -130,8 +130,67 @@ pub enum Accepted {
 
 pub use imp::{Listener, Stream};
 
+/// What [`Accepted::into_connection`] hands back: the connection a session
+/// talks over.
+///
+/// Named once so a caller that holds one does not have to repeat the platform
+/// split to say what type it has — and on Windows it is a wrapper rather than
+/// the `Arc` itself, so that `Read` and `Write` are on `&mut self` exactly as
+/// they are for a `UnixStream`. Without it every caller would need `&*x` on one
+/// platform and `&x` on the other.
+#[cfg(unix)]
+pub type Connection = Stream;
+
+/// The accepted pipe, behind the `Arc` that lets a reader thread and a writer
+/// thread share one connection.
+///
+/// `miow::pipe::NamedPipe` implements `Read` and `Write` for `&NamedPipe`
+/// rather than for itself, so the `Arc` does not implement either. This wrapper
+/// forwards both, which is what keeps the daemon's read/write split identical
+/// on both platforms.
+#[cfg(windows)]
+pub struct PipeHandle(std::sync::Arc<miow::pipe::NamedPipe>);
+
+#[cfg(windows)]
+impl std::io::Read for PipeHandle {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        std::io::Read::read(&mut &*self.0, buf)
+    }
+}
+
+#[cfg(windows)]
+impl std::io::Write for PipeHandle {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        std::io::Write::write(&mut &*self.0, buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        std::io::Write::flush(&mut &*self.0)
+    }
+}
+
+#[cfg(windows)]
+pub type Connection = PipeHandle;
+
 /// What a client connects as, on either platform.
 pub type Transport = Stream;
+
+/// A second usable handle on an accepted connection, so one thread can read
+/// while another writes.
+///
+/// On Unix this duplicates the socket. On Windows the connection is a pipe
+/// behind an `Arc` and `Read` and `Write` are both on `&self`, so a clone of the
+/// `Arc` is the second handle — and both threads reach the I/O through a
+/// deref, which is why [`Connection`] is handed out rather than the pipe type.
+#[cfg(unix)]
+pub fn connection_duplicate(connection: &Connection) -> io::Result<Connection> {
+    connection.try_clone()
+}
+
+#[cfg(windows)]
+pub fn connection_duplicate(connection: &Connection) -> io::Result<Connection> {
+    Ok(PipeHandle(std::sync::Arc::clone(&connection.0)))
+}
 
 /// Windows named pipes live in the `\\.\pipe\` namespace and are named, not
 /// pathed; a Unix socket takes the path exactly as given.
@@ -160,15 +219,10 @@ pub fn connect(endpoint: &str) -> io::Result<Stream> {
     }
     #[cfg(windows)]
     {
-        named_pipe::PipeClient::connect(endpoint)
+        // Blocks until the server is reachable, and hands back the read+write
+        // `File` the client talks over.
+        miow::pipe::connect(endpoint)
     }
-}
-
-/// A second connection to the same pipe, for the side that cannot duplicate the
-/// handle it was given.
-#[cfg(windows)]
-pub fn reopen(endpoint: &str) -> io::Result<Stream> {
-    named_pipe::PipeClient::connect(endpoint)
 }
 
 /// A read timeout. Named pipes block until data arrives with no equivalent, so
@@ -204,13 +258,12 @@ pub fn handshake_writer(stream: &mut Stream) -> &mut Stream {
     stream
 }
 
-/// Bind a listener at `endpoint` and wait for the first connection.
+/// Bind a listener at `endpoint`.
 ///
 /// On Unix the listener persists and accepts repeatedly, so the value returned
-/// is a listener. On Windows a single-instance pipe serves exactly one client
-/// and then has to be recreated, so `bind` has already waited for that client by
-/// the time it returns: the value *is* the connection, and the runtime's serve
-/// loop re-binds for the next one.
+/// is a listener. On Windows the pipe is created here and [`accept`] is what
+/// waits for a client, because `NamedPipe::connect` takes `&self` — so the
+/// listener survives the wait and the serve loop re-accepts on the same one.
 pub fn bind(endpoint: &str) -> io::Result<Listener> {
     #[cfg(unix)]
     {
@@ -218,17 +271,16 @@ pub fn bind(endpoint: &str) -> io::Result<Listener> {
     }
     #[cfg(windows)]
     {
-        named_pipe::PipeOptions::new(endpoint)
-            .single()
-            .and_then(|connecting| connecting.wait())
+        Ok(std::sync::Arc::new(miow::pipe::NamedPipe::new(endpoint)?))
     }
 }
 
 /// The connection the listener is holding.
 ///
 /// On Unix this blocks until a client connects, as many times as it is called.
-/// On Windows `bind` already waited, so this just hands over the handle it is
-/// holding — there is nothing left to accept.
+/// On Windows it blocks in `NamedPipe::connect`, which is `ConnectNamedPipe` —
+/// callable again after a `disconnect`, so one listener serves client after
+/// client.
 pub fn accept(listener: Listener) -> io::Result<Accepted> {
     #[cfg(unix)]
     {
@@ -238,9 +290,7 @@ pub fn accept(listener: Listener) -> io::Result<Accepted> {
     }
     #[cfg(windows)]
     {
-        // `bind` already waited for this client, so the listener *is* the
-        // connection. A single-instance pipe serves one client, which is why
-        // this takes the handle by value: there is nothing to hand back.
+        listener.connect()?;
         Ok(Accepted::Server(listener))
     }
 }
@@ -249,10 +299,10 @@ pub fn accept(listener: Listener) -> io::Result<Accepted> {
 /// socket.
 ///
 /// On Unix the stream is duplicable and `Read` is on `&self`, so this is a
-/// second handle to the same socket. A Windows pipe reads through `&mut self`
-/// and is not `Clone`, so the caller hands over its own handle: the handshake is
-/// the only read before the reader thread starts, and the handle comes back
-/// through [`take_handshake`] once the frame has been read.
+/// second handle to the same socket. On Windows `Read` is on `&self` too, so the
+/// accepted connection is lent as-is; the handshake is the only read before the
+/// reader thread starts, and the handle comes back through [`take_handshake`]
+/// once the frame has been read.
 #[cfg(unix)]
 pub fn handshake_reader(stream: &mut Accepted) -> impl std::io::Read + '_ {
     stream

@@ -181,19 +181,21 @@ struct Identity {
 /// has nothing to offer.
 /// Windows: not implemented, and said so rather than faked.
 ///
-/// The design this file is built on needs one socket with two owners — a writer
-/// the supervisor holds and a reader that moves into the pump. A `UnixStream`
-/// duplicates, so that is two handles. A `named_pipe::PipeClient` does not
-/// duplicate and offers no synchronous duplex multiplexing: the only primitives
-/// are `read_async_owned` / `write_async_owned`, which take ownership. Serving
-/// both directions from one handle means either overlapping I/O or restructuring
-/// the pump to own the pipe and take writes from a channel.
+/// The blocker used to be the crate: `named_pipe::PipeClient` neither duplicated
+/// nor offered synchronous duplex I/O, so one connection could not have a writer
+/// and a reader. That is no longer true — the transport is on `miow` now, whose
+/// `NamedPipe` implements `Read` and `Write` on `&self` and is shared behind an
+/// `Arc`, which is exactly this shape (see `transport::connection_duplicate`).
 ///
-/// Both are real work and both need a Windows machine to validate, which is why
-/// this is M5.1 and not a stub. What it must not be is a path that compiles and
-/// then deadlocks: a pump blocked in `read` while holding the only handle would
-/// hang the daemon with nothing in the log. Refusing here is recoverable and
-/// visible; a hang is neither.
+/// What is left is wiring: this path waits for the adapter's socket and then
+/// connects as a *client*, while `miow`'s server side is the one that blocks in
+/// `connect()`. Getting the two ends to meet on Windows means deciding which
+/// side binds, and that is a change to the adapter's serve loop as well as this
+/// function — and it needs a Windows machine to validate, which is why this is
+/// M5.1 and not a stub. What it must not be is a path that compiles and then
+/// deadlocks: a pump blocked in `read` while holding the only handle would hang
+/// the daemon with nothing in the log. Refusing here is recoverable and visible;
+/// a hang is neither.
 #[cfg(not(unix))]
 fn connect_and_handshake(
     _launch: &AdapterLaunch,
