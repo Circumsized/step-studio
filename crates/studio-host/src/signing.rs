@@ -6,20 +6,23 @@
 //! otherwise a downgrade is an attack that replays an older, validly-signed
 //! manifest.
 //!
-//! The signing key never exists in this crate: only the verifying key is baked
-//! in, and signing happens on the release machine. That separation is the whole
-//! point — a daemon that can sign can also be made to sign anything.
+//! The signing key never exists in this crate, and neither does a verifying key:
+//! signing happens on the release machine, and whatever verifies passes its own
+//! `VerifyingKey` in. That separation is the whole point — a daemon that can sign
+//! can also be made to sign anything.
+//!
+//! There used to be a `pub const VERIFYING_KEY_BYTES: [u8; 32] = [0u8; 32]` here,
+//! "a placeholder until a real release key is minted", with nothing referencing
+//! it. It is deleted rather than left: the all-zero ed25519 verifying key is
+//! matchable by `SigningKey::from_bytes(&[0u8; 32])`, which anyone can compute,
+//! so the first caller to wire it up would have shipped a signature check that
+//! verifies anything. A baked key belongs in a build script that has one, not in
+//! a constant waiting to be trusted.
 
 use std::path::Path;
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
-
-/// The public key the daemon verifies against.
-///
-/// A placeholder until a real release key is minted and baked at build time; the
-/// tests below mint their own. `pub` so a build script can replace it.
-pub const VERIFYING_KEY_BYTES: [u8; 32] = [0u8; 32];
 
 /// What a manifest asserts, and what the signature covers.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
