@@ -146,13 +146,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: studio-crates-windows
-      # Compile and lint only. The runtime is unverified on Windows: no Step CLI
-      # is installed here, so the end-to-end tests would skip rather than prove
-      # anything, and a GUI shell cannot run on a hosted runner.
-      # `step-studio-host` is here for the same reason the transport is: its
+      # Clippy first, for the same reason as before: `step-studio-host`'s
       # `#[cfg(not(unix))]` arms — the pipe-name endpoint, the no-op departure
       # announcement — have no other way to be compiled at all.
       - run: cargo clippy -p step-studio-bridge -p step-studio-runtime -p step-studio-host --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+      # Then actually run them. This job used to be compile-and-lint only, on the
+      # reasoning that the runtime is unverified here (no Step CLI, so the
+      # end-to-end tests skip) and a GUI shell cannot run on a hosted runner.
+      # Both are true and neither covers the unit tests, which is how a Windows
+      # keystore that silently persisted nothing stayed green: the one test that
+      # would have caught it ran only on Linux, where there is no Secret Service
+      # and it asserts nothing. See `design/review/plan-2026-11-15.md` §11.
+      # The runtime e2e still skips; that is a different, known gap.
+      - run: cargo test -p step-studio-bridge -p step-studio-runtime -p step-studio-host -p step-studio-sessions -p step-studio-tui -p step-studio-desktop-tauri --target x86_64-pc-windows-msvc
 
   # `macos-package` was removed with the Electron shell: it packed a .app with
   # electron-builder, ad-hoc signed it, and ran `full-gui-e2e.mjs` against it. The

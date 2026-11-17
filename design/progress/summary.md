@@ -21,11 +21,11 @@
 
 | 维度 | 门禁执行 | 仓库内总数（静态，下界） |
 | --- | --- | --- |
-| Rust 测试 | **365** passed / 0 failed / 0 ignored | 365 个 `#[test]` |
+| Rust 测试 | **366** passed / 0 failed / 0 ignored | 366 个 `#[test]` |
 | TypeScript 测试 | `npm run check` 12.4 s 全绿 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
 | Rust 行数 | — | 28,583 |
 | TypeScript 行数 | — | 176,027 |
-| 提交 | — | 257 |
+| 提交 | — | 260 |
 | signoff 截图 | — | 19 文件 / 19 个唯一 sha256（`git ls-files design/signoff` = 0，不跟踪） |
 
 生成命令：
@@ -44,13 +44,13 @@ sha256sum design/signoff/*.png | awk '{print $1}' | sort -u | wc -l
 
 `cargo clippy --all-targets -D warnings` 全 workspace 干净（Linux 与 Windows target 都是）·
 `cargo test --workspace`
-**365 passed / 0 failed / 0 ignored**
+**366 passed / 0 failed / 0 ignored**
 （11 个 e2e + 2 个真 CLI）· contracts 2/2 · architecture 7/7 · `npm run check` 12.3 s 全绿 ·
 **Windows target 全绿**（2026-11-16 首次）：`cargo clippy --workspace --all-targets
 --target x86_64-pc-windows-msvc -- -D warnings` exit 0。此前 `src-tauri` 因
 `std::os::unix` 未设门有 18 个 error，整个壳二进制在 Windows 上建不出来 ·
-**但这个绿有一部分是空的**：365 个测试里 **25 个在 Windows 上编译成 nothing**
-（含 `daemon.rs` 整个 18 条端到端套件、token 权限属性那条）。
+**但 Windows 上一个测试都没执行过**（CI 的 Windows job 只跑 clippy），
+25 个测试在那里编译成 nothing。已修一半：CI 改为在 Windows 上跑测试。
 详见 `review/plan-2026-11-15.md` §11 ·
 **真 CLI 端到端**：`real-runtime-adapter.test.js` 2.7 s 通过（跨语言，TS 客户端 ↔ Rust 适配器 ↔ omp）·
 Xvfb 实机启动 30 秒无 panic
@@ -77,6 +77,10 @@ Xvfb 实机启动 30 秒无 panic
 - **Windows daemon 无法干净退出已修**：`serve` 主线程阻塞在 `ConnectNamedPipe`，
   `stopping` 永不重读。改为 `transport::wait_or_stop`（线程 + 50 ms 轮询），
   平台无关，三条测试、第三条变异验证过。真机退出仍未验（卡 B1）。
+- **Windows 上丢过用户数据而门禁全绿**（本轮最重）：keyring 缺 `windows-native`，
+  Windows 上退到进程内 mock store，加密钥每次启动重 mint，盘上所有加密定义解不开；
+  CI 的 Windows job 只跑 clippy 所以无一测试发现。已修（feature + 持久性测试 +
+  CI 跑测试）。见 `review/plan-2026-11-15.md` §11。
 - **`src-tauri` 在 Windows 上编译不过，已修**（18 error，`std::os::unix` 未设门）。
   这条**不需要 Windows 真机**就能发现，却一直红着——此前所有验证都在 Linux 上跑。
   修法见 `review/plan-2026-11-15.md` §10；三个功能的传输层移植仍未做。

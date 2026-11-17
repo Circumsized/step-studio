@@ -32,7 +32,14 @@ uuid = { version = "1", features = ["v4"] }
 # The OS keystore, holding the data-encryption key that protects the service
 # definition store. The Linux backend is the synchronous `dbus-secret-service`
 # crate, not the async zbus stack.
-keyring = { version = "3", features = ["sync-secret-service"] }
+#
+# `windows-native` is not optional. Without it, keyring 3 falls back to its
+# `mock` store on Windows (`lib.rs:296`), which is process-local and persists
+# nothing. `OsKeystoreCodec::data_key` reads NoEntry, mints a fresh key and
+# writes it into that map — so the shell works perfectly for one launch and
+# silently orphans every definition already on disk at the next one, which is
+# the exact failure its own doc comment says it refuses to have.
+keyring = { version = "3", features = ["sync-secret-service", "windows-native"] }
 # AES-256-GCM over that key. A service spec's `env` block is where its API token
 # lives, so the file has to be confidential rather than merely unreadable.
 aes-gcm = "0.10"

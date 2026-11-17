@@ -1151,6 +1151,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn a_key_the_keystore_holds_survives_a_fresh_entry() {
+        // The property keyring's in-memory fallback violates, and the reason
+        // `windows-native` is not an optional feature in Cargo.toml.
+        //
+        // The consistency test above passes against that fallback: `available()`
+        // answers true, `data_key()` mints and stores, and the encrypt/decrypt
+        // round trip works. What fails is the *next launch* — a fresh entry finds
+        // nothing, `data_key` mints a second key, and every definition already on
+        // disk is orphaned. That is the exact failure the module's first rule
+        // exists to prevent, arriving through a dependency's cfg table instead of
+        // through any line here.
+        //
+        // A fresh `Entry` is as close as one process gets to a restart: the real
+        // backends look the value up by (service, user), the mock keeps it in the
+        // entry it was built for and starts every new one empty.
+        if !OsKeystoreCodec.available() {
+            return;
+        }
+        let service = "step-studio-keystore-persistence-probe";
+        let written = "0123456789abcdef0123456789abcdef";
+        let first = keyring::Entry::new(service, "probe").expect("an entry");
+        let _ = first.delete_credential();
+        first.set_password(written).expect("written");
+        let second = keyring::Entry::new(service, "probe").expect("a second entry");
+        let read = second.get_password();
+        let _ = second.delete_credential();
+        assert_eq!(
+            read.ok().as_deref(),
+            Some(written),
+            "the keystore does not persist across entries: a fresh entry found nothing, \
+             so every launch mints a new data key and orphans the store"
+        );
+    }
+
     /// Point `store_path()` at a directory of its own.
     ///
     /// The same two-lock split the Skillshare tests use: the path override is held
