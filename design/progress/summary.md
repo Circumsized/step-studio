@@ -135,6 +135,23 @@ Xvfb 实机启动 30 秒无 panic
   （listener 句柄、accept 后立即重 bind），§7 那个修复本身不受影响。
 - 一条检索中出现但**拿不到 Microsoft 出处**的说法（同步管道操作串行）记作未证实，不进证据列。
 
+## 联网查证：Windows 对等身份的权威结论（2026-11-17）
+
+S2 里「Project Zero 对 `GetNamedPipeClientProcessId` 有警告」这句话**原先没有出处**。
+查到了：James Forshaw，Google Project Zero，《Windows Exploitation Tricks: Spoofing
+Named Pipe Client PID》（2019-09-25）。结论句逐字：
+
+> this PID should not be relied upon to make security decisions as it doesn't
+> necessarily reflect the actual client, just the process which opened the pipe
+
+三条手段：PID 回收（检查若在首次读写之后就能拖到回收）、经本地 SMB 任意指定 PID
+（EA buffer 为空时 SMB server 令 PID = 4）、以及内核态注入 EA buffer。
+
+**对 S2 的意义：二选一有了确定答案——pid 闸门不可以**，不是"更弱"。
+Windows 侧唯一可做的是 OpenProcess → OpenProcessToken → GetTokenInformation → SID，
+没有便宜选项。另有一条直接约束：PID 记在**连接时**，所以对等检查必须在 accept 那一刻，
+不能延到首个请求，否则正落进可回收窗口。详见 `review/plan-2026-11-15.md` §14。
+
 ## 跨里程碑阻塞
 
 见 `blockers.md`。当前三条：

@@ -33,6 +33,12 @@ export function resolveLanguage(preference?: AppLanguage): Locale {
 }
 
 function lookupKey(dict: Record<string, unknown>, path: string): string | undefined {
+  // A union is a compile-time promise: a Host on a newer protocol indexes a
+  // `Record<Union, string>` table with a key that is not there, the lookup yields
+  // `undefined`, and splitting that threw. Guarded here rather than at each call
+  // site because `translate` is exported and takes a `key: string` from callers
+  // this module cannot see.
+  if (typeof path !== "string") return undefined;
   const parts = path.split(".");
   let current: unknown = dict;
   for (const part of parts) {
