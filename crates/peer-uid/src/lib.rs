@@ -49,9 +49,13 @@ const SO_PEERCRED: std::os::raw::c_int = 17;
 /// help. The daemon's Windows gate (`cargo clippy --target x86_64-pc-windows-msvc`)
 /// was red for exactly this reason.
 ///
-/// On Windows the answer is always `None`, which is honest: a named pipe carries
-/// no peer credential. The caller already treats an unknown peer as a platform
-/// that cannot say, rather than as a permitted one.
+/// On Windows the answer is always `None`. A named pipe does carry a peer
+/// credential — `GetNamedPipeClientProcessId` — but it answers a **pid**, and
+/// this crate is uid-only for the reason unix(7) gives. Going from that pid to a
+/// uid-equivalent is `OpenProcess` → `OpenProcessToken` →
+/// `GetTokenInformation(TokenUser)` → SID, three more FFI calls. Unwritten on
+/// purpose: the caller reads an unknown peer as a platform that cannot say, not
+/// as a permitted one.
 #[cfg(unix)]
 pub fn peer_uid<T: std::os::unix::io::AsRawFd>(stream: &T) -> Option<u32> {
     #[cfg(unix)]

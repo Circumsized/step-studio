@@ -1,23 +1,24 @@
 //! Signed update manifests, per §12.4: "ed25519 清单 + 公钥 bake + 版本签入防降级".
 //!
-//! A manifest names the artifact, its version and its digest. The daemon verifies
-//! the signature against a public key compiled into the binary before it will
-//! replace anything, and refuses a version at or below the one it is running —
-//! otherwise a downgrade is an attack that replays an older, validly-signed
-//! manifest.
+//! A manifest names the artifact, its version and its digest. A verifier checks
+//! the signature against a key it is given before replacing anything, and refuses
+//! a version at or below the one it is running — otherwise a downgrade is an
+//! attack that replays an older, validly-signed manifest.
+//!
+//! Nothing in this daemon calls any of it. The flow that does verify lives in
+//! `packages/runtime-installer/src/update-manifest.ts`, which is the stronger of
+//! the two; see `design/review/plan-2026-11-15.md` S9.
 //!
 //! The signing key never exists in this crate, and neither does a verifying key:
 //! signing happens on the release machine, and whatever verifies passes its own
 //! `VerifyingKey` in. That separation is the whole point — a daemon that can sign
 //! can also be made to sign anything.
 //!
-//! There used to be a `pub const VERIFYING_KEY_BYTES: [u8; 32] = [0u8; 32]` here,
-//! "a placeholder until a real release key is minted", with nothing referencing
-//! it. It is deleted rather than left: the all-zero ed25519 verifying key is
-//! matchable by `SigningKey::from_bytes(&[0u8; 32])`, which anyone can compute,
-//! so the first caller to wire it up would have shipped a signature check that
-//! verifies anything. A baked key belongs in a build script that has one, not in
-//! a constant waiting to be trusted.
+//! There was a `pub const VERIFYING_KEY_BYTES: [u8; 32] = [0u8; 32]` here, "a
+//! placeholder", referenced by nothing. Deleted rather than left: the all-zero
+//! ed25519 verifying key is matchable by `SigningKey::from_bytes(&[0u8; 32])`,
+//! so the first caller to wire it up ships a signature check that verifies
+//! anything.
 
 use std::path::Path;
 
