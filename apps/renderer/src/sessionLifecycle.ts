@@ -60,7 +60,32 @@ export type CommandWaitClient = {
     listener: (event: { kind: string; receipt?: CommandReceipt }) => void,
   ): () => void;
   getState?: () => { readonly commands?: Readonly<Record<string, CommandState>> };
+  /** Called on every reducer update. See `waitForCommandReceipt` for why it matters. */
+  onState?: (listener: () => void) => () => void;
 };
+
+/**
+ * How long a receipt may take before the wait gives up and reports
+ * `outcome_unknown`. Same budget `waitReceipt` uses.
+ */
+const RECEIPT_TIMEOUT_MS = 120_000;
+
+/**
+ * The receipt a timed-out wait resolves with.
+ *
+ * Resolving rather than rejecting because every caller inspects
+ * `receipt.status` itself — `outcome_unknown` is a status they already handle,
+ * and the alternative (a rejected promise) would bypass that handling.
+ */
+function unknownReceipt(requestId: CommandRequestId): CommandReceipt {
+  return {
+    requestId,
+    commandName: "runtime.ensure",
+    status: "outcome_unknown",
+    reason: "等待 Host 回执超时",
+    observedAt: new Date().toISOString(),
+  };
+}
 
 function terminalFromState(client: CommandWaitClient, requestId: CommandRequestId): CommandReceipt | undefined {
   const entry = client.getState?.()?.commands?.[requestId];
@@ -74,20 +99,49 @@ function terminalFromState(client: CommandWaitClient, requestId: CommandRequestI
 export function waitForCommandReceipt(
   client: CommandWaitClient,
   requestId: CommandRequestId,
+  timeoutMs: number | null = RECEIPT_TIMEOUT_MS,
 ): Promise<CommandReceipt> {
   const existing = terminalFromState(client, requestId);
   if (existing !== undefined) return Promise.resolve(existing);
   return new Promise((resolve) => {
+    let settled = false;
+    const settle = (receipt: CommandReceipt) => {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      unsubscribe();
+      offState?.();
+      resolve(receipt);
+    };
+
+    // Reading the state once is not enough, and this used to be all it did. The
+    // reducer can move an in-flight command to a terminal status with no
+    // matching `command.receipt` event — re-bootstrap, resync, a runtime epoch
+    // change, runtime loss — and if that happens after this line, nothing ever
+    // settled: the caller waited forever, with no error and no way back. The
+    // comment on `waitReceipt` (hostError) says exactly this; this copy of the
+    // wait did not inherit the fix. Live at DiagnosticsPage's install/recheck,
+    // runtimeEnsure, and HomePage.
+    const offState =
+      typeof client.onState === "function"
+        ? client.onState(() => {
+            const raced = terminalFromState(client, requestId);
+            if (raced !== undefined) settle(raced);
+          })
+        : undefined;
+
     const unsubscribe = client.subscribe({ scope: "command", requestId }, (event) => {
       if (event.kind !== "command.receipt" || event.receipt === undefined) return;
-      unsubscribe();
-      resolve(event.receipt);
+      settle(event.receipt);
     });
+
+    const timer =
+      timeoutMs === null
+        ? undefined
+        : setTimeout(() => settle(unknownReceipt(requestId)), timeoutMs);
+
     const raced = terminalFromState(client, requestId);
-    if (raced !== undefined) {
-      unsubscribe();
-      resolve(raced);
-    }
+    if (raced !== undefined) settle(raced);
   });
 }
 
