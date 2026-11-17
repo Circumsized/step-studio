@@ -25,7 +25,7 @@
 | TypeScript 测试 | `npm run check` 12.4 s 全绿 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
 | Rust 行数 | — | 28,583 |
 | TypeScript 行数 | — | 176,027 |
-| 提交 | — | 254 |
+| 提交 | — | 257 |
 | signoff 截图 | — | 19 文件 / 19 个唯一 sha256（`git ls-files design/signoff` = 0，不跟踪） |
 
 生成命令：
