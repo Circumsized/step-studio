@@ -21,7 +21,7 @@
 
 | 维度 | 门禁执行 | 仓库内总数（静态，下界） |
 | --- | --- | --- |
-| Rust 测试 | **366** passed / 0 failed / 0 ignored | 366 个 `#[test]` |
+| Rust 测试 | **369** passed / 0 failed / 0 ignored | 369 个 `#[test]` |
 | TypeScript 测试 | `npm run check` 全绿；渲染层 vitest **960** 个 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
 | Rust 行数 | — | 28,583 |
 | TypeScript 行数 | — | 176,027 |
@@ -44,7 +44,7 @@ sha256sum design/signoff/*.png | awk '{print $1}' | sort -u | wc -l
 
 `cargo clippy --all-targets -D warnings` 全 workspace 干净（Linux 与 Windows target 都是）·
 `cargo test --workspace`
-**366 passed / 0 failed / 0 ignored**
+**369 passed / 0 failed / 0 ignored**
 （11 个 e2e + 2 个真 CLI）· contracts 2/2 · architecture 7/7 · `npm run check` 12.3 s 全绿 ·
 **Windows target 全绿**（2026-11-16 首次）：`cargo clippy --workspace --all-targets
 --target x86_64-pc-windows-msvc -- -D warnings` exit 0。此前 `src-tauri` 因
@@ -99,6 +99,26 @@ Xvfb 实机启动 30 秒无 panic
   修法见 `review/plan-2026-11-15.md` §10；三个功能的传输层移植仍未做。
 - 测试侧：T1/T2/T3/T4/T5/T7 收口，T4 是**阴性结果**（未发现伪测试方法）；
   S8 决定不做（帧解码器是无状态解析器，AFLNet 的优势在有状态）。
+
+## 专家团复核（2026-11-17）
+
+三路只读专家并行复核本轮发现。**查出两个我真漏掉的问题**：
+
+- **challenge 没有新鲜度**：`challenge_for(epoch)` 就是 `format!("daemon-{epoch}")`，
+  壳侧 `format!("shell-{epoch}")`。跨重启不可重放（它声称的目的）成立，但同一 epoch 内
+  proof 是确定函数，抓一次交换终生有效。已改 `fresh_challenge`（`getrandom` 16 字节），
+  并修掉同函数的非常数时间比较。
+- **keystore 只修了一半**：加了 `windows-native` 没加 `apple-native`，而 keyring 3 的
+  `lib.rs:280` 正是 macOS 的 mock 回退——**同一个数据丢失 bug 在另一个发布平台活着**，
+  且新加的那条测试在 macOS 上不会早退、会直接红。已补。
+
+另修：`diagnosticsModel.ts:511` 是我漏掉的最后一个裸表索引（声称修掉的 crash 还活着）、
+未知 `installer.status` 与 `runtime` 缺失都能到达"运行正常"hero、`unknownReceipt`
+伪造 `commandName`、`terminalFromState` 裸调 `getState`。
+
+**我删过头一次**：删 `isNewConversationAvailable` 时把同块里活着的
+`NewSessionWaitResult` 一起删了（grep 只查了另外两个名字），已恢复。
+详见 `review/plan-2026-11-15.md` §13。
 
 ## review 轮补记（2026-11-17 晚）
 

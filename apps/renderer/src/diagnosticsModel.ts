@@ -508,7 +508,7 @@ function deriveHero(
     ? t("diagnostics.heroCurrentVersion", { version: input.runtimeVersion })
     : t("diagnostics.versionUnknown");
   const signature = input.installer
-    ? t("diagnostics.heroSignature", { sig: t(SIGNATURE_LABEL[input.installer.signature]) })
+    ? t("diagnostics.heroSignature", { sig: labelFor(SIGNATURE_LABEL, input.installer.signature, t) })
     : t("diagnostics.heroSignatureUnknown");
   const baseDetail = `${version} · ${signature} · ${checked}`;
 
@@ -590,13 +590,42 @@ function deriveHero(
   // arm for, and this fallback used to be the `ok` hero — so an unrecognised
   // state was reported to the operator as healthy. `runtimeCheck` below already
   // fails closed; this is the same rule for the hero.
-  if (input.runtime !== undefined && input.runtime.status !== "connected") {
+  // Unknown installer status, or nothing reported at all. The four installer arms
+  // above are a compile-time union too, and `runtime === undefined` was reaching
+  // this fallback as well: absence of evidence read as health, while `runtimeCheck`
+  // and `installCheck` in the same file both report "unreadable" for it.
+  if (input.runtime === undefined) {
+    return {
+      kind: "down",
+      title: t("diagnostics.heroUnknownStatus", { status: t("diagnostics.versionUnknown") }),
+      detail: baseDetail,
+      primary: "recheck",
+      showReinstall: input.installer?.status === "installed",
+    };
+  }
+  if (input.runtime.status !== "connected") {
     return {
       kind: "down",
       title: t("diagnostics.heroUnknownStatus", { status: input.runtime.status }),
       detail: `${input.runtime.status} · ${baseDetail}`,
       primary: "recheck",
       showReinstall: input.installer?.status === "installed",
+    };
+  }
+  const INSTALLER_KNOWN: ReadonlySet<string> = new Set([
+    "installed",
+    "not-installed",
+    "update-available",
+    "installing",
+    "failed",
+  ]);
+  if (input.installer !== undefined && !INSTALLER_KNOWN.has(input.installer.status)) {
+    return {
+      kind: "down",
+      title: t("diagnostics.heroUnknownStatus", { status: input.installer.status }),
+      detail: `${input.installer.status} · ${baseDetail}`,
+      primary: "recheck",
+      showReinstall: false,
     };
   }
   const extra = input.problemCount > 0 ? ` · ${t("diagnostics.heroRecentProblems", { count: input.problemCount })}` : "";

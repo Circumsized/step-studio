@@ -164,7 +164,7 @@ impl BridgeSession {
         // before the reader thread exists, so exactly one owner touches the
         // socket at a time.
         let mut reader = BufReader::new(stream_clone(&stream)?);
-        let challenge = format!("shell-{}", launch.runtime_epoch);
+        let challenge = crate::handshake::fresh_challenge("shell", launch.runtime_epoch);
         let hello = json!({
             "type": "studio.hello",
             "requestId": "shell-hello",

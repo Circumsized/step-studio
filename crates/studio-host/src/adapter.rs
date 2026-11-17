@@ -30,6 +30,7 @@ use step_studio_bridge::frame::write_frame;
 #[cfg(unix)]
 use step_studio_bridge::handshake::verify_hello;
 use step_studio_bridge::handshake::challenge_proof;
+use step_studio_bridge::handshake::fresh_challenge;
 // `PROTOCOL_VERSION` is only read inside `connect_and_handshake`, which is
 // `#[cfg(unix)]`: on Windows the adapter has no duplex transport to handshake
 // over, so importing it unconditionally makes the Windows clippy job — the one
@@ -310,10 +311,11 @@ pub fn mark_dead(flag: &AtomicBool) {
     flag.store(false, Ordering::Relaxed);
 }
 
-/// The challenge the daemon sends. Carries the daemon epoch so a proof minted
-/// for a previous daemon cannot be replayed against this one.
+/// The challenge the daemon sends. Fresh per launch, and carrying the daemon
+/// epoch so a proof minted for a previous daemon cannot be replayed against this
+/// one either.
 pub fn challenge_for(daemon_epoch: u64) -> String {
-    format!("daemon-{daemon_epoch}")
+    fresh_challenge("daemon", daemon_epoch)
 }
 
 /// Ask the adapter to shut down, then make sure it is gone.

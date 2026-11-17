@@ -33,13 +33,19 @@ uuid = { version = "1", features = ["v4"] }
 # definition store. The Linux backend is the synchronous `dbus-secret-service`
 # crate, not the async zbus stack.
 #
-# `windows-native` is not optional. Without it, keyring 3 falls back to its
-# `mock` store on Windows (`lib.rs:296`), which is process-local and persists
-# nothing. `OsKeystoreCodec::data_key` reads NoEntry, mints a fresh key and
-# writes it into that map — so the shell works perfectly for one launch and
-# silently orphans every definition already on disk at the next one, which is
-# the exact failure its own doc comment says it refuses to have.
-keyring = { version = "3", features = ["sync-secret-service", "windows-native"] }
+# Both native features are non-optional, and the Windows one was fixed a day
+# before the macOS one was noticed. keyring 3 has no default features, and its
+# store selection is per-OS with a `mock` fallback for each:
+#   lib.rs:296 — windows, not(windows-native)  -> mock
+#   lib.rs:280 — macos,   not(apple-native)    -> mock
+# The mock is process-local and persists nothing, so `OsKeystoreCodec::data_key`
+# reads NoEntry, mints a fresh DEK and writes it into a map that dies with the
+# process. The shell then works perfectly for one launch and silently orphans
+# every definition already on disk at the next one, which is the exact failure
+# its own doc comment says it refuses to have. macOS is a shipping target
+# (AGENTS.md: Windows and macOS Apple Silicon), so leaving `apple-native` out
+# kept that bug live on the other platform.
+keyring = { version = "3", features = ["sync-secret-service", "windows-native", "apple-native"] }
 # AES-256-GCM over that key. A service spec's `env` block is where its API token
 # lives, so the file has to be confidential rather than merely unreadable.
 aes-gcm = "0.10"

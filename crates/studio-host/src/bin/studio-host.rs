@@ -598,11 +598,20 @@ fn serve(daemon: Arc<Daemon>) {
             }
             let connection = match transport::accept_until(&listener, &daemon.stopping) {
                 Ok(Some(connection)) => connection,
-                // Stopping, or the connect failed: either way this loop is over.
+                // Stopping: this loop is over.
                 Ok(None) => return,
+                // An accept that produced no connection is not a reason to stop
+                // serving. The Unix arm below never exits on an accept error
+                // either — it logs, sleeps, and loops — and this arm used to
+                // `return` on any error, which made one transient accept fatal
+                // for a daemon whose whole job is to sit there. That asymmetry
+                // is the defect; which specific error is transient is not
+                // something this machine can demonstrate, so the arm matches
+                // Unix rather than guessing at an error code.
                 Err(error) => {
                     eprintln!("step-studio-host: accept failed: {error}");
-                    return;
+                    std::thread::sleep(POLL_SLICE);
+                    continue;
                 }
             };
             // Re-bind before serving, so the next client is not kept waiting

@@ -117,5 +117,43 @@ describe("diagnostics hero copy", () => {
       expect(runtime?.detail).toContain(UNKNOWN);
       expect(runtime?.tone).toBe("error");
     });
+
+    // The installer's signature field rides the same unvalidated path from
+    // bootstrap.environment, and it was the one table index the first fix missed.
+    it("shows the raw signature instead of throwing", () => {
+      const body = deriveDiagnosticsView({
+        environment: {
+          runtime: { status: "connected", classification: "managed" },
+          installer: { status: "installed", version: "1", signature: "brand-new-scheme" },
+        },
+        checks: [],
+        entries: [],
+      } as unknown as Parameters<typeof deriveDiagnosticsView>[0]);
+      expect(body.hero.detail).toContain("brand-new-scheme");
+    });
+
+    // Unknown installer status, and no runtime at all, both used to reach the
+    // `ok` hero: absence of evidence read as health.
+    it("does not report an unknown installer status as healthy", () => {
+      const body = deriveDiagnosticsView({
+        environment: {
+          runtime: { status: "connected", classification: "managed" },
+          installer: { status: "half-installed", version: "1", signature: "verified" },
+        },
+        checks: [],
+        entries: [],
+      } as unknown as Parameters<typeof deriveDiagnosticsView>[0]);
+      expect(body.hero.kind).not.toBe("ok");
+      expect(body.hero.detail).toContain("half-installed");
+    });
+
+    it("does not report a missing runtime as healthy", () => {
+      const body = deriveDiagnosticsView({
+        environment: { installer: { status: "installed", version: "1", signature: "verified" } },
+        checks: [],
+        entries: [],
+      } as unknown as Parameters<typeof deriveDiagnosticsView>[0]);
+      expect(body.hero.kind).not.toBe("ok");
+    });
   });
 });

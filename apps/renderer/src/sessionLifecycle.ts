@@ -11,16 +11,11 @@ import type {
 import type { OperatorStateSnapshot } from "@omp-studio/studio-protocol";
 import { waitReceipt } from "./hostError";
 
-export const NEW_CONVERSATION_UNAVAILABLE_REASON =
-  "Host 未提供 session.create，无法创建新的 Runtime 会话。";
-
+// Live: App.tsx types its session-create wait on this. I deleted it a moment ago
+// along with the two genuinely dead items below, having grepped only their names.
 export type NewSessionWaitResult =
   | { readonly ok: true; readonly sessionId?: SessionId }
   | { readonly ok: false; readonly error: string };
-
-export function isNewConversationAvailable(): true {
-  return true;
-}
 
 /** The single Host pending interaction, if exactly one command is waiting. */
 export function selectPendingInteraction(
@@ -77,10 +72,17 @@ const RECEIPT_TIMEOUT_MS = 120_000;
  * `receipt.status` itself — `outcome_unknown` is a status they already handle,
  * and the alternative (a rejected promise) would bypass that handling.
  */
-function unknownReceipt(requestId: CommandRequestId): CommandReceipt {
+function unknownReceipt(client: CommandWaitClient, requestId: CommandRequestId): CommandReceipt {
+  // The real command name when the reducer still has the entry, which it does for
+  // every live call site: they all issue a command and then wait on its id. This
+  // used to hardcode "runtime.ensure" while two of the three callers issue
+  // "runtime.install", so a timed-out wait handed them a receipt whose
+  // commandName was a lie. Nothing reads it off these receipts today, which is
+  // exactly why it went unnoticed — a latent wrong value, not a live one.
+  const named = client.getState?.()?.commands?.[requestId]?.commandName;
   return {
     requestId,
-    commandName: "runtime.ensure",
+    commandName: named ?? "runtime.ensure",
     status: "outcome_unknown",
     reason: "等待 Host 回执超时",
     observedAt: new Date().toISOString(),
@@ -88,7 +90,17 @@ function unknownReceipt(requestId: CommandRequestId): CommandReceipt {
 }
 
 function terminalFromState(client: CommandWaitClient, requestId: CommandRequestId): CommandReceipt | undefined {
-  const entry = client.getState?.()?.commands?.[requestId];
+  // Guarded, not bare, and it matters more now: `onState` calls this on every
+  // reducer tick, so an unbound extract throws inside a state listener rather
+  // than once. hostError.ts and runtimeEnsure.ts both carry this guard, one with
+  // a comment naming the exact failure ("Cannot read properties of undefined").
+  let commands: Readonly<Record<string, CommandState>> | undefined;
+  try {
+    commands = client.getState?.()?.commands;
+  } catch {
+    return undefined;
+  }
+  const entry = commands?.[requestId];
   if (entry === undefined) return undefined;
   if (entry.status === "completed" || entry.status === "failed" || entry.status === "rejected" || entry.status === "outcome_unknown") {
     return entry;
@@ -138,7 +150,7 @@ export function waitForCommandReceipt(
     const timer =
       timeoutMs === null
         ? undefined
-        : setTimeout(() => settle(unknownReceipt(requestId)), timeoutMs);
+        : setTimeout(() => settle(unknownReceipt(client, requestId)), timeoutMs);
 
     const raced = terminalFromState(client, requestId);
     if (raced !== undefined) settle(raced);

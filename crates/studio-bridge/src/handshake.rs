@@ -14,6 +14,38 @@ pub type HmacSha256 = Hmac<Sha256>;
 ///
 /// The NUL separator is load-bearing: without it a challenge and an instance
 /// id that concatenate to the same bytes would produce the same proof.
+/// How much randomness a challenge carries.
+const CHALLENGE_BYTES: usize = 16;
+
+/// A challenge nobody could have chosen in advance.
+///
+/// The challenger picks the challenge, which is the normal shape; what was wrong
+/// is that both sides picked a *deterministic* one derived from the epoch
+/// (`daemon-{epoch}`, `shell-{epoch}`). That still blocks replaying a proof
+/// across a daemon restart, which is what its comment claimed, but inside one
+/// epoch the proof is a fixed function of (token, instance id, epoch): capture
+/// one exchange and it is valid for the rest of that daemon's life. A challenge
+/// with no freshness is not a challenge.
+///
+/// The epoch prefix is kept, so the cross-restart property survives alongside
+/// the new per-connection one.
+pub fn fresh_challenge(prefix: &str, epoch: u64) -> String {
+    let mut bytes = [0u8; CHALLENGE_BYTES];
+    // `getrandom` 0.2 spells it `getrandom`; 0.3 renamed it to `fill`.
+    getrandom::getrandom(&mut bytes).expect("the OS CSPRNG is available");
+    let mut out = String::with_capacity(prefix.len() + 24 + CHALLENGE_BYTES * 2);
+    out.push_str(prefix);
+    out.push('-');
+    out.push_str(&epoch.to_string());
+    out.push('-');
+    for byte in bytes {
+        for nibble in [byte >> 4, byte & 0x0f] {
+            out.push(char::from_digit(nibble as u32, 16).expect("4 bits fit a digit"));
+        }
+    }
+    out
+}
+
 pub fn challenge_proof(token: &str, challenge: &str, runtime_instance_id: &str) -> String {
     let mut mac = HmacSha256::new_from_slice(token.as_bytes()).expect("HMAC accepts any key length");
     mac.update(challenge.as_bytes());
@@ -59,7 +91,11 @@ pub fn verify_hello(
         .get("challengeProof")
         .and_then(|v| v.as_str())
         .ok_or("hello is missing challengeProof")?;
-    if actual != expected {
+    // Constant-time: `actual != expected` on strings short-circuits on the first
+    // differing byte, which leaks how much of a guessed proof was right. Both
+    // sides are hex of a fixed-length digest, so the lengths always match when
+    // the bytes do.
+    if !same_bytes(expected.as_bytes(), actual.as_bytes()) {
         return Err("challenge proof mismatch".to_string());
     }
     let version = body
@@ -84,6 +120,18 @@ pub fn verify_hello(
     })
 }
 
+/// Compare two byte strings without leaking where they first differ.
+fn same_bytes(expected: &[u8], actual: &[u8]) -> bool {
+    if expected.len() != actual.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (left, right) in expected.iter().zip(actual.iter()) {
+        diff |= left ^ right;
+    }
+    diff == 0
+}
+
 fn str_field(body: &serde_json::Value, key: &str) -> Result<String, String> {
     body.get(key)
         .and_then(|v| v.as_str())
@@ -94,6 +142,61 @@ fn str_field(body: &serde_json::Value, key: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_challenge_is_fresh_every_time() {
+        // The defect this replaces: both sides derived the challenge from the
+        // epoch (`daemon-{epoch}`, `shell-{epoch}`), so inside one epoch the proof
+        // was a fixed function of (token, instance id, epoch) and one captured
+        // exchange stayed valid for the rest of that daemon's life.
+        let first = fresh_challenge("shell", 7);
+        let second = fresh_challenge("shell", 7);
+        assert_ne!(first, second, "two challenges for the same epoch collided");
+        // And the epoch still rides along, so a proof minted for a previous daemon
+        // does not verify against this one either.
+        assert!(first.starts_with("shell-7-"), "the epoch prefix was lost: {first}");
+        assert_ne!(fresh_challenge("shell", 7), fresh_challenge("shell", 8));
+    }
+
+    #[test]
+    fn a_proof_for_one_challenge_does_not_verify_against_another() {
+        // The property the deterministic challenge lacked. A verifier that is fed
+        // a proof computed for a different challenge must refuse it.
+        let token = "a-token";
+        let instance = "instance-1";
+        let mine = fresh_challenge("shell", 1);
+        let theirs = fresh_challenge("shell", 1);
+        assert_ne!(mine, theirs, "the fixture needs two distinct challenges");
+
+        let proof_for_mine = challenge_proof(token, &mine, instance);
+        let body = serde_json::json!({
+            "runtimeInstanceId": instance,
+            "challengeProof": proof_for_mine,
+            "selectedProtocolVersion": PROTOCOL_VERSION,
+            "runtimeVersion": "1",
+            "upstreamVersion": "1",
+        });
+        assert!(
+            verify_hello(&body, token, &theirs).is_err(),
+            "a proof minted for another challenge was accepted"
+        );
+        // And the right challenge still verifies, so the check is not just refusing.
+        assert!(verify_hello(&body, token, &mine).is_ok());
+    }
+
+    #[test]
+    fn the_proof_comparison_does_not_short_circuit() {
+        // Correctness of the constant-time compare: equal, and every single-byte
+        // difference, must be classified correctly.
+        assert!(same_bytes(b"abc", b"abc"));
+        for index in 0..b"abc".len() {
+            let mut changed = *b"abc";
+            changed[index] ^= 1;
+            assert!(!same_bytes(b"abc", &changed), "byte {index} was ignored");
+        }
+        assert!(!same_bytes(b"abc", b"abcd"), "length was ignored");
+        assert!(!same_bytes(b"", b"x"));
+    }
 
     /// RFC 4231's HMAC-SHA-256 vectors, test cases 1 and 2.
     ///
