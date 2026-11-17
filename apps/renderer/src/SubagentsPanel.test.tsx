@@ -392,5 +392,9 @@ describe("SubagentsPanel editor model picker", () => {
         expect.objectContaining({ name: "notes", disabled: true }),
       );
     });
-  });
+    // Two clicks, each followed by a query round trip, then the command receipt:
+    // the chain passes in isolation but ran 5170 ms against the default 5000 ms
+    // budget once the full suite was competing for the same CPUs. Same reason
+    // RuntimeSettings and SettingsPage already pass 15000.
+  }, 15000);
 });

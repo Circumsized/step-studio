@@ -22,10 +22,10 @@
 | 维度 | 门禁执行 | 仓库内总数（静态，下界） |
 | --- | --- | --- |
 | Rust 测试 | **366** passed / 0 failed / 0 ignored | 366 个 `#[test]` |
-| TypeScript 测试 | `npm run check` 12.4 s 全绿 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
+| TypeScript 测试 | `npm run check` 全绿；渲染层 vitest **953** 个 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
 | Rust 行数 | — | 28,583 |
 | TypeScript 行数 | — | 176,027 |
-| 提交 | — | 260 |
+| 提交 | — | 262 |
 | signoff 截图 | — | 19 文件 / 19 个唯一 sha256（`git ls-files design/signoff` = 0，不跟踪） |
 
 生成命令：
@@ -64,6 +64,11 @@ Xvfb 实机启动 30 秒无 panic
   32 字节 OS CSPRNG 值，`0600` 发布在 daemon 自己的 state 目录，壳 / TUI / 测试夹具改为读文件。
   lock 包数 595 → 595。接线过程中修掉两个 bug（token 路径双后缀、客户端无 token 时白 mint），
   各有一条具名测试钉住，且都验过非空泛。
+- **T4 已执行**：渲染层 65 个导出函数逐个变异成 `return null`，**22 个（34%）无人发现**——
+  变异后 953 个测试全绿。集中在 `conversationReflow.ts`（7/11）与 `diagnosticsModel.ts`（7/13）。
+  与方案引的 Vera-Pérez et al.（PS_RATE 最高 46%，21/21 个项目都有）一致。
+  失败模式是行为式测试不断言返回值；**没有补测试**，按 `AGENTS.md` 测试哲学留给负责人定优先级。
+  详见 `review/plan-2026-11-15.md` §2.1d。
 - **T6 决策：不设覆盖门禁**——`AGENTS.md:63` 的测试哲学与门禁相冲，且本轮证明覆盖类指标在此误导。
 - **S2 的真实状态被纠正**：对等身份做主授权在 **Unix 上早已建成**
   （`peer-uid/` + `studio-host.rs:615` + `daemon.rs:744`），不是「未执行」。
