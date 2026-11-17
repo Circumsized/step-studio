@@ -38,6 +38,15 @@ export function cancelConversationReflow(scroller: HTMLElement): void {
   compensationTop.delete(scroller);
   scroller.dispatchEvent(new Event(SCROLL_INTENT));
 }
+/**
+ * Whether this scroll event was produced by a reflow rather than by the reader.
+ *
+ * Consume-once: reading it deletes the compensation entry, so a second call in
+ * the same tick answers differently. That is deliberate — the entry is a one-shot
+ * marker for the scroll the reflow itself caused — but it is invisible at the
+ * call site, and one caller (`useConversationScroll.ts:186`) is all that keeps it
+ * correct. Read it once into a local.
+ */
 export function isConversationReflowScroll(scroller: HTMLElement): boolean {
   const top = compensationTop.get(scroller);
   if (top !== undefined) compensationTop.delete(scroller);

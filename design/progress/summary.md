@@ -152,6 +152,16 @@ Windows 侧唯一可做的是 OpenProcess → OpenProcessToken → GetTokenInfor
 没有便宜选项。另有一条直接约束：PID 记在**连接时**，所以对等检查必须在 accept 那一刻，
 不能延到首个请求，否则正落进可回收窗口。详见 `review/plan-2026-11-15.md` §14。
 
+## 收尾（2026-11-17 深夜）
+
+- **读完剩下 15 个未断言函数：阴性结果，没有新 bug。** 审评说
+  `createResumeGenerationGate` 零调用方，实际 `App.tsx:6856` 在用——查过才没删，
+  否则这是本轮第二次误删。唯一发现是文档缺口：`isConversationReflowScroll` 是
+  消费一次的谓词（读它即删 compensation 条目），调用点看不出，已补注释。
+- **Windows job 现在会数测试条数、为 0 则失败。** 零个的 exit 0 和 400 个的原本无法区分。
+- 三个 skill（ponytail / stop-that-shit / antislop）本轮内均显式调用；antislop 模式
+  during（session override）。安全审评那路专家两次因基础设施故障中断，未冒领。
+
 ## 跨里程碑阻塞
 
 见 `blockers.md`。当前三条：
