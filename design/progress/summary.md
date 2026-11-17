@@ -22,10 +22,10 @@
 | 维度 | 门禁执行 | 仓库内总数（静态，下界） |
 | --- | --- | --- |
 | Rust 测试 | **366** passed / 0 failed / 0 ignored | 366 个 `#[test]` |
-| TypeScript 测试 | `npm run check` 全绿；渲染层 vitest **953** 个 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
+| TypeScript 测试 | `npm run check` 全绿；渲染层 vitest **956** 个 | 未逐文件计数（`describeReal` 等条件 describe 行首正则计不到，故只作下界） |
 | Rust 行数 | — | 28,583 |
 | TypeScript 行数 | — | 176,027 |
-| 提交 | — | 262 |
+| 提交 | — | 263 |
 | signoff 截图 | — | 19 文件 / 19 个唯一 sha256（`git ls-files design/signoff` = 0，不跟踪） |
 
 生成命令：
@@ -68,7 +68,10 @@ Xvfb 实机启动 30 秒无 panic
   变异后 953 个测试全绿。集中在 `conversationReflow.ts`（7/11）与 `diagnosticsModel.ts`（7/13）。
   与方案引的 Vera-Pérez et al.（PS_RATE 最高 46%，21/21 个项目都有）一致。
   失败模式是行为式测试不断言返回值；**没有补测试**，按 `AGENTS.md` 测试哲学留给负责人定优先级。
-  详见 `review/plan-2026-11-15.md` §2.1d。
+  但顺着 `diagnosticsModel` 那 7 个（用户可见的诊断面板文案）读出两个真 bug，已修：
+  **未知 runtime 状态让诊断面板崩掉**（标签表查不到键 → `t(undefined)` 抛 TypeError），
+  以及**未知状态被 hero 报成「运行正常」**（`deriveHero` 兜底恒返回 `ok`，fail-open）。
+  三条测试钉住，两处修复分别变异验证过。详见 `review/plan-2026-11-15.md` §2.1d。
 - **T6 决策：不设覆盖门禁**——`AGENTS.md:63` 的测试哲学与门禁相冲，且本轮证明覆盖类指标在此误导。
 - **S2 的真实状态被纠正**：对等身份做主授权在 **Unix 上早已建成**
   （`peer-uid/` + `studio-host.rs:615` + `daemon.rs:744`），不是「未执行」。
