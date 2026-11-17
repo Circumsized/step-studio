@@ -100,6 +100,21 @@ Xvfb 实机启动 30 秒无 panic
 - 测试侧：T1/T2/T3/T4/T5/T7 收口，T4 是**阴性结果**（未发现伪测试方法）；
   S8 决定不做（帧解码器是无状态解析器，AFLNet 的优势在有状态）。
 
+## review 轮补记（2026-11-17 晚）
+
+- **联网核对 Windows 命名管道的权威说法**（`review/plan-2026-11-15.md` §12）：
+  默认 DACL 授 Everyone + anonymous **读**、`FILE_FLAG_FIRST_PIPE_INSTANCE` 令第二实例
+  `ERROR_ACCESS_DENIED`、`nMaxInstances` 上界 255——三条 Microsoft 原文逐字确认。
+  S1 里「`FILE_GENERIC_WRITE` 与 `FILE_CREATE_PIPE_INSTANCE` 共享取值」这条自己写的断言
+  这次算出来了：`WRITE_OWNER` 与 `FILE_FLAG_FIRST_PIPE_INSTANCE` 同为 `0x00080000`，
+  而 `FILE_GENERIC_WRITE` 含 `WRITE_OWNER`。
+- **纠正了自己上一轮的一个错误推荐**：三个功能的读超时，我此前写
+  「`transport::wait_or_stop` 正是那个形状」——Microsoft 明确说 `PIPE_NOWAIT`
+  「should not be used to achieve overlapped I/O」，正解是 `FILE_FLAG_OVERLAPPED`
+  + `WaitForSingleObject` + `CancelIoEx`。已改。`wait_or_stop` 只对 accept 路径成立
+  （listener 句柄、accept 后立即重 bind），§7 那个修复本身不受影响。
+- 一条检索中出现但**拿不到 Microsoft 出处**的说法（同步管道操作串行）记作未证实，不进证据列。
+
 ## 跨里程碑阻塞
 
 见 `blockers.md`。当前三条：
