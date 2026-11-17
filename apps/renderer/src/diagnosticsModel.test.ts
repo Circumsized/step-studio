@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { EnvironmentReadModel, RuntimeConnection } from "@omp-studio/client-contract";
-import { deriveDiagnosticsView, formatRuntimeUnavailableCopy, type I18nT } from "./diagnosticsModel";
+import {
+  deriveDiagnosticsView,
+  formatRuntimeAutoRespawnCopy,
+  formatRuntimeClassification,
+  formatRuntimeDisconnectCode,
+  formatRuntimeStatusLabel,
+  formatRuntimeUnavailableCopy,
+  type I18nT,
+} from "./diagnosticsModel";
 import { translate } from "./i18n/I18nContext";
 import type { Locale, TranslationParams } from "./i18n/types";
 
@@ -65,5 +73,49 @@ describe("diagnostics hero copy", () => {
   it("falls back to the raw reason for an unmapped rejection", () => {
     const copy = formatRuntimeUnavailableCopy("resolution-rejected", "some brand new resolver reason");
     expect(copy.detail).toBe("some brand new resolver reason");
+  });
+
+  // A union is a compile-time promise, not a runtime one. The label tables are
+  // typed `Record<Union, string>`, which reads as total; a Host on a newer
+  // protocol — or any frame this build does not know — indexes them with a key
+  // that is not there, and the lookup yields `undefined`. That used to reach
+  // `t`, whose `path.split(".")` threw, and `deriveDiagnosticsView` went down
+  // with it: the whole diagnostics panel, because of one unknown status string.
+  // No test caught it because all of them drove in-union values only.
+  describe("a status the Host sends that this build has no label for", () => {
+    const UNKNOWN = "reconnecting";
+
+    function runtimeWith(status: string): RuntimeConnection {
+      return { status, classification: "managed" } as unknown as RuntimeConnection;
+    }
+
+    it("shows the raw status instead of throwing", () => {
+      expect(formatRuntimeStatusLabel(UNKNOWN as never)).toBe(UNKNOWN);
+      expect(formatRuntimeClassification(UNKNOWN as never)).toBe(UNKNOWN);
+      expect(formatRuntimeAutoRespawnCopy(UNKNOWN as never)).toBe(UNKNOWN);
+      expect(formatRuntimeDisconnectCode(UNKNOWN as never)).toBe(UNKNOWN);
+    });
+
+    it("still localizes a known status", () => {
+      // The fallback must not swallow the mapped path.
+      expect(formatRuntimeStatusLabel("connected")).toBe(
+        translate("zh", "diagnostics.statusConnected"),
+      );
+    });
+
+    it("derives a whole view instead of throwing", () => {
+      const view = deriveDiagnosticsView({
+        runtime: runtimeWith(UNKNOWN),
+        checks: [],
+        entries: [],
+      } as unknown as Parameters<typeof deriveDiagnosticsView>[0]);
+      // The unknown value reaches the operator verbatim rather than blanking
+      // the panel — same rule the unmapped-reason test above asserts.
+      expect(view.hero.title).toContain(UNKNOWN);
+      expect(view.hero.kind).not.toBe("ok");
+      const runtime = view.checks.find((check) => check.id === "runtime");
+      expect(runtime?.detail).toContain(UNKNOWN);
+      expect(runtime?.tone).toBe("error");
+    });
   });
 });

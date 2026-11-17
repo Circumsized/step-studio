@@ -2205,6 +2205,7 @@ const zhRaw = {
     "heroUpdateTitle": "有可用 Runtime 更新",
     "heroConnectingTitle": "正在连接 Runtime",
     "heroRecentProblems": "发现 {count} 项近期问题",
+    "heroUnknownStatus": "Runtime 报告了本版本不认识的状态：{status}",
     "heroOkTitle": "Runtime 运行正常",
     "checkRuntimeUnreadable": "无法读取 Runtime 状态",
     "checkInstallLabel": "托管安装状态",

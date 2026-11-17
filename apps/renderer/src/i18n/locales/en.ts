@@ -2205,6 +2205,7 @@ export const en: LocaleDictionary = {
     "heroUpdateTitle": "Runtime Update Available",
     "heroConnectingTitle": "Connecting to Runtime",
     "heroRecentProblems": "{count} recent problems detected",
+    "heroUnknownStatus": "Runtime reported a status this build does not recognise: {status}",
     "heroOkTitle": "Runtime Operational",
     "checkRuntimeUnreadable": "Unable to read Runtime status",
     "checkInstallLabel": "Managed Installation Status",

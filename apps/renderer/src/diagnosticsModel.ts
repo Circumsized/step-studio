@@ -50,6 +50,20 @@ const zhT: I18nT = (key, params) => {
   return formatParams(template, params);
 };
 
+/**
+ * Translate a label-table entry, falling back to the raw key.
+ *
+ * The tables below are typed `Record<Union, string>`, which reads as total — but
+ * a union is a compile-time promise, not a runtime one. A Host on a newer
+ * protocol, or a frame this build does not know, indexes them with a key that is
+ * not there; the lookup yields `undefined`, and handing that to `t` threw inside
+ * `split`, which took the whole diagnostics view down with it. Showing the raw
+ * value beats a blank panel: it says what the Host actually reported.
+ */
+function labelFor<K extends string>(table: Record<K, string>, key: string, t: I18nT): string {
+  return t((table as Record<string, string | undefined>)[key] ?? key);
+}
+
 export type DiagnosticsHeroKind = "ok" | "update" | "missing" | "down" | "failed" | "installing" | "connecting";
 export type DiagnosticsHeroAction = "recheck" | "install" | "update" | "reconnect";
 export type DiagnosticsCheckTone = "ok" | "warn" | "error";
@@ -201,19 +215,19 @@ export function isRuntimeAutoRespawnStatus(value: unknown): value is RuntimeAuto
 }
 
 export function formatRuntimeStatusLabel(status: RuntimeConnection["status"], t: I18nT = zhT): string {
-  return t(RUNTIME_LABEL[status]);
+  return labelFor(RUNTIME_LABEL, status, t);
 }
 
 export function formatRuntimeClassification(classification: RuntimeClassification, t: I18nT = zhT): string {
-  return t(CLASSIFICATION_LABEL[classification]);
+  return labelFor(CLASSIFICATION_LABEL, classification, t);
 }
 
 export function formatRuntimeAutoRespawnCopy(status: RuntimeAutoRespawnStatus, t: I18nT = zhT): string {
-  return t(AUTO_RESPAWN_LABEL[status]);
+  return labelFor(AUTO_RESPAWN_LABEL, status, t);
 }
 
 export function formatRuntimeDisconnectCode(code: RuntimeDisconnectCode, t: I18nT = zhT): string {
-  return t(DISCONNECT_CODE_LABEL[code]);
+  return labelFor(DISCONNECT_CODE_LABEL, code, t);
 }
 
 /**
@@ -398,8 +412,8 @@ export function formatDiagnosticEntryMessage(entry: DiagnosticEntry, t: I18nT = 
 }
 
 export function formatRuntimeConnectionLine(runtime: RuntimeConnection, t: I18nT = zhT): string {
-  const status = t(RUNTIME_LABEL[runtime.status]);
-  const kind = t(CLASSIFICATION_LABEL[runtime.classification]);
+  const status = labelFor(RUNTIME_LABEL, runtime.status, t);
+  const kind = labelFor(CLASSIFICATION_LABEL, runtime.classification, t);
   return `${status} · ${kind}`;
 }
 
@@ -408,8 +422,8 @@ export function formatRuntimeConnectionFacts(runtime: RuntimeConnection | undefi
     return [{ label: t("diagnostics.factStatus"), value: t("diagnostics.factUnreadable") }];
   }
   const facts: DiagnosticsFact[] = [
-    { label: t("diagnostics.factStatus"), value: t(RUNTIME_LABEL[runtime.status]) },
-    { label: t("diagnostics.factType"), value: t(CLASSIFICATION_LABEL[runtime.classification]) },
+    { label: t("diagnostics.factStatus"), value: labelFor(RUNTIME_LABEL, runtime.status, t) },
+    { label: t("diagnostics.factType"), value: labelFor(CLASSIFICATION_LABEL, runtime.classification, t) },
   ];
   if (runtime.status === "unavailable") {
     const copy = formatRuntimeUnavailableCopy(runtime.unavailableCode, runtime.unavailableReason, t);
@@ -420,14 +434,14 @@ export function formatRuntimeConnectionFacts(runtime: RuntimeConnection | undefi
     const copy = formatRuntimeDisconnectCopy(runtime.disconnectCode, runtime.disconnectReason, t);
     facts.push({
       label: t("diagnostics.factReasonCode"),
-      value: runtime.disconnectCode === undefined ? "—" : t(DISCONNECT_CODE_LABEL[runtime.disconnectCode]),
+      value: runtime.disconnectCode === undefined ? "—" : labelFor(DISCONNECT_CODE_LABEL, runtime.disconnectCode, t),
     });
     facts.push({ label: t("diagnostics.factDetail"), value: copy.detail });
     if (runtime.disconnectedAt !== undefined) {
       facts.push({ label: t("diagnostics.factDisconnectedAt"), value: formatCheckedAt(runtime.disconnectedAt, t) });
     }
     if (runtime.autoRespawn !== undefined) {
-      facts.push({ label: t("diagnostics.factAutoRespawn"), value: t(AUTO_RESPAWN_LABEL[runtime.autoRespawn]) });
+      facts.push({ label: t("diagnostics.factAutoRespawn"), value: labelFor(AUTO_RESPAWN_LABEL, runtime.autoRespawn, t) });
     }
   }
   return facts;
@@ -561,12 +575,27 @@ function deriveHero(
   }
   if (input.runtime?.status === "disconnected") {
     const copy = formatRuntimeDisconnectCopy(input.runtime.disconnectCode, input.runtime.disconnectReason, t);
-    const auto = input.runtime.autoRespawn === undefined ? "" : ` · ${t(AUTO_RESPAWN_LABEL[input.runtime.autoRespawn])}`;
+    const auto = input.runtime.autoRespawn === undefined ? "" : ` · ${labelFor(AUTO_RESPAWN_LABEL, input.runtime.autoRespawn, t)}`;
     return {
       kind: "down",
       title: copy.title,
       detail: `${copy.detail}${auto} · ${baseDetail}`,
       primary: "reconnect",
+      showReinstall: input.installer?.status === "installed",
+    };
+  }
+  // Anything with no branch above is not "fine". `RuntimeConnection["status"]`
+  // is a compile-time union, which reads as though these four arms are
+  // exhaustive; at runtime a Host on a newer protocol sends a status there is no
+  // arm for, and this fallback used to be the `ok` hero — so an unrecognised
+  // state was reported to the operator as healthy. `runtimeCheck` below already
+  // fails closed; this is the same rule for the hero.
+  if (input.runtime !== undefined && input.runtime.status !== "connected") {
+    return {
+      kind: "down",
+      title: t("diagnostics.heroUnknownStatus", { status: input.runtime.status }),
+      detail: `${input.runtime.status} · ${baseDetail}`,
+      primary: "recheck",
       showReinstall: input.installer?.status === "installed",
     };
   }
@@ -596,10 +625,10 @@ function runtimeCheck(runtime: RuntimeConnection | undefined, t: I18nT): Diagnos
   }
   if (runtime.status === "disconnected") {
     const copy = formatRuntimeDisconnectCopy(runtime.disconnectCode, runtime.disconnectReason, t);
-    const auto = runtime.autoRespawn === undefined ? "" : ` · ${t(AUTO_RESPAWN_LABEL[runtime.autoRespawn])}`;
+    const auto = runtime.autoRespawn === undefined ? "" : ` · ${labelFor(AUTO_RESPAWN_LABEL, runtime.autoRespawn, t)}`;
     return { id: "runtime", label: t("diagnostics.checkRuntimeLabel"), detail: `${copy.problem}${auto}`, tone: "error" };
   }
-  return { id: "runtime", label: t("diagnostics.checkRuntimeLabel"), detail: t(RUNTIME_LABEL[runtime.status]), tone: "error" };
+  return { id: "runtime", label: t("diagnostics.checkRuntimeLabel"), detail: labelFor(RUNTIME_LABEL, runtime.status, t), tone: "error" };
 }
 
 function installCheck(installer: RuntimeInstallState | undefined, t: I18nT): DiagnosticsCheck {
