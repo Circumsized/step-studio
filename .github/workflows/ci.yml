@@ -159,6 +159,16 @@ jobs:
       # and it asserts nothing. See `design/review/plan-2026-11-15.md` §11.
       # The runtime e2e still skips; that is a different, known gap.
       - run: cargo test -p step-studio-bridge -p step-studio-runtime -p step-studio-host -p step-studio-sessions -p step-studio-tui -p step-studio-desktop-tauri --target x86_64-pc-windows-msvc
+      # An exit 0 from a run that executed zero tests is indistinguishable from one
+      # that executed four hundred, which is how a platform can look green while
+      # testing nothing: `#![cfg(unix)]` on daemon.rs meant 18 of the suite
+      # compiled to nothing here. Count them, so a zero is loud.
+      - name: Prove the Windows job ran tests rather than none
+        shell: bash
+        run: |
+          count=$(cargo test -p step-studio-bridge -p step-studio-runtime -p step-studio-host -p step-studio-sessions -p step-studio-tui -p step-studio-desktop-tauri --target x86_64-pc-windows-msvc -- --list | grep -c ': test$')
+          echo "windows target test count: $count"
+          test "$count" -gt 0
 
   # `macos-package` was removed with the Electron shell: it packed a .app with
   # electron-builder, ad-hoc signed it, and ran `full-gui-e2e.mjs` against it. The

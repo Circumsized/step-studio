@@ -5,7 +5,6 @@
 //! of watching it fail the other way — that killing the daemon does not leave
 //! the runtime orphaned, holding the user's session open.
 
-#![cfg(unix)]
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -71,21 +70,31 @@ impl Daemon {
         // command line, so the fake arrives through a wrapper rather than as
         // `node <script>`. (The TypeScript adapter did split it; that divergence
         // predates M2 and is not this test's business.)
-        let step = dir.join("step");
-        std::fs::write(
-            &step,
-            format!(
-                "#!/bin/sh\nexec node {}\n",
-                // The same fixture the runtime crate's e2e tests use, reached by
-                // path. It used to live in `packages/runtime-stepcode/test/`,
-                // which was deleted as dead code — and these tests then wrote a
-                // wrapper that exec'd nothing, so every turn came back `failed`
-                // with a spawn error that looked like a runtime regression.
-                root.join("crates/step-studio-runtime/tests/fixtures/fake-step.mjs")
-                    .to_string_lossy()
-            ),
-        )
-        .expect("write the step wrapper");
+        // The Rust runtime takes the CLI as one executable and does not split a
+        // command line, so the fake arrives through a wrapper rather than as
+        // `node <script>`. (The TypeScript adapter did split it; that divergence
+        // predates M2 and is not this test's business.)
+        //
+        // `#!/bin/sh` on Unix, `step.cmd` on Windows. Node is already a hard
+        // requirement of the fixture, so the Windows branch adds no dependency —
+        // and this file used to be `#![cfg(unix)]` for no better reason than
+        // that nobody had written this branch, which cost the daemon's whole
+        // end-to-end suite on a platform that ships.
+        let fixture = root
+            .join("crates/step-studio-runtime/tests/fixtures/fake-step.mjs")
+            .to_string_lossy()
+            .to_string();
+        #[cfg(unix)]
+        let (step, body) = (
+            dir.join("step"),
+            format!("#!/bin/sh\nexec node {fixture}\n"),
+        );
+        #[cfg(windows)]
+        let (step, body) = (
+            dir.join("step.cmd"),
+            format!("@echo off\r\nnode \"{fixture}\" %*\r\n"),
+        );
+        std::fs::write(&step, body).expect("write the step wrapper");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -101,6 +110,10 @@ impl Daemon {
         let state_home = dir.join("state-home");
         let mut child = Command::new(daemon_bin)
             .env("XDG_STATE_HOME", &state_home)
+            // Windows' daemon resolves its state base from LOCALAPPDATA, so
+            // pointing only XDG_STATE_HOME at the scratch directory would send
+            // the upgrade marker into the machine's real one.
+            .env("LOCALAPPDATA", &state_home)
             .stderr(Stdio::piped())
             .arg("--endpoint")
             .arg(&endpoint)
@@ -247,7 +260,7 @@ impl Daemon {
     fn wait_until_reachable(&self) {
         let deadline = Instant::now() + Duration::from_secs(30);
         while Instant::now() < deadline {
-            if std::os::unix::net::UnixStream::connect(&self.endpoint).is_ok() {
+            if endpoint_answers(&self.endpoint) {
                 return;
             }
             std::thread::sleep(Duration::from_millis(50));
@@ -277,6 +290,18 @@ impl Drop for Daemon {
         }
         let _ = std::fs::remove_dir_all(&self.dir);
     }
+}
+
+/// Whether anything is accepting connections at `endpoint`.
+///
+/// Through `transport` rather than `UnixStream` directly, because the daemon's
+/// endpoint is a socket file on Unix and a pipe name on Windows and
+/// `endpoint_for_bind` is the one place that knows the difference. Same probe
+/// `lifecycle::acquire` makes, minus the stale-file removal a probe has no
+/// business doing.
+fn endpoint_answers(endpoint: &str) -> bool {
+    let target = step_studio_bridge::transport::endpoint_for_bind(endpoint);
+    step_studio_bridge::transport::connect(&target).is_ok()
 }
 
 fn repo_root() -> PathBuf {
@@ -1050,6 +1075,9 @@ fn the_hot_replace_sequence_lands_the_staged_build_and_a_rollback_restores_the_o
     // passed through). What is left is the sequence itself: drain → swap →
     // restart, then rollback, with the user's data untouched throughout.
     let root = repo_root();
+    #[cfg(windows)]
+    let daemon_bin = root.join("target/debug/step-studio-host.exe");
+    #[cfg(not(windows))]
     let daemon_bin = root.join("target/debug/step-studio-host");
     assert!(daemon_bin.is_file(), "build the daemon first");
 
@@ -1123,7 +1151,7 @@ fn the_hot_replace_sequence_lands_the_staged_build_and_a_rollback_restores_the_o
     // --- second daemon, from the swapped-in build ---
     let second = Daemon::spawn("swap-second", 600, &target, &work, &root);
     assert!(
-        std::os::unix::net::UnixStream::connect(&second.endpoint).is_ok(),
+        endpoint_answers(&second.endpoint),
         "the new build did not come up; log: {:?}",
         second.log()
     );
