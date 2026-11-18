@@ -247,6 +247,32 @@ fn connect_and_handshake(
         .ok_or_else(|| AdapterError::Handshake("adapter closed before hello".to_string()))?;
     let verified = verify_hello(&frame.body, token, challenge).map_err(AdapterError::Handshake)?;
 
+    // Answering the adapter's challenge is the half that proves *we* hold the
+    // token. Until it existed the adapter signed whatever challenge it was
+    // handed and dropped its own verification, so any peer could pick a value
+    // and be given a valid proof for it.
+    let peer_challenge = frame
+        .body
+        .get("challenge")
+        .and_then(|c| c.as_str())
+        .ok_or_else(|| AdapterError::Handshake("the adapter issued no challenge".to_string()))?
+        .to_string();
+    let proof = step_studio_bridge::handshake::hello_proof(
+        token,
+        &peer_challenge,
+        &verified.runtime_instance_id,
+    );
+    // Unbuffered, and on a clone rather than the reader above: the adapter sends
+    // its proof expectation and then its first real frame back to back, so a
+    // buffering reader here would consume the second one.
+    {
+        let mut proof_writer = stream
+            .try_clone()
+            .map_err(|e| AdapterError::Socket(e.to_string()))?;
+        step_studio_bridge::frame::write_frame(&mut proof_writer, 1, &proof)
+            .map_err(|e| AdapterError::Handshake(e.to_string()))?;
+    }
+
     let writer = Arc::new(Mutex::new(
         stream
             .try_clone()
@@ -274,7 +300,12 @@ fn connect_and_handshake(
 /// documented that same failure as its proof of being non-vacuous. Copying a
 /// known set of keys is a list that goes stale the moment the adapter grows one;
 /// overriding four keys is a rule that does not.
-pub fn hello_result(handle: &AdapterView, challenge: &str, request_id: &Value) -> Value {
+pub fn hello_result(
+    handle: &AdapterView,
+    challenge: &str,
+    request_id: &Value,
+    daemon_challenge: &str,
+) -> Value {
     let identity = &handle.identity;
     let proof = challenge_proof(&handle.token, challenge, &handle.instance_id);
     let mut body = identity.clone();
@@ -283,6 +314,10 @@ pub fn hello_result(handle: &AdapterView, challenge: &str, request_id: &Value) -
         map.insert("runtimeInstanceId".to_string(), json!(handle.instance_id));
         map.insert("runtimeEpoch".to_string(), json!(handle.epoch));
         map.insert("challengeProof".to_string(), json!(proof));
+        // Ours, for the surface to answer. Answering the surface's own challenge
+        // only proved the surface could verify; this is what makes the daemon
+        // verify the surface.
+        map.insert("challenge".to_string(), json!(daemon_challenge));
     }
     body
 }

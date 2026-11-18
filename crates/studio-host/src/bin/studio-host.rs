@@ -814,7 +814,9 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     // The first frame is the surface's hello. Answer it from what the adapter
     // reported, and keep anything else to forward verbatim. Bounded, because the
     // slot is exclusive and a silent peer would otherwise hold it forever.
-    let mut head = None;
+    // The daemon's own challenge, carried out of the hello answer so the proof
+    // that follows can be checked against it.
+    let mut peer_challenge: Option<String> = None;
     let Some(first) = first_frame_within(surface_reader, SURFACE_FIRST_FRAME_BUDGET) else {
         // Budget spent with no first frame. Release the slot and close, so the
         // silent peer stops holding it and the abandoned read is completed.
@@ -838,13 +840,26 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
             Some(body) if body.get("type").and_then(|t| t.as_str()) == Some("studio.hello") => {
                 let challenge = body.get("challenge").and_then(|c| c.as_str()).unwrap_or("");
                 let request_id = body.get("requestId").cloned().unwrap_or(Value::Null);
-                let answer = adapter::hello_result(&handle, challenge, &request_id);
+                let daemon_challenge =
+                    step_studio_bridge::handshake::fresh_challenge("daemon", handle.epoch);
+                let answer =
+                    adapter::hello_result(&handle, challenge, &request_id, &daemon_challenge);
                 let mut bytes = Vec::new();
                 if write_frame(&mut bytes, handle.epoch, &answer).is_ok() {
                     let _ = sender.send(bytes);
                 }
+                peer_challenge = Some(daemon_challenge);
             }
-            _ => head = Some(frame),
+            // Anything else as a *first* frame used to be forwarded verbatim,
+            // which is how a peer that never shook hands at all still drove the
+            // runtime. A surface opens with a hello or it does not open.
+            _ => {
+                eprintln!("step-studio-host: a surface's first frame was not a hello; refusing it");
+                daemon.release_surface(surface);
+                drop(sender);
+                let _ = transport::close_connection(&stream);
+                return;
+            }
         },
         Ok(None) => {}
         Err(error) => {
@@ -852,19 +867,64 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         }
     }
 
+    // The surface must now prove it holds the token, answering the challenge we
+    // just chose. Until this existed the daemon signed whatever challenge it was
+    // handed, so any peer that could open the endpoint picked a value and was
+    // given a valid proof for it — and a first frame that was not a hello was
+    // forwarded verbatim, so a peer that never shook hands at all still drove the
+    // runtime. NIST SP 800-63B-4: "the verifier sends the claimant a challenge".
+    let Some(daemon_challenge) = peer_challenge else {
+        // No hello was answered, which the arm above already refused. Reaching
+        // here would mean the two disagree.
+        daemon.release_surface(surface);
+        drop(sender);
+        let _ = transport::close_connection(&stream);
+        return;
+    };
+    let Some(proof) = first_frame_within(surface_reader, SURFACE_FIRST_FRAME_BUDGET) else {
+        eprintln!("step-studio-host: a surface never proved itself; releasing the slot");
+        daemon.release_surface(surface);
+        drop(sender);
+        let _ = transport::close_connection(&stream);
+        return;
+    };
+    // A reader for the relay loop, for the same reason as above: the bounded read
+    // consumed its own, and a completed read consumed exactly one frame.
+    let surface_reader = match transport::connection_duplicate(&stream) {
+        Ok(stream) => stream,
+        Err(error) => {
+            eprintln!("step-studio-host: {error}");
+            daemon.release_surface(surface);
+            return;
+        }
+    };
+    let proved = match proof {
+        Ok(Some(frame)) => match relay::body_of(&frame) {
+            Some(body)
+                if body.get("type").and_then(|t| t.as_str()) == Some("studio.hello.proof") =>
+            {
+                step_studio_bridge::handshake::verify_proof(
+                    &body,
+                    &handle.token,
+                    &daemon_challenge,
+                    &handle.instance_id,
+                )
+            }
+            _ => Err("the frame after a hello was not a proof".to_string()),
+        },
+        Ok(None) => Err("the surface closed before proving itself".to_string()),
+        Err(error) => Err(format!("the proof was unreadable: {error}")),
+    };
+    if let Err(error) = proved {
+        eprintln!("step-studio-host: refusing a surface that failed to prove itself: {error}");
+        daemon.release_surface(surface);
+        drop(sender);
+        let _ = transport::close_connection(&stream);
+        return;
+    }
+
     {
         let mut adapter_writer = AdapterWriter(Arc::clone(&handle.writer));
-        if let Some(frame) = head {
-            // Recorded like every other forwarded frame: this one arrived
-            // before the relay thread existed, and a request sent as the very
-            // first frame would otherwise have its reply broadcast instead of
-            // routed back.
-            if let Some(id) = relay::request_id_of(&frame) {
-                daemon.expect(&id, surface);
-            }
-            use std::io::Write;
-            let _ = adapter_writer.write_all(&frame);
-        }
         // The relay runs on its own thread so this one can watch the adapter:
         // a surface that keeps sending while its adapter has died is a socket
         // nobody is reading, and the shell behind it would wait forever.

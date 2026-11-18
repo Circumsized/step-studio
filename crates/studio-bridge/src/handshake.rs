@@ -76,6 +76,45 @@ pub fn hello_request(challenge: &str) -> serde_json::Value {
     })
 }
 
+/// The frame a peer sends to prove it holds the token, answering a challenge the
+/// other side chose.
+///
+/// The other half of the handshake. NIST SP 800-63B-4 defines a
+/// challenge-response protocol as one where "the verifier sends the claimant a
+/// challenge", and RFC 4949 is explicit about what a claimant-chosen challenge
+/// buys: at most *data origin authentication*, never *peer entity authentication*,
+/// because no *liveness* is established. Before this existed, the daemon signed
+/// whatever challenge it was handed, so any peer could pick a value and be given
+/// a valid proof for it.
+pub fn hello_proof(token: &str, challenge: &str, runtime_instance_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "type": "studio.hello.proof",
+        "challengeProof": challenge_proof(token, challenge, runtime_instance_id),
+    })
+}
+
+/// Verify a proof frame against the challenge this side issued.
+///
+/// Separate from [`verify_hello`] because a proof frame carries only the proof:
+/// the identity was already established by the hello it answers, and requiring
+/// the full hello shape here would reject a correct answer.
+pub fn verify_proof(
+    body: &serde_json::Value,
+    token: &str,
+    challenge: &str,
+    runtime_instance_id: &str,
+) -> Result<(), String> {
+    let expected = challenge_proof(token, challenge, runtime_instance_id);
+    let actual = body
+        .get("challengeProof")
+        .and_then(|v| v.as_str())
+        .ok_or("hello.proof is missing challengeProof")?;
+    if !same_bytes(expected.as_bytes(), actual.as_bytes()) {
+        return Err("challenge proof mismatch".to_string());
+    }
+    Ok(())
+}
+
 /// Verify a hello result against the expected proof and extract its identity.
 pub fn verify_hello(
     body: &serde_json::Value,

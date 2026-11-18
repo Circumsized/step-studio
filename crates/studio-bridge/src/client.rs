@@ -185,6 +185,30 @@ impl BridgeSession {
         let verified =
             verify_hello(&frame.body, &token, &challenge).map_err(BridgeError::Protocol)?;
 
+        // Answering the peer's challenge only proved the peer could verify. This
+        // is the half that proves *we* hold the token: the daemon puts its own
+        // challenge in the hello result it just sent, and we sign it. Without
+        // this the daemon served any peer that could open the endpoint.
+        let peer_challenge = frame
+            .body
+            .get("challenge")
+            .and_then(|c| c.as_str())
+            .ok_or_else(|| {
+                BridgeError::Protocol("the peer issued no challenge to answer".to_string())
+            })?
+            .to_string();
+        let proof = crate::handshake::hello_proof(
+            &token,
+            &peer_challenge,
+            &verified.runtime_instance_id,
+        );
+        // Same ownership rule as the hello above: exactly one owner touches the
+        // socket until the reader thread exists.
+        #[cfg(unix)]
+        write_frame(&mut transport::handshake_writer(&stream), 1, &proof)?;
+        #[cfg(windows)]
+        write_frame(&mut transport::handshake_writer(&mut stream), 1, &proof)?;
+
         // From here on a reader thread owns the socket: it demultiplexes
         // frames into the shared inbox and wakes whoever is waiting.
         let shared = Arc::new(Shared::default());

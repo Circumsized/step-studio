@@ -12,7 +12,7 @@ use step_studio_bridge::transport::{self, Accepted};
 use serde_json::{json, Value};
 
 use step_studio_bridge::frame::{read_frame, write_frame, FrameError};
-use step_studio_bridge::handshake::{challenge_proof, verify_hello, PROTOCOL_VERSION};
+use step_studio_bridge::handshake::{challenge_proof, fresh_challenge, verify_proof, PROTOCOL_VERSION};
 
 use crate::capabilities::capability_manifest;
 use crate::conversation::{map_event, MapContext};
@@ -1160,7 +1160,12 @@ fn serve_connection(
     let challenge = body.get("challenge").and_then(|v| v.as_str()).unwrap_or("");
     let instance_id = format!("step-runtime-{}", std::process::id());
     let proof = challenge_proof(&config.token, challenge, &instance_id);
-    let _ = verify_hello(&body, &config.token, challenge); // validation only
+    // Ours, for the peer to answer. Until this existed the runtime signed
+    // whatever challenge it was handed and dropped the result of its own
+    // verification, so any peer that could open the endpoint picked a value and
+    // was given a valid proof for it. NIST SP 800-63B-4: the verifier sends the
+    // challenge.
+    let peer_challenge = fresh_challenge("runtime", session.epoch);
     session
         .send(&json!({
             "type": "studio.hello.result",
@@ -1175,7 +1180,33 @@ fn serve_connection(
             "commandManifestHash": manifest.command_hash,
             "stateVersion": 0,
             "challengeProof": proof,
+            "challenge": peer_challenge,
         }))
+        .map_err(|e| e.to_string())?;
+
+    // And now the peer has to prove it holds the token, answering that challenge.
+    // Reading directly, before the session's own reader exists, so exactly one
+    // owner touches the socket — the same rule the hello above follows.
+    // No `BufReader` here, and that is the whole point: the peer sends its proof
+    // and its first real frame back to back, so a buffering reader would take the
+    // second one off the socket and drop it with the buffer. The session's own
+    // reader would then wait forever for a frame that was already consumed — which
+    // is how the abort test failed with EAGAIN after its 300 s read timeout.
+    let proof_frame = {
+        let mut proof_reader = transport::handshake_reader(&mut session.stream);
+        read_frame(&mut proof_reader)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "peer closed before proving itself".to_string())?
+    };
+    if proof_frame
+        .body
+        .get("type")
+        .and_then(|v| v.as_str())
+        != Some("studio.hello.proof")
+    {
+        return Err("the frame after a hello was not a proof".to_string());
+    }
+    verify_proof(&proof_frame.body, &config.token, &peer_challenge, &instance_id)
         .map_err(|e| e.to_string())?;
 
     // The session id only exists once the CLI has created its session.
