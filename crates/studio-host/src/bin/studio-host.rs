@@ -646,6 +646,39 @@ fn serve(daemon: Arc<Daemon>) {
 /// handshakes exactly once per connection, so a surface's hello relayed to it
 /// would be ignored and the surface would wait forever for an answer that
 /// never comes. Everything after the hello goes through as the original bytes.
+/// How long a surface has to say its first frame.
+///
+/// The surface slot is exclusive — the adapter broadcasts on one connection with
+/// no addressing, so two surfaces reading it would split it — which means a client
+/// that connects and sends nothing holds the only slot forever and the real shell
+/// is never served. On Unix `set_read_timeout` bounds this; on Windows it is
+/// accepted and ignored, so the bound has to come from the wait.
+const SURFACE_FIRST_FRAME_BUDGET: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Read one frame, giving up after `budget`.
+///
+/// Platform-generic on purpose: `set_read_timeout` is a no-op on Windows, and
+/// miow's `Read for &NamedPipe` is overlapped underneath (a thread-local
+/// `OVERLAPPED`, handle opened `FILE_FLAG_OVERLAPPED`), so abandoning the read and
+/// closing the connection completes it rather than wedging the process. The reader
+/// is consumed because `wait_or_stop`'s closure is `'static`; the caller
+/// re-duplicates for the relay loop, which is sound because a completed read
+/// consumed exactly one frame.
+fn first_frame_within(
+    mut reader: transport::Connection,
+    budget: std::time::Duration,
+) -> Option<std::io::Result<Option<Vec<u8>>>> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    let stop = Arc::new(AtomicBool::new(false));
+    let setter = Arc::clone(&stop);
+    std::thread::spawn(move || {
+        std::thread::sleep(budget);
+        setter.store(true, Ordering::Relaxed);
+    });
+    transport::wait_or_stop(move || relay::next_frame(&mut reader), &stop)
+}
+
 fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     let stream = connection.into_connection();
 
@@ -746,7 +779,7 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
         }
     });
 
-    let mut surface_reader = match transport::connection_duplicate(&stream) {
+    let surface_reader = match transport::connection_duplicate(&stream) {
         Ok(stream) => stream,
         Err(error) => {
             eprintln!("step-studio-host: {error}");
@@ -779,9 +812,28 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     };
 
     // The first frame is the surface's hello. Answer it from what the adapter
-    // reported, and keep anything else to forward verbatim.
+    // reported, and keep anything else to forward verbatim. Bounded, because the
+    // slot is exclusive and a silent peer would otherwise hold it forever.
     let mut head = None;
-    match relay::next_frame(&mut surface_reader) {
+    let Some(first) = first_frame_within(surface_reader, SURFACE_FIRST_FRAME_BUDGET) else {
+        // Budget spent with no first frame. Release the slot and close, so the
+        // silent peer stops holding it and the abandoned read is completed.
+        eprintln!("step-studio-host: a surface never said hello; releasing the slot");
+        daemon.release_surface(surface);
+        let _ = transport::close_connection(&stream);
+        return;
+    };
+    // A reader for the relay loop. The bounded read consumed its own, and it
+    // completed exactly one frame on the way here, so this starts at the next.
+    let surface_reader = match transport::connection_duplicate(&stream) {
+        Ok(stream) => stream,
+        Err(error) => {
+            eprintln!("step-studio-host: {error}");
+            daemon.release_surface(surface);
+            return;
+        }
+    };
+    match first {
         Ok(Some(frame)) => match relay::body_of(&frame) {
             Some(body) if body.get("type").and_then(|t| t.as_str()) == Some("studio.hello") => {
                 let challenge = body.get("challenge").and_then(|c| c.as_str()).unwrap_or("");
@@ -1191,4 +1243,95 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Config, String> {
             .to_string();
     }
     Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A surface that connects and says nothing must not hold the slot.
+    ///
+    /// The slot is exclusive — the adapter broadcasts on one connection with no
+    /// addressing — so before the bound, this peer held it forever and the real
+    /// shell was never served. `set_read_timeout` bounds it on Unix and is
+    /// ignored on Windows, which is why the bound comes from the wait instead.
+    #[test]
+    fn a_silent_surface_releases_the_slot_instead_of_holding_it_forever() {
+        let dir = std::env::temp_dir().join(format!("ss-first-frame-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a temp dir");
+        let endpoint = dir.join("bridge.sock");
+
+        let listener = step_studio_bridge::transport::bind(&endpoint.to_string_lossy())
+            .expect("bind");
+        let for_client = step_studio_bridge::transport::endpoint_for_bind(&endpoint.to_string_lossy());
+        // Connects, then says nothing at all — and stays connected. Dropping the
+        // client handle would be EOF, which `next_frame` already reports as
+        // `Ok(None)`; the defect is a peer that is *open and silent*.
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let silent = std::thread::spawn(move || {
+            let client = step_studio_bridge::transport::connect(&for_client)?;
+            let _ = held_tx.send(client);
+            std::io::Result::<()>::Ok(())
+        });
+        let _held = held_rx.recv().expect("the surface connected");
+
+        let accepted = step_studio_bridge::transport::accept(listener).expect("accept");
+        let reader = accepted.into_connection();
+        let started = std::time::Instant::now();
+        let outcome = first_frame_within(reader, std::time::Duration::from_millis(300));
+
+        assert!(outcome.is_none(), "a silent surface was not given up on");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "the bound took {:?}",
+            started.elapsed()
+        );
+        let _ = silent.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The bound must not eat a frame that did arrive.
+    #[test]
+    fn a_surface_that_speaks_still_gets_its_first_frame() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("ss-first-frame-ok-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a temp dir");
+        let endpoint = dir.join("bridge.sock");
+
+        let listener = step_studio_bridge::transport::bind(&endpoint.to_string_lossy())
+            .expect("bind");
+        let for_client = step_studio_bridge::transport::endpoint_for_bind(&endpoint.to_string_lossy());
+        let speaker = std::thread::spawn(move || -> std::io::Result<()> {
+            let mut client = step_studio_bridge::transport::connect(&for_client)?;
+            let hello = serde_json::json!({
+                "type": "studio.hello",
+                "requestId": "surface-hello",
+                "supportedProtocolVersions": [step_studio_bridge::PROTOCOL_VERSION],
+                "requiredProfile": "limited",
+                "challenge": "a-challenge",
+            });
+            let mut bytes = Vec::new();
+            step_studio_bridge::frame::write_frame(&mut bytes, 1, &hello)
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
+            client.write_all(&bytes)?;
+            client.flush()
+        });
+
+        let accepted = step_studio_bridge::transport::accept(listener).expect("accept");
+        let reader = accepted.into_connection();
+        let first = first_frame_within(reader, std::time::Duration::from_secs(5))
+            .expect("not given up on")
+            .expect("the read succeeded")
+            .expect("a frame arrived");
+        let body = relay::body_of(&first).expect("the frame has a body");
+        assert_eq!(
+            body.get("type").and_then(|t| t.as_str()),
+            Some("studio.hello"),
+            "the first frame was not the hello"
+        );
+        let _ = speaker.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
