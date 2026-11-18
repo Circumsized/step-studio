@@ -101,6 +101,88 @@ fn session_handshakes_snapshots_and_runs_a_turn() {
     assert_eq!(deltas, "hello!");
 }
 
+/// A peer that sends its hello and a second frame in one burst must not wedge the
+/// handshake.
+///
+/// This is the hang the mutual-authentication fix introduced and then fixed: the
+/// hello was read through a `BufReader`, so a burst peer's second frame landed in
+/// that reader's buffer and was dropped with it, and the unbuffered proof read
+/// waited forever for bytes already consumed. The daemon's side bounds both its
+/// reads with `first_frame_within`; this side had no bound at all.
+///
+/// A legitimate peer cannot trigger it — it cannot compute the proof before the
+/// runtime chooses its challenge — so this drives the socket by hand.
+#[test]
+fn a_burst_peer_does_not_wedge_the_handshake() {
+    use std::io::{Read, Write};
+
+    let launch = launch("burst");
+    // What `BridgeSession::connect` does before it spawns: mint the secret into
+    // the file the adapter will read, and clear a socket a previous run left.
+    let token = step_studio_bridge::token::generate_token();
+    step_studio_bridge::token::write_token_file(
+        std::path::Path::new(&launch.token_file),
+        &token,
+    )
+    .expect("publish the token");
+    let _ = std::fs::remove_file(&launch.socket_path);
+    let mut child = step_studio_bridge::spawn_adapter(&launch).expect("spawn the adapter");
+
+    let mut peer = step_studio_bridge::client::wait_for_socket(
+        &launch.socket_path,
+        std::time::Duration::from_secs(20),
+    )
+    .expect("connect to the adapter");
+    // The crate's wrapper, not the inherent method: on Windows the peer is a
+    // `File` and has none, and the wrapper is where that difference is confined.
+    step_studio_bridge::transport::set_read_timeout(
+        &peer,
+        Some(std::time::Duration::from_secs(10)),
+    )
+    .expect("a read timeout");
+
+    // The hello, and a frame the runtime has no reason to accept, in one write.
+    let hello = serde_json::json!({
+        "type": "studio.hello",
+        "requestId": "burst-hello",
+        "supportedProtocolVersions": [step_studio_bridge::PROTOCOL_VERSION],
+        "requiredProfile": "limited",
+        "challenge": "a-challenge",
+    });
+    let mut burst = Vec::new();
+    step_studio_bridge::frame::write_frame(&mut burst, 1, &hello).expect("encode the hello");
+    step_studio_bridge::frame::write_frame(&mut burst, 1, &serde_json::json!({ "type": "junk" }))
+        .expect("encode the junk");
+    peer.write_all(&burst).expect("send the burst");
+    peer.flush().expect("flush the burst");
+
+    // The runtime answers the hello and then refuses: it never gets the proof it
+    // asked for, because the junk frame was consumed by the hello's reader.
+    // Either way the connection must end rather than hang.
+    let mut seen = Vec::new();
+    let mut chunk = [0u8; 4096];
+    loop {
+        match peer.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(read) => seen.extend_from_slice(&chunk[..read]),
+            Err(error)
+                if error.kind() == std::io::ErrorKind::WouldBlock
+                    || error.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                break
+            }
+            Err(error) => panic!("the burst was not answered: {error}"),
+        }
+        if seen.len() > 64 * 1024 {
+            break;
+        }
+    }
+    assert!(!seen.is_empty(), "the runtime never answered the hello");
+
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
 #[test]
 fn events_reach_the_caller_before_the_receipt() {
     // The fake CLI holds the receipt 1.4 s after the last delta, so a caller
