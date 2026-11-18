@@ -1147,8 +1147,14 @@ fn serve_connection(
     // Handshake: the runtime must prove it holds the token before anything else
     // is trusted. This one frame is read directly, before the reader thread
     // exists, so there is exactly one owner of the socket.
+    // Unbuffered, and so is the proof read below. A `BufReader` here would be a
+    // hang: a peer that sends its hello and its proof in one burst leaves the
+    // proof sitting in this reader's buffer, which is then dropped, and the
+    // unbuffered proof read waits forever for bytes that were already consumed.
+    // The daemon's side of this handshake bounds both its reads
+    // (`first_frame_within`, 30 s); this side had no bound at all.
     let frame = {
-        let mut hello_reader = BufReader::new(transport::handshake_reader(&mut session.stream));
+        let mut hello_reader = transport::handshake_reader(&mut session.stream);
         read_frame(&mut hello_reader)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "host closed before hello".to_string())?
