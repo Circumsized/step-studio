@@ -270,6 +270,26 @@ pub fn connection_config() -> Option<ConnectionConfig> {
     }
 
     let session_dir = cwd.join(".step-studio");
+    // Hardened, not just created. `create_dir_all` derives its mode from the
+    // umask, and under the common `002` that is `0775` — group-writable, so
+    // another member of the group can replace the token file this directory
+    // holds. Measured, not assumed. The daemon's own endpoint directory gets
+    // the same treatment in `lifecycle::bind`; this one did not, which is the
+    // same threat in a different place.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let _ = std::fs::create_dir_all(&session_dir);
+        if let Ok(metadata) = std::fs::metadata(&session_dir) {
+            if metadata.uid() == host::lifecycle::own_uid() {
+                let _ = std::fs::set_permissions(
+                    &session_dir,
+                    std::fs::Permissions::from_mode(0o700),
+                );
+            }
+        }
+    }
+    #[cfg(not(unix))]
     let _ = std::fs::create_dir_all(&session_dir);
     Some(ConnectionConfig {
         endpoint: host::lifecycle::default_endpoint(),
