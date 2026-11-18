@@ -46,10 +46,12 @@ use step_studio_bridge::transport;
 /// turns one into `\\.\pipe\<name>`; on Windows the endpoint is a name, not a
 /// path, and nothing is left on disk to clean up.
 ///
-/// `ponytail:` the user discriminator is the uid on Unix and the same number
-/// on Windows, where a real per-user pipe namespace wants the SID. Two users
-/// on one Windows machine therefore share a daemon until M5.1; on Unix they
-/// do not.
+/// `ponytail:` the discriminator is the uid on Unix and a hash of `USERNAME` on
+/// Windows, where a real per-user pipe namespace wants the SID. A hash is not a
+/// SID — it is guessable, and `\.\pipe\` is machine-global, so this is
+/// hardening against accidental collision rather than an access control. It used
+/// to be `USERNAME.len()`, which made same-length usernames collide *by choice*;
+/// the hash removes that. The real fix is S2's SID gate.
 pub fn default_endpoint() -> String {
     let uid = user_discriminator();
     #[cfg(unix)]
@@ -64,6 +66,31 @@ pub fn default_endpoint() -> String {
     {
         format!("step-studio-{uid}")
     }
+}
+
+/// A per-user discriminator from a name, stable across processes and versions.
+///
+/// FNV-1a rather than `DefaultHasher` because the latter's output is not
+/// guaranteed stable across Rust versions, and this value ends up in the pipe
+/// name: a daemon and the shell probing for it have to agree, including across
+/// the upgrade drill that swaps the daemon binary under a running shell.
+///
+/// This replaces `name.len()`, which made every same-length username share one
+/// daemon — `\.\pipe\` is one machine-global namespace, so the collision was
+/// not accidental but choosable: register a username of the right length and you
+/// land on somebody else's daemon.
+// Dead on Unix outside tests: only the Windows arm of `user_discriminator` calls
+// it, and clippy's lib target does not include `mod tests`. The allow is scoped
+// to Unix rather than silencing the lint everywhere, so a real dead reference on
+// Windows would still be caught.
+#[cfg_attr(unix, allow(dead_code))]
+fn stable_discriminator(name: &str) -> u32 {
+    let mut hash: u32 = 0x811c_9dc5;
+    for byte in name.as_bytes() {
+        hash ^= u32::from(*byte);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    hash
 }
 
 /// Something that distinguishes one user's daemon from another's, without
@@ -82,7 +109,7 @@ fn user_discriminator() -> u32 {
         // Windows has no uid in `std`, and the value only has to be stable
         // per user for the pipe name.
         std::env::var("USERNAME")
-            .map(|name| name.len() as u32)
+            .map(|name| stable_discriminator(&name))
             .unwrap_or(0)
     }
 }
@@ -312,6 +339,22 @@ mod tests {
         assert!(endpoint.exists(), "the socket file exists once bound");
         drop(bound);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn same_length_usernames_no_longer_share_a_discriminator() {
+        // The defect this replaces: `USERNAME.len()` made every same-length
+        // username land on one daemon, and `\\.\\pipe\\` is one machine-global
+        // namespace, so the collision was choosable rather than accidental.
+        // Same length on purpose: a length-based discriminator already separates
+        // different-length names, so anything else would let the old bug pass.
+        assert_ne!(stable_discriminator("alice"), stable_discriminator("bobby"));
+        assert_ne!(stable_discriminator("carol"), stable_discriminator("david"));
+        // And it is stable, which is the property the pipe name depends on: the
+        // daemon and the shell probing for it must agree, including across the
+        // upgrade drill that swaps the daemon binary under a running shell.
+        assert_eq!(stable_discriminator("alice"), stable_discriminator("alice"));
+        assert_ne!(stable_discriminator(""), stable_discriminator("a"));
     }
 
     #[test]
