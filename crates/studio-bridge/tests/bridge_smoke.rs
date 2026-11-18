@@ -24,6 +24,31 @@ use step_studio_bridge::frame::{FrameDecoder, FrameEncoder, MAX_FRAME_BYTES};
 use step_studio_bridge::handshake::{challenge_proof, PROTOCOL_VERSION};
 use step_studio_bridge::transport;
 
+/// Accept, but give up after `bound`.
+///
+/// `transport::accept` blocks with no timeout, so a transport that fails to
+/// produce a connection hangs the suite instead of failing it: the connector
+/// thread has already returned its error, and nobody ever reaches the join that
+/// would print it. These tests already bound the *read* for exactly this reason
+/// (`set_read_timeout` below); the accept had the same hole.
+///
+/// Built on `wait_or_stop`, which the crate already tests, rather than on a
+/// second copy of the poll loop.
+fn accept_within(listener: transport::Listener, bound: std::time::Duration) -> std::io::Result<transport::Accepted> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    let stop = Arc::new(AtomicBool::new(false));
+    let setter = Arc::clone(&stop);
+    std::thread::spawn(move || {
+        std::thread::sleep(bound);
+        setter.store(true, Ordering::Relaxed);
+    });
+    match transport::wait_or_stop(move || transport::accept(listener), &stop) {
+        Some(accepted) => accepted,
+        None => Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "accept timed out")),
+    }
+}
+
 #[test]
 fn challenge_proof_matches_the_protocol_construction() {
     // Same vector the TypeScript host uses, so a drift on either side fails here.
@@ -290,7 +315,7 @@ fn a_duplicated_connection_is_usable_from_both_ends() {
     let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
     let connector = std::thread::spawn(move || transport::connect(&for_client));
 
-    let accepted = transport::accept(listener).expect("accept");
+    let accepted = accept_within(listener, std::time::Duration::from_secs(10)).expect("accept");
     let mut client = connector
         .join()
         .expect("the connector finished")
@@ -322,7 +347,7 @@ fn closing_one_end_makes_the_other_see_a_closed_connection() {
     let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
     let connector = std::thread::spawn(move || transport::connect(&for_client));
 
-    let accepted = transport::accept(listener).expect("accept");
+    let accepted = accept_within(listener, std::time::Duration::from_secs(10)).expect("accept");
     let mut client = connector
         .join()
         .expect("the connector finished")
