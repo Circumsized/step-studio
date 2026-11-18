@@ -679,6 +679,32 @@ fn first_frame_within(
     transport::wait_or_stop(move || relay::next_frame(&mut reader), &stop)
 }
 
+/// Whether a surface whose peer reports `peer` may be served.
+///
+/// Split out of `serve_surface` so the decision is testable at all: inline, the
+/// only branch a single-user machine can exercise is the one where the peer *is*
+/// identified, which is how the Windows fail-open survived a review that read the
+/// comment above it and believed it.
+///
+/// The `None` arm is the divergence, written as it behaves rather than as the
+/// comment claims: refused on Unix, **accepted on Windows**. That is TH13. It is
+/// not fixed here because fixing it means either unsafe FFI for the SID or an
+/// explicit decision to ship Windows with no peer gate at all, and neither is
+/// mine to decide. Writing `None => false` would close the hole and take the
+/// product down on Windows in the same line, which is why the arm says what it
+/// does instead of what it should.
+fn peer_may_serve(peer: Option<u32>) -> bool {
+    match peer {
+        Some(uid) => uid == lifecycle::own_uid(),
+        // `!cfg!`, not `cfg!`: the refusing arm was `else if cfg!(unix)`, so a
+        // platform that cannot identify the peer is refused on Unix and accepted
+        // on Windows. Writing this arm the other way round inverts the gate —
+        // refusing this user's own surfaces and serving everyone else's — and the
+        // test below is what caught that on the first attempt.
+        None => !cfg!(unix),
+    }
+}
+
 fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     let stream = connection.into_connection();
 
@@ -687,13 +713,12 @@ fn serve_surface(connection: Accepted, daemon: Arc<Daemon>) {
     // session and working directory. Where the platform cannot say who is on
     // the other end, the connection is refused rather than trusted: an unknown
     // peer is not a permitted one.
-    if let Some(uid) = peer_uid(&stream) {
-        if uid != lifecycle::own_uid() {
-            eprintln!("step-studio-host: refusing a surface from uid {uid}");
-            return;
+    let peer = peer_uid(&stream);
+    if !peer_may_serve(peer) {
+        match peer {
+            Some(uid) => eprintln!("step-studio-host: refusing a surface from uid {uid}"),
+            None => eprintln!("step-studio-host: cannot tell who this surface is; refusing it"),
         }
-    } else if cfg!(unix) {
-        eprintln!("step-studio-host: cannot tell who this surface is; refusing it");
         return;
     }
 
@@ -1308,6 +1333,32 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Config, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The gate refuses an unidentifiable peer — on this platform.
+    ///
+    /// What this pins: the Unix half. What it cannot pin: the Windows divergence,
+    /// because on Unix `!cfg!(unix)` and `false` evaluate the same, so no
+    /// assertion here can tell them apart. Verified by sabotage: changing the
+    /// `None` arm to a flat `false` leaves this test green. The divergence is
+    /// therefore documented in `peer_may_serve`'s comment and in TH13, not pinned
+    /// by a test — and saying otherwise would be the exact overclaim this round
+    /// has been about.
+    #[test]
+    #[cfg(unix)]
+    fn the_gate_refuses_what_it_should_on_this_platform() {
+        assert!(
+            peer_may_serve(Some(crate::lifecycle::own_uid())),
+            "this user's own surface was refused"
+        );
+        assert!(
+            !peer_may_serve(Some(0)),
+            "a surface from another uid was served"
+        );
+        assert!(
+            !peer_may_serve(None),
+            "a peer this platform cannot identify was served"
+        );
+    }
 
     /// A surface that connects and says nothing must not hold the slot.
     ///
