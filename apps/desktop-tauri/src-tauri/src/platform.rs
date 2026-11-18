@@ -307,12 +307,29 @@ mod tests {
         // The assertion that matters, and the one the previous version could not
         // make: it compared `other_instance_running()` against a connect to the
         // path the function itself had chosen. A wrong path made both sides
-        // false and the test passed. This compares the path to the daemon's
-        // endpoint instead, so a divergence fails here.
+        // false and the test passed.
+        //
+        // This one compares the path to the daemon's endpoint — which is the
+        // right comparison, and it was still vacuous until now, because
+        // `daemon_probe_path()` *is* `default_endpoint()`: the two sides moved
+        // together. Verified by mutation: replacing `default_endpoint`'s body
+        // with an empty string left this test green. So it now also asserts the
+        // thing that actually regressed historically — the probe reaching for a
+        // path under the shell's own per-workspace directory.
+        let probe = daemon_probe_path();
         assert_eq!(
-            daemon_probe_path(),
+            probe,
             std::path::PathBuf::from(host::lifecycle::default_endpoint()),
             "the probe must look where the daemon binds, not at a path of the shell's own"
+        );
+        assert!(
+            !probe.as_os_str().is_empty(),
+            "an empty endpoint is not where the daemon binds"
+        );
+        assert!(
+            !probe.ends_with(".step-studio")
+                && !probe.components().any(|part| part.as_os_str() == ".step-studio"),
+            "the probe is looking at the shell's own workspace directory again"
         );
     }
 
