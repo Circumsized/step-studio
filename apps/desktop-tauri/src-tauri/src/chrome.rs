@@ -16,6 +16,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::process::Command;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -156,15 +158,37 @@ pub fn open_url(url: String) -> ChromeResult<()> {
     if !url.starts_with("https://") {
         return Err(ChromeError::invalid("only https links can be opened"));
     }
+    // A double quote would break out of the quoting below, and has no business in
+    // a URL this shell is about to hand to the OS. Everything else is handled by
+    // the quoting itself, not by a blocklist: `&` is legitimate in a query string,
+    // so the fix has to be structural rather than a character ban.
+    if url.contains('"') {
+        return Err(ChromeError::invalid("the link contains a double quote"));
+    }
+    // Each arm is `#[cfg]`, not `cfg!`: `cfg!` is a runtime boolean and its body
+    // still compiles everywhere, which is how `raw_arg` — a method that exists
+    // only on the Windows extension trait — broke the Linux build.
     let outcome = if cfg!(target_os = "macos") {
         Command::new("open").arg(&url).spawn()
-    } else if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/C", "start", ""])
-            .arg(&url)
-            .spawn()
     } else {
-        Command::new("xdg-open").arg(&url).spawn()
+        #[cfg(target_os = "windows")]
+        {
+            // `cmd /C start "" <url>` with `arg` is a command injection: Rust quotes
+            // a Windows argument only when it contains a space or a quote, so
+            // `https://x&calc` arrives at cmd unquoted and `&` is cmd's command
+            // separator. `raw_arg` bypasses Rust's quoting and hands cmd exactly
+            // these bytes, so the URL arrives as one quoted token. The preload
+            // states plainly that the Tauri ACL is no trust boundary, which makes
+            // this one renderer compromise away from execution.
+            Command::new("cmd")
+                .args(["/C", "start", ""])
+                .raw_arg(format!("\"{url}\""))
+                .spawn()
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Command::new("xdg-open").arg(&url).spawn()
+        }
     };
     outcome.map_err(|error| ChromeError::failed(format!("cannot open the link: {error}")))?;
     Ok(())
@@ -957,5 +981,20 @@ mod skillshare_tests {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
         }
+    }
+
+    // A URL the shell is about to hand to `cmd /C start` must not carry a double
+    // quote: it would break out of the quoting that keeps `&` a literal. The
+    // quoting itself handles every other metacharacter, which is why this is a
+    // one-character rejection and not a blocklist — `&` is legitimate in a query.
+    #[test]
+    fn a_link_carrying_a_double_quote_is_refused() {
+        assert!(open_url("https://example.invalid/?q=\"&calc".to_string()).is_err());
+    }
+
+    #[test]
+    fn a_non_https_link_is_still_refused() {
+        assert!(open_url("javascript:alert(1)".to_string()).is_err());
+        assert!(open_url("file:///etc/passwd".to_string()).is_err());
     }
 }
