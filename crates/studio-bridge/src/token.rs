@@ -5,7 +5,8 @@
 //! the HMAC handshake session-binding rather than authentication: any local
 //! process could compute a valid proof. It is now 32 bytes from the OS CSPRNG,
 //! written `0600` into the daemon's own state directory by the daemon that
-//! mints it, and read from there by every surface.
+//! mints it, and read from there by every surface. `0600` is enforced by
+//! [`write_token_file`] on every minting path, not only the daemon's.
 
 use std::path::Path;
 
@@ -29,6 +30,24 @@ pub fn generate_token() -> String {
         }
     }
     out
+}
+
+/// Publish a minted token `0600`, so the property this module claims holds on
+/// every path that mints.
+///
+/// Three places mint and only one used to set the mode: the daemon's
+/// `state::write_token`. The two session paths wrote with a bare `fs::write`, so
+/// a freshly minted token landed at the umask default — `0644` under the common
+/// `022`, readable by every other local user on the machine. That is the constant
+/// this module exists to replace, arriving through a different door.
+pub fn write_token_file(path: &Path, token: &str) -> std::io::Result<()> {
+    std::fs::write(path, token)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(())
 }
 
 /// Read the token a daemon published, or `None` when it cannot be read.
@@ -86,6 +105,21 @@ mod tests {
         let token = generate_token();
         std::fs::write(&path, format!("{token}\n")).expect("write the token");
         assert_eq!(read_token_file(&path).as_deref(), Some(token.as_str()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_minted_token_file_is_owner_only_on_every_minting_path() {
+        use std::os::unix::fs::MetadataExt;
+        let path = scratch("mode").join("token");
+
+        // A bare `fs::write` leaves the umask default, which is 0644 under the
+        // common 022: the shared constant this module exists to replace, back
+        // through a different door. Two of the three minting paths did that.
+        write_token_file(&path, &generate_token()).expect("publish");
+
+        let mode = std::fs::metadata(&path).expect("stat the token").mode();
+        assert_eq!(mode & 0o777, 0o600, "token is {:o}", mode & 0o777);
     }
 
     #[test]

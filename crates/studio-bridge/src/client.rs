@@ -137,7 +137,7 @@ impl BridgeSession {
             Some(token) => token,
             None if spawnable => {
                 let token = crate::token::generate_token();
-                std::fs::write(&launch.token_file, &token)
+                crate::token::write_token_file(std::path::Path::new(&launch.token_file), &token)
                     .map_err(|e| BridgeError::Io(format!("token file: {e}")))?;
                 token
             }

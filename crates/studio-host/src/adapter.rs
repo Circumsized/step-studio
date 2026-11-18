@@ -113,7 +113,7 @@ pub fn launch(
         Some(token) => token,
         None => {
             let token = step_studio_bridge::token::generate_token();
-            fs::write(&launch.token_file, &token)
+            step_studio_bridge::token::write_token_file(std::path::Path::new(&launch.token_file), &token)
                 .map_err(|e| AdapterError::Spawn(format!("token file: {e}")))?;
             token
         }
