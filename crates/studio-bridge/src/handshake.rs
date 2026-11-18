@@ -182,6 +182,62 @@ fn str_field(body: &serde_json::Value, key: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
+    /// A peer that cannot answer the challenge is refused.
+    ///
+    /// The negative PoC for the mutual-handshake fix: before it, the daemon and
+    /// the runtime signed whatever challenge they were handed and dropped their
+    /// own verification, so any peer that could open the endpoint picked a value
+    /// and was given a valid proof for it. This pins the other direction — a
+    /// proof computed with the wrong secret does not verify.
+    #[test]
+    fn a_proof_computed_with_the_wrong_token_is_refused() {
+        let challenge = fresh_challenge("daemon", 1);
+        let instance = "step-runtime-1";
+
+        let honest = challenge_proof("the-real-token", &challenge, instance);
+        assert!(
+            verify_proof(
+                &serde_json::json!({ "type": "studio.hello.proof", "challengeProof": honest }),
+                "the-real-token",
+                &challenge,
+                instance,
+            )
+            .is_ok(),
+            "the honest proof was refused"
+        );
+
+        // Wrong token, wrong instance, and a proof minted for a different
+        // challenge: each is a peer that does not hold the secret.
+        for forged in [
+            challenge_proof("another-token", &challenge, instance),
+            challenge_proof("the-real-token", &challenge, "step-runtime-2"),
+            challenge_proof("the-real-token", &fresh_challenge("daemon", 1), instance),
+        ] {
+            assert!(
+                verify_proof(
+                    &serde_json::json!({ "type": "studio.hello.proof", "challengeProof": forged }),
+                    "the-real-token",
+                    &challenge,
+                    instance,
+                )
+                .is_err(),
+                "a forged proof was accepted"
+            );
+        }
+
+        // And a frame that is not a proof at all.
+        assert!(
+            verify_proof(
+                &serde_json::json!({ "type": "studio.request" }),
+                "the-real-token",
+                &challenge,
+                instance,
+            )
+            .is_err(),
+            "a frame with no proof was accepted"
+        );
+    }
+
     #[test]
     fn a_challenge_is_fresh_every_time() {
         // The defect this replaces: both sides derived the challenge from the
