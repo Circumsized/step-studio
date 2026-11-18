@@ -102,3 +102,35 @@ mod tests {
         assert!(uid > 0, "the kernel reported uid {uid}");
     }
 }
+
+/// Why the Windows peer gate fails open, asserted where it can be.
+///
+/// `serve_surface` refuses a surface only when `peer_uid` answers `None` *and*
+/// the platform is Unix. On Windows the answer is always `None`, so the gate
+/// never fires. That is TH13, and until now nothing on Windows said so: this
+/// crate's only test was Unix-gated, so the platform carrying the gap had no
+/// test at all.
+///
+/// This is the deployment half of the PoC — it shows `peer_uid` really does
+/// answer `None` for a live connection here, which is what routes
+/// `serve_surface` into the accepting arm. The other half, that the arm then
+/// accepts, is `an_unidentifiable_peer_is_accepted_on_windows_which_is_th13` in
+/// the daemon.
+#[cfg(all(test, not(unix)))]
+mod windows_tests {
+    use super::*;
+
+    #[test]
+    fn a_live_connection_reports_no_uid_on_windows() {
+        // Whatever the transport hands back, the answer must be `None` — a
+        // `Some` here would mean the platform *can* identify the peer, and the
+        // `else if cfg!(unix)` arm in serve_surface would be wrong for a
+        // different reason than the one recorded.
+        let connected = std::fs::File::open(std::env::current_exe().expect("this binary"))
+            .expect("some handle");
+        assert!(
+            peer_uid(&connected).is_none(),
+            "Windows reported a peer uid, which would change what serve_surface does"
+        );
+    }
+}
