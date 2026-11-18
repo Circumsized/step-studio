@@ -1334,6 +1334,23 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Config, String> {
 mod tests {
     use super::*;
 
+    /// Windows accepts a peer it cannot identify. That is TH13, and this test
+    /// exists so the gap is visible here rather than only in a comment.
+    ///
+    /// It is not a PoC of the vulnerability — nothing on this machine can be,
+    /// because the fail-open branch is unreachable wherever `peer_uid` works.
+    /// What it does is fail when somebody closes the gap, which is the moment
+    /// TH13 has to be rewritten anyway. A test that only ever passes on the
+    /// platform with the bug is still worth having for that reason.
+    #[test]
+    #[cfg(windows)]
+    fn an_unidentifiable_peer_is_accepted_on_windows_which_is_th13() {
+        assert!(
+            peer_may_serve(None),
+            "Windows now refuses an unidentifiable peer: TH13 is fixed and must be updated"
+        );
+    }
+
     /// The gate refuses an unidentifiable peer — on this platform.
     ///
     /// What this pins: the Unix half. What it cannot pin: the Windows divergence,
