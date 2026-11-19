@@ -104,10 +104,14 @@ pnpm-workspace.yaml
 apps/desktop-tauri/src-tauri/gen/
 apps/desktop-tauri/src-tauri/target/
 
-# `git.rs`'s diff test creates one of these in the repo root and `add -N`s it.
-# Three got committed as empty tracked files; the name carries a pid, so it is
-# never a real asset.
+# `git.rs`'s tests create these in the repo root and `add -N` them. Three got
+# committed as empty tracked files; the name carries a pid, so it is never a
+# real asset. Two prefixes, because there are two tests: `diff_tests` makes
+# `scratch-diff-test-<pid>.txt` and the staging round-trip makes
+# `scratch-stage-<pid>.txt` — the second was missing, so a failed cleanup on
+# that test left an *untracked* file, which `git add .` would have taken.
 scratch-diff-test-*.txt
+scratch-stage-*.txt
 
 # Sign-off captures are regenerable output, not source. The command that
 # produces them is in design/m41-signoff.md.
