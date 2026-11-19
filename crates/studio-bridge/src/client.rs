@@ -163,7 +163,7 @@ impl BridgeSession {
         // token before anything else is trusted. This frame is read directly,
         // before the reader thread exists, so exactly one owner touches the
         // socket at a time.
-        let mut reader = BufReader::new(stream_clone(&stream)?);
+        let reader = BufReader::new(stream_clone(&stream)?);
         let challenge = crate::handshake::fresh_challenge("shell", launch.runtime_epoch);
         let hello = json!({
             "type": "studio.hello",
@@ -180,7 +180,14 @@ impl BridgeSession {
         write_frame(&mut transport::handshake_writer(&stream), 1, &hello)?;
         #[cfg(windows)]
         write_frame(&mut transport::handshake_writer(&mut stream), 1, &hello)?;
-        let frame = read_frame(&mut reader)?
+        // `set_read_timeout` above bounds this on Unix and is accepted-and-
+        // ignored on Windows, so on Windows a peer that connects and says
+        // nothing — a squatted endpoint, or a daemon that wedged before its
+        // hello — blocked here forever, with no error and no way back. The same
+        // shape and the same primitive the daemon uses for its own first frame.
+        let frame = first_frame_within(reader, HELLO_BUDGET)
+            .ok_or_else(|| BridgeError::TimedOut(format!("no hello within {HELLO_BUDGET:?}")))?
+            .map_err(|error| BridgeError::Io(error.to_string()))?
             .ok_or_else(|| BridgeError::Protocol("adapter closed before hello".to_string()))?;
         let verified =
             verify_hello(&frame.body, &token, &challenge).map_err(BridgeError::Protocol)?;
@@ -197,11 +204,8 @@ impl BridgeSession {
                 BridgeError::Protocol("the peer issued no challenge to answer".to_string())
             })?
             .to_string();
-        let proof = crate::handshake::hello_proof(
-            &token,
-            &peer_challenge,
-            &verified.runtime_instance_id,
-        );
+        let proof =
+            crate::handshake::hello_proof(&token, &peer_challenge, &verified.runtime_instance_id);
         // Same ownership rule as the hello above: exactly one owner touches the
         // socket until the reader thread exists.
         #[cfg(unix)]
@@ -446,6 +450,38 @@ impl BridgeSession {
     }
 }
 
+/// How long the handshake's first read may take.
+///
+/// Matches the daemon's own first-frame budget. `set_read_timeout` cannot do
+/// this job on Windows — it is accepted and ignored there — so the bound comes
+/// from the wait, which is platform-generic.
+const HELLO_BUDGET: Duration = Duration::from_secs(30);
+
+/// Read the handshake's first frame, giving up after `budget`.
+///
+/// The reader is consumed because `wait_or_stop`'s closure is `'static`. That
+/// is sound here: this is the only frame read before the reader thread takes
+/// over the socket, so nothing else touches the reader afterwards.
+fn first_frame_within<R>(
+    mut reader: R,
+    budget: Duration,
+) -> Option<std::io::Result<Option<crate::frame::DecodedFrame>>>
+where
+    R: std::io::Read + Send + 'static,
+{
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let stop = std::sync::Arc::new(AtomicBool::new(false));
+    let setter = std::sync::Arc::clone(&stop);
+    std::thread::spawn(move || {
+        std::thread::sleep(budget);
+        setter.store(true, Ordering::Relaxed);
+    });
+    transport::wait_or_stop(
+        move || read_frame(&mut reader).map_err(|error| std::io::Error::other(error.to_string())),
+        &stop,
+    )
+}
+
 impl Drop for BridgeSession {
     fn drop(&mut self) {
         // Only ends the runtime when this session launched it. See
@@ -607,4 +643,85 @@ pub fn spawn_adapter(launch: &AdapterLaunch) -> Result<Child, BridgeError> {
 
 fn is_terminal(status: Option<&str>) -> bool {
     matches!(status, Some(s) if TERMINAL_STATUSES.contains(&s))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A peer that connects and says nothing, and stays connected.
+    ///
+    /// Dropping the client handle would be EOF, which `read_frame` already
+    /// reports as `Ok(None)`; the defect is a peer that is open and silent. On
+    /// Windows `set_read_timeout` is ignored, so before the bound this read
+    /// never returned at all — no error, no way back. The daemon-side test for
+    /// the same shape hangs under sabotage; this one fails instead.
+    #[test]
+    fn a_silent_peer_is_given_up_on_instead_of_blocking_forever() {
+        let dir = std::env::temp_dir().join(format!("ss-hello-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a temp dir");
+        let endpoint = dir.join("bridge.sock");
+
+        let listener = transport::bind(&endpoint.to_string_lossy()).expect("bind");
+        let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let silent = std::thread::spawn(move || {
+            let client = transport::connect(&for_client)?;
+            let _ = held_tx.send(client);
+            std::io::Result::<()>::Ok(())
+        });
+        let _held = held_rx.recv().expect("the peer connected");
+
+        let accepted = transport::accept(listener).expect("accept");
+        let reader = BufReader::new(accepted.into_connection());
+        let started = std::time::Instant::now();
+        let outcome = first_frame_within(reader, Duration::from_millis(300));
+
+        assert!(outcome.is_none(), "a silent peer was not given up on");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the bound took {:?}",
+            started.elapsed()
+        );
+        let _ = silent.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The bound must not cost the talking peer its frame: the reader is
+    /// consumed by the wait, and the frame has to come back regardless.
+    #[test]
+    fn a_peer_that_speaks_still_gets_its_frame_through_the_bound() {
+        let dir = std::env::temp_dir().join(format!("ss-hello-talk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a temp dir");
+        let endpoint = dir.join("bridge.sock");
+
+        let listener = transport::bind(&endpoint.to_string_lossy()).expect("bind");
+        let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let talker = std::thread::spawn(move || {
+            let mut client = transport::connect(&for_client)?;
+            let frame = crate::frame::FrameEncoder::encode(1, &serde_json::json!({"type": "studio.hello"}))
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            client.write_all(&frame)?;
+            let _ = held_tx.send(client);
+            std::io::Result::<()>::Ok(())
+        });
+        let _held = held_rx.recv().expect("the peer connected");
+
+        let accepted = transport::accept(listener).expect("accept");
+        let reader = BufReader::new(accepted.into_connection());
+        let first = first_frame_within(reader, Duration::from_secs(5))
+            .expect("the wait gave up on a talking peer")
+            .expect("the frame failed to decode")
+            .expect("the peer closed instead of sending");
+        assert_eq!(
+            first.body.get("type").and_then(Value::as_str),
+            Some("studio.hello"),
+            "the frame survived the bound"
+        );
+        let _ = talker.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
