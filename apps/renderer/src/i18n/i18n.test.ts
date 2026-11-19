@@ -80,4 +80,16 @@ describe("i18n system tests", () => {
   it("gracefully falls back when key is missing", () => {
     expect(translate("zh", "nonexistent.key.path")).toBe("nonexistent.key.path");
   });
+
+  it("returns a non-string key unchanged instead of throwing", () => {
+    // `translate` is exported and typed `key: string`, but the type is a
+    // compile-time promise: Host data reaching it can be `undefined`. The
+    // `typeof path !== "string"` guard in `lookupKey` is what keeps
+    // `path.split(".")` from throwing. No in-module caller gets here —
+    // `labelFor` substitutes the raw key with `?? key` — so this is the only
+    // thing that pins the guard.
+    expect(() => translate("zh", undefined as never)).not.toThrow();
+    expect(translate("zh", undefined as never)).toBeUndefined();
+    expect(translate("en", 42 as never)).toBe(42);
+  });
 });
