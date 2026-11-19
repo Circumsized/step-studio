@@ -1,6 +1,53 @@
 import { describe, expect, it, vi } from "vitest";
+import { MemoryClientTransport, StudioClientImpl } from "@omp-studio/client";
+import type { ClientBootstrap } from "@omp-studio/client-contract";
 import type { SessionId, StudioClient, ThreadId } from "@omp-studio/client-contract";
 import { ensureSelectedSessionActive, waitForCommandReceipt } from "./sessionLifecycle";
+
+const TS = "2026-08-12T00:00:00.000Z";
+
+/**
+ * The smallest snapshot a `StudioClientImpl` will accept. Only the fields the
+ * reducer reads on `bootstrap.set` are load-bearing here; the rest exist to
+ * satisfy the contract version check and the read-model shape.
+ */
+function bootstrapped(): ClientBootstrap {
+  return {
+    contractVersion: 2,
+    authority: { authorityId: "auth-1" as never, authorityEpoch: 1 as never },
+    runtime: {
+      status: "connected",
+      classification: "managed",
+      runtimeId: "rt-1" as never,
+      runtimeEpoch: 1 as never,
+      backend: "studio-host",
+      runtimeVersion: "1.0.0",
+    },
+    surface: { terminalAttach: false, fileReveal: false, previewInput: false, openExternal: false },
+    capabilityManifest: { profile: "full-parity-v1", generatedAt: TS, hash: "cap-hash", capabilities: [] },
+    commandManifestHash: "cmd-hash",
+    selected: {},
+    snapshot: {
+      runtimeId: "rt-1" as never,
+      runtimeEpoch: 1 as never,
+      stateVersion: 1 as never,
+      sessionId: "sess-1" as SessionId,
+      isStreaming: false,
+      isCompacting: false,
+      activeMode: "normal",
+      approvalMode: "yolo",
+      pendingMessages: 0,
+      activeCommandIds: [],
+      agentsRevision: 0,
+      jobsRevision: 0,
+      agents: [],
+      jobs: [],
+    },
+    stateVersion: 1 as never,
+    cursor: "10" as never,
+    residents: { generatedAt: TS, activeSessionId: "sess-1" as SessionId, residents: [] },
+  };
+}
 
 function completedResumeClient(sessionId: SessionId) {
   const command = vi.fn(async () => ({ requestId: "resume-request" }));
@@ -137,5 +184,43 @@ describe("waitForCommandReceipt", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/**
+ * The four above hand-roll a client (`as never`), so each one encodes its own
+ * guess at what `getState().commands[id]` looks like. That guess is the wiring:
+ * if the real reducer nests the command state differently, or names the status
+ * field differently, all four pass and every live call site still hangs.
+ *
+ * This one drives a real `StudioClientImpl` over a `MemoryClientTransport` —
+ * the same pair the shipped renderer uses — so the state shape is the reducer's
+ * own rather than a test's.
+ */
+describe("waitForCommandReceipt wired to a real StudioClientImpl", () => {
+  it("settles when a re-bootstrap strands the command, with no receipt event", async () => {
+    const transport = new MemoryClientTransport({
+      bootstrap: () => bootstrapped(),
+      command: (request) => ({ ...request, status: "accepted", acceptedAt: TS }),
+    });
+    const client = new StudioClientImpl(transport);
+    await client.bootstrap();
+
+    const handle = await client.command("session.resume", { threadId: "thread-1" as ThreadId });
+    const waiting = waitForCommandReceipt(client, handle.requestId);
+
+    // One of the four reducer paths that strand an in-flight command: a
+    // re-bootstrap marks it `outcome_unknown` and emits no `command.receipt`.
+    // Before the `onState` listener existed, this exact sequence hung the
+    // caller forever — no error, no way back — at DiagnosticsPage's
+    // install/recheck, at runtimeEnsure, and at HomePage.
+    await client.bootstrap();
+
+    const receipt = await Promise.race([
+      waiting,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("the wait never settled")), 1000)),
+    ]);
+    expect((receipt as { status: string }).status).toBe("outcome_unknown");
+    await client.close();
   });
 });
