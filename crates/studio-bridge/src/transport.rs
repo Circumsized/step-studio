@@ -409,6 +409,39 @@ where
     }
 }
 
+/// Read one frame, giving up after `budget`.
+///
+/// `set_read_timeout` bounds a read on Unix and is accepted-and-ignored on
+/// Windows, so a bound that holds on both platforms has to come from the wait
+/// rather than from the socket option. Built on [`wait_or_stop`], which is
+/// where the abandoning actually happens: the read runs on a detached thread,
+/// so a peer that never sends does not hold its caller.
+///
+/// The reader is consumed because the closure must be `'static`. Sound when the
+/// caller can hand over ownership — either it owns the reader outright, or it
+/// duplicates the connection with [`Accepted::duplicate`].
+pub fn first_frame_within<R>(
+    mut reader: R,
+    budget: Duration,
+) -> Option<io::Result<Option<crate::frame::DecodedFrame>>>
+where
+    R: std::io::Read + Send + 'static,
+{
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let stop = std::sync::Arc::new(AtomicBool::new(false));
+    let setter = std::sync::Arc::clone(&stop);
+    std::thread::spawn(move || {
+        std::thread::sleep(budget);
+        setter.store(true, Ordering::Relaxed);
+    });
+    wait_or_stop(
+        move || {
+            crate::frame::read_frame(&mut reader).map_err(|error| io::Error::other(error.to_string()))
+        },
+        &stop,
+    )
+}
+
 /// Wait for a client, giving up when `stop` says so.
 ///
 /// The Windows counterpart of [`accept`], which blocks in `ConnectNamedPipe`

@@ -185,7 +185,7 @@ impl BridgeSession {
         // nothing — a squatted endpoint, or a daemon that wedged before its
         // hello — blocked here forever, with no error and no way back. The same
         // shape and the same primitive the daemon uses for its own first frame.
-        let frame = first_frame_within(reader, HELLO_BUDGET)
+        let frame = transport::first_frame_within(reader, HELLO_BUDGET)
             .ok_or_else(|| BridgeError::TimedOut(format!("no hello within {HELLO_BUDGET:?}")))?
             .map_err(|error| BridgeError::Io(error.to_string()))?
             .ok_or_else(|| BridgeError::Protocol("adapter closed before hello".to_string()))?;
@@ -452,35 +452,9 @@ impl BridgeSession {
 
 /// How long the handshake's first read may take.
 ///
-/// Matches the daemon's own first-frame budget. `set_read_timeout` cannot do
-/// this job on Windows — it is accepted and ignored there — so the bound comes
-/// from the wait, which is platform-generic.
+/// Matches the daemon's own first-frame budget, and sits under the 20 s
+/// `wait_for_socket` already spent getting the socket to exist.
 const HELLO_BUDGET: Duration = Duration::from_secs(30);
-
-/// Read the handshake's first frame, giving up after `budget`.
-///
-/// The reader is consumed because `wait_or_stop`'s closure is `'static`. That
-/// is sound here: this is the only frame read before the reader thread takes
-/// over the socket, so nothing else touches the reader afterwards.
-fn first_frame_within<R>(
-    mut reader: R,
-    budget: Duration,
-) -> Option<std::io::Result<Option<crate::frame::DecodedFrame>>>
-where
-    R: std::io::Read + Send + 'static,
-{
-    use std::sync::atomic::{AtomicBool, Ordering};
-    let stop = std::sync::Arc::new(AtomicBool::new(false));
-    let setter = std::sync::Arc::clone(&stop);
-    std::thread::spawn(move || {
-        std::thread::sleep(budget);
-        setter.store(true, Ordering::Relaxed);
-    });
-    transport::wait_or_stop(
-        move || read_frame(&mut reader).map_err(|error| std::io::Error::other(error.to_string())),
-        &stop,
-    )
-}
 
 impl Drop for BridgeSession {
     fn drop(&mut self) {
@@ -676,7 +650,7 @@ mod tests {
         let accepted = transport::accept(listener).expect("accept");
         let reader = BufReader::new(accepted.into_connection());
         let started = std::time::Instant::now();
-        let outcome = first_frame_within(reader, Duration::from_millis(300));
+        let outcome = transport::first_frame_within(reader, Duration::from_millis(300));
 
         assert!(outcome.is_none(), "a silent peer was not given up on");
         assert!(
@@ -712,7 +686,7 @@ mod tests {
 
         let accepted = transport::accept(listener).expect("accept");
         let reader = BufReader::new(accepted.into_connection());
-        let first = first_frame_within(reader, Duration::from_secs(5))
+        let first = transport::first_frame_within(reader, Duration::from_secs(5))
             .expect("the wait gave up on a talking peer")
             .expect("the frame failed to decode")
             .expect("the peer closed instead of sending");

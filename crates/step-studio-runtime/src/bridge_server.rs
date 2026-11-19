@@ -32,6 +32,10 @@ const TERMINAL_HISTORY: usize = 64;
 /// number for one idea.
 const SHUTDOWN_DRAIN: Duration = Duration::from_secs(5);
 
+/// How long either handshake read may take. The daemon bounds its own two the
+/// same way; this side set no read timeout at all before this.
+const HANDSHAKE_BUDGET: Duration = Duration::from_secs(30);
+
 /// How long `usage.panel` waits for the CLI's panel before giving up.
 ///
 /// The panel arrives on the fire-and-forget channel rather than as the prompt's
@@ -1154,8 +1158,24 @@ fn serve_connection(
     // The daemon's side of this handshake bounds both its reads
     // (`first_frame_within`, 30 s); this side had no bound at all.
     let frame = {
-        let mut hello_reader = transport::handshake_reader(&mut session.stream);
-        read_frame(&mut hello_reader)
+        // Bounded, and unbuffered on purpose. Unbuffered because a `BufReader`
+        // here is a hang: a peer that sends its hello and its proof in one burst
+        // leaves the proof sitting in this reader's buffer, which is then
+        // dropped, and the unbuffered proof read below waits forever for bytes
+        // that were already consumed. Bounded because this side sets no read
+        // timeout at all — `set_read_timeout` bounds a read on Unix and is
+        // ignored on Windows — so a peer that connected and said nothing blocked
+        // here forever, with no error and no way back.
+        //
+        // A second handle rather than a borrow: the bound runs the read on a
+        // detached thread so a silent peer can be abandoned, and that closure
+        // must be `'static`, so it cannot hold the borrow `handshake_reader`
+        // lends. `stream_for_reader` is the same helper the session's own reader
+        // thread uses, so this adds no new duplication path. The original stays
+        // with the session, which still writes through it.
+        let hello_reader = stream_for_reader(&session)?;
+        transport::first_frame_within(hello_reader, HANDSHAKE_BUDGET)
+            .ok_or_else(|| format!("no hello within {HANDSHAKE_BUDGET:?}"))?
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "host closed before hello".to_string())?
     };
@@ -1199,8 +1219,13 @@ fn serve_connection(
     // reader would then wait forever for a frame that was already consumed — which
     // is how the abort test failed with EAGAIN after its 300 s read timeout.
     let proof_frame = {
-        let mut proof_reader = transport::handshake_reader(&mut session.stream);
-        read_frame(&mut proof_reader)
+        // Same bound, same reason, same unbuffered rule as the hello above. A
+        // fresh handle rather than a reuse of the first: the hello's read
+        // completed, so no thread is left holding it, and two sequential reads
+        // through two handles on one connection do not interleave.
+        let proof_reader = stream_for_reader(&session)?;
+        transport::first_frame_within(proof_reader, HANDSHAKE_BUDGET)
+            .ok_or_else(|| format!("no proof within {HANDSHAKE_BUDGET:?}"))?
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "peer closed before proving itself".to_string())?
     };
