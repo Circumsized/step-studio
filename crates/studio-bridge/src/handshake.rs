@@ -280,9 +280,20 @@ mod tests {
     }
 
     #[test]
-    fn the_proof_comparison_does_not_short_circuit() {
-        // Correctness of the constant-time compare: equal, and every single-byte
-        // difference, must be classified correctly.
+    fn every_byte_and_the_length_of_the_proof_are_compared() {
+        // What this checks: the comparison classifies equal input, every
+        // single-byte difference, a length difference, and empty-vs-not
+        // correctly. That is correctness, and it is all a functional test can
+        // check.
+        //
+        // What it does NOT check: that the comparison is constant-time. Renamed
+        // from `the_proof_comparison_does_not_short_circuit`, which claimed that
+        // property — verified false by replacing the body with an early-exit
+        // loop, which is functionally identical and left all eight tests green.
+        // Constant-time-ness is a property of the implementation and is verified
+        // by reading `same_bytes`; no timing assertion belongs in the suite,
+        // because timing tests are flaky and a flaky test trains people to
+        // ignore red.
         assert!(same_bytes(b"abc", b"abc"));
         for index in 0..b"abc".len() {
             let mut changed = *b"abc";
