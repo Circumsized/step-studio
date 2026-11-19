@@ -1722,7 +1722,14 @@ mod write_tests {
         let Some(root) = repo_root() else { return };
         for bad in ["../../etc/passwd", "/etc/passwd", "--upload-pack=evil", "a/../../b"] {
             let result = paths_op(&root, &["add", "--"], Some(&json!([bad])), false);
-            assert!(result.is_err(), "{bad} must be refused, not passed to git");
+            let error = result.expect_err("{bad} must be refused, not passed to git");
+            // Which refusal. `paths_op` also fails when git is missing or the
+            // command errors, and a bare `is_err()` is satisfied by either — so
+            // this test used to pass on a machine with no git at all.
+            assert!(
+                error.starts_with("refusing the path"),
+                "{bad} was refused for the wrong reason: {error}"
+            );
         }
     }
 
@@ -1730,7 +1737,11 @@ mod write_tests {
     fn a_commit_without_a_message_is_refused() {
         let Some(root) = repo_root() else { return };
         let result = commit(&root, &json!({ "kind": "commit", "message": "  " }));
-        assert!(result.is_err(), "an empty message is not a commit");
+        let error = result.expect_err("an empty message is not a commit");
+        assert!(
+            error.contains("needs a message"),
+            "refused for the wrong reason: {error}"
+        );
     }
 
     #[test]
@@ -1738,7 +1749,11 @@ mod write_tests {
         let Some(root) = repo_root() else { return };
         for bad in ["-d", "--force"] {
             let created = branch_create(&root, &json!({ "kind": "branch.create", "name": bad }));
-            assert!(created.is_err(), "{bad} must be refused, not passed to git");
+            let error = created.expect_err("{bad} must be refused, not passed to git");
+            assert!(
+                error.starts_with("refusing the branch name"),
+                "{bad} was refused for the wrong reason: {error}"
+            );
         }
     }
 
@@ -1764,7 +1779,11 @@ mod write_tests {
     fn a_pull_strategy_that_is_not_one_of_the_three_is_refused() {
         let Some(root) = repo_root() else { return };
         let result = pull(&root, &json!({ "kind": "pull", "strategy": "squash" }));
-        assert!(result.is_err(), "an unknown strategy must not become a merge");
+        let error = result.expect_err("an unknown strategy must not become a merge");
+        assert!(
+            error.starts_with("refusing the pull strategy"),
+            "refused for the wrong reason: {error}"
+        );
     }
 
     #[test]
