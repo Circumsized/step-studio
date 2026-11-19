@@ -203,7 +203,7 @@ fn serve_one(
     };
     let terminal = Arc::clone(terminal);
     std::thread::spawn(move || {
-        if let Err(error) = serve_connection(connection, config, terminal) {
+        if let Err(error) = serve_connection(connection, config, terminal, HANDSHAKE_BUDGET) {
             eprintln!("step-studio-runtime: connection ended: {error}");
         }
     })
@@ -1119,6 +1119,7 @@ fn serve_connection(
     stream: transport::Accepted,
     config: AdapterConfig,
     terminal: Arc<Mutex<Vec<Value>>>,
+    handshake_budget: Duration,
 ) -> Result<(), String> {
     let step = StepRpc::spawn(&crate::step_rpc::StepLaunch {
         command: config.step_command.clone(),
@@ -1174,8 +1175,8 @@ fn serve_connection(
         // thread uses, so this adds no new duplication path. The original stays
         // with the session, which still writes through it.
         let hello_reader = stream_for_reader(&session)?;
-        transport::first_frame_within(hello_reader, HANDSHAKE_BUDGET)
-            .ok_or_else(|| format!("no hello within {HANDSHAKE_BUDGET:?}"))?
+        transport::first_frame_within(hello_reader, handshake_budget)
+            .ok_or_else(|| format!("no hello within {handshake_budget:?}"))?
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "host closed before hello".to_string())?
     };
@@ -1224,8 +1225,8 @@ fn serve_connection(
         // completed, so no thread is left holding it, and two sequential reads
         // through two handles on one connection do not interleave.
         let proof_reader = stream_for_reader(&session)?;
-        transport::first_frame_within(proof_reader, HANDSHAKE_BUDGET)
-            .ok_or_else(|| format!("no proof within {HANDSHAKE_BUDGET:?}"))?
+        transport::first_frame_within(proof_reader, handshake_budget)
+            .ok_or_else(|| format!("no proof within {handshake_budget:?}"))?
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "peer closed before proving itself".to_string())?
     };
@@ -1344,4 +1345,105 @@ fn stream_for_reader(session: &Session) -> Result<Accepted, String> {
 /// Errors from the CLI that must not crash the adapter.
 pub fn describe_step_error(error: &StepError) -> String {
     error.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// The fake CLI the e2e suite drives, as a wrapper next to the test's own
+    /// temp dir. Runs under node, so the silent-peer case skips without it —
+    /// `serve_connection` spawns the CLI before it reads anything, and a test
+    /// that fails because node is missing says nothing about the bound.
+    fn fake_step_wrapper(dir: &std::path::Path) -> PathBuf {
+        let fake = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake-step.mjs");
+        let wrapper = dir.join("fake-step");
+        std::fs::write(&wrapper, format!("#!/bin/sh\nexec node {} \"$@\"\n", fake.display()))
+            .expect("write wrapper");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755));
+        }
+        wrapper
+    }
+
+    fn has_node() -> bool {
+        std::process::Command::new("node")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+
+    fn config_in(dir: &std::path::Path, step_command: String) -> AdapterConfig {
+        AdapterConfig {
+            endpoint: dir.join("bridge.sock").to_string_lossy().to_string(),
+            token: "rust-runtime-token".to_string(),
+            runtime_epoch: 1,
+            cwd: dir.to_string_lossy().to_string(),
+            step_command,
+            step_env: std::env::vars().collect(),
+            continue_session: false,
+            exit_on_disconnect: false,
+        }
+    }
+
+    /// A peer that connects, says nothing, and stays connected.
+    ///
+    /// Dropping the handle would be EOF, which `read_frame` already reports as
+    /// `Ok(None)`; the defect is a peer that is open and silent. Before the
+    /// bound, this side set no read timeout at all — on either platform — so the
+    /// accept loop's worker never returned, and because `serve_one` joins each
+    /// worker, no further connection was served either.
+    #[test]
+    fn a_silent_peer_is_given_up_on_instead_of_wedging_the_accept_loop() {
+        if !has_node() {
+            eprintln!("skipping: no node for the fake Step CLI");
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("rust-rt-silent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a temp dir");
+        let config = config_in(&dir, fake_step_wrapper(&dir).to_string_lossy().to_string());
+
+        let listener = transport::bind(&config.endpoint).expect("bind");
+        let for_client = transport::endpoint_for_bind(&config.endpoint);
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let silent = std::thread::spawn(move || {
+            let client = transport::connect(&for_client)?;
+            let _ = held_tx.send(client);
+            std::io::Result::<()>::Ok(())
+        });
+        let _held = held_rx.recv().expect("the peer connected");
+
+        let accepted = transport::accept(listener).expect("accept");
+        let started = std::time::Instant::now();
+        // 300 ms, not the production 30 s: the point is that the read is bounded,
+        // and a test that waits half a minute to say so is a test people rerun
+        // selectively.
+        let outcome = serve_connection(
+            accepted,
+            config,
+            Arc::new(Mutex::new(Vec::new())),
+            Duration::from_millis(300),
+        );
+
+        let error = outcome.expect_err("a silent peer was not given up on");
+        // Which reason. `serve_connection` also fails if the CLI will not spawn,
+        // and on a machine without node that is the error you get — so pin the
+        // timeout specifically, or the test passes for the wrong reason.
+        assert!(
+            error.starts_with("no hello within"),
+            "the silent peer was refused for the wrong reason: {error}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "the bound took {:?}",
+            started.elapsed()
+        );
+        let _ = silent.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
