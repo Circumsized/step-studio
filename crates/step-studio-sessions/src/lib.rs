@@ -617,9 +617,11 @@ mod agent_tests {
     #[test]
     fn the_real_store_is_read_without_inventing_or_losing_agents() {
         let Some(store) = store_dir() else {
+            eprintln!("skipping: no session store on this machine, so this test asserted nothing");
             return;
         };
         if !store.is_dir() {
+            eprintln!("skipping: the session store is not a directory, so this test asserted nothing");
             return;
         }
         // `super::agents_in`, not the test helper of the same name below: the

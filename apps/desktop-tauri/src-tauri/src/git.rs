@@ -1719,7 +1719,10 @@ mod write_tests {
 
     #[test]
     fn a_path_that_escapes_the_repository_is_refused() {
-        let Some(root) = repo_root() else { return };
+        let Some(root) = repo_root() else {
+            eprintln!("skipping: no repository, so this test asserted nothing");
+            return;
+        };
         for bad in ["../../etc/passwd", "/etc/passwd", "--upload-pack=evil", "a/../../b"] {
             let result = paths_op(&root, &["add", "--"], Some(&json!([bad])), false);
             let error = result.expect_err("{bad} must be refused, not passed to git");
@@ -1735,7 +1738,10 @@ mod write_tests {
 
     #[test]
     fn a_commit_without_a_message_is_refused() {
-        let Some(root) = repo_root() else { return };
+        let Some(root) = repo_root() else {
+            eprintln!("skipping: no repository, so this test asserted nothing");
+            return;
+        };
         let result = commit(&root, &json!({ "kind": "commit", "message": "  " }));
         let error = result.expect_err("an empty message is not a commit");
         assert!(
@@ -1746,7 +1752,10 @@ mod write_tests {
 
     #[test]
     fn a_branch_name_that_looks_like_an_option_is_refused() {
-        let Some(root) = repo_root() else { return };
+        let Some(root) = repo_root() else {
+            eprintln!("skipping: no repository, so this test asserted nothing");
+            return;
+        };
         for bad in ["-d", "--force"] {
             let created = branch_create(&root, &json!({ "kind": "branch.create", "name": bad }));
             let error = created.expect_err("{bad} must be refused, not passed to git");
@@ -1759,7 +1768,10 @@ mod write_tests {
 
     #[test]
     fn a_stale_expected_revision_refuses_the_delete() {
-        let Some(root) = repo_root() else { return };
+        let Some(root) = repo_root() else {
+            eprintln!("skipping: no repository, so this test asserted nothing");
+            return;
+        };
         let result = branch_delete(
             &root,
             &json!({ "kind": "branch.delete", "name": "no-such-branch", "expectedRevision": "deadbeef" }),
@@ -1777,7 +1789,10 @@ mod write_tests {
 
     #[test]
     fn a_pull_strategy_that_is_not_one_of_the_three_is_refused() {
-        let Some(root) = repo_root() else { return };
+        let Some(root) = repo_root() else {
+            eprintln!("skipping: no repository, so this test asserted nothing");
+            return;
+        };
         let result = pull(&root, &json!({ "kind": "pull", "strategy": "squash" }));
         let error = result.expect_err("an unknown strategy must not become a merge");
         assert!(
@@ -1838,7 +1853,10 @@ mod write_tests {
 
     #[test]
     fn staging_a_real_file_round_trips_through_the_index() {
-        let Some(root) = repo_root() else { return };
+        let Some(root) = repo_root() else {
+            eprintln!("skipping: no repository, so this test asserted nothing");
+            return;
+        };
         let name = format!("scratch-stage-{}.txt", std::process::id());
         let path = root.join(&name);
         let _scratch = scratch::Scratch { root: root.clone(), name: name.clone() };
