@@ -596,7 +596,10 @@ fn spawn_daemon(
     step_command: &str,
     session_dir: &Path,
 ) -> bool {
-    let Some(binary) = daemon_binary(repo_root) else {
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(Path::to_path_buf));
+    let Some(binary) = daemon_binary(exe_dir.as_deref(), repo_root) else {
         eprintln!("[bridge] no step-studio-host binary found");
         return false;
     };
@@ -641,15 +644,20 @@ fn spawn_daemon(
 
 /// Where the daemon lives: beside the shell in a packaged build, under
 /// `target/` in a checkout. The first hit wins, because the candidates overlap.
-fn daemon_binary(repo_root: &Path) -> Option<PathBuf> {
-    let beside_exe = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("step-studio-host")));
-    let candidates = beside_exe.into_iter().chain(
-        ["release", "debug"]
-            .map(|profile| repo_root.join(format!("target/{profile}/step-studio-host"))),
-    );
-    candidates.into_iter().find(|candidate| candidate.is_file())
+///
+/// The bare name is tried, then the `.exe` one: Windows appends the extension
+/// to the installed file, so `step-studio-host` alone never matches and a
+/// packaged shell finds no daemon at all.
+fn daemon_binary(exe_dir: Option<&Path>, repo_root: &Path) -> Option<PathBuf> {
+    let beside_exe = exe_dir.map(Path::to_path_buf).into_iter().flat_map(|dir| {
+        ["step-studio-host", "step-studio-host.exe"].map(move |name| dir.join(name))
+    });
+    beside_exe
+        .chain(
+            ["release", "debug"]
+                .map(|profile| repo_root.join(format!("target/{profile}/step-studio-host"))),
+        )
+        .find(|candidate| candidate.is_file())
 }
 
 /// Translate a Studio snapshot into the client contract's `ClientBootstrap`.
@@ -1309,4 +1317,47 @@ mod capability_tests {
             "the warning names the command: {warnings:?}"
         );
     }
+
+    /// A packaged Windows install puts `step-studio-host.exe` beside the shell,
+    /// and the resolver used to look for the extension-less name only — so the
+    /// installed app found no daemon and never started one. Both spellings are
+    /// accepted now; this pins the `.exe` one, which is the only spelling the
+    /// installed layout can produce.
+    #[test]
+    fn the_daemon_is_found_beside_the_shell_with_or_without_the_exe_suffix() {
+        let dir = std::env::temp_dir().join(format!("ss-daemon-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("make an install dir");
+        let installed = dir.join("step-studio-host.exe");
+        std::fs::write(&installed, b"not a real binary").expect("write the sibling");
+
+        assert_eq!(
+            daemon_binary(Some(&dir), Path::new("/nowhere")).as_deref(),
+            Some(installed.as_path()),
+            "the installed daemon was not found"
+        );
+
+        // The checkout spelling still wins, because the first hit wins and the
+        // bare name comes first.
+        let checkout = dir.join("step-studio-host");
+        std::fs::write(&checkout, b"not a real binary").expect("write the sibling");
+        assert_eq!(
+            daemon_binary(Some(&dir), Path::new("/nowhere")).as_deref(),
+            Some(checkout.as_path()),
+            "the checkout daemon was not found"
+        );
+
+        let _ = std::fs::remove_file(&checkout);
+        let _ = std::fs::remove_file(&installed);
+        assert!(
+            daemon_binary(Some(&dir), Path::new("/nowhere")).is_none(),
+            "a directory with no daemon resolved to one"
+        );
+        assert!(
+            daemon_binary(None, Path::new("/nowhere")).is_none(),
+            "no exe dir resolved to a daemon"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
 }

@@ -359,19 +359,34 @@ fn bring_up(daemon: &Daemon) -> Result<(AdapterHandle, transport::Stream), adapt
         // The daemon's own token, the one it published: the adapter proves it
         // knows this value, and `hello_result` re-signs with it for surfaces.
         token: Some(daemon.token.clone()),
-        command: native_runtime_command(&daemon.config.repo_root),
+        command: native_runtime_command(daemon_exe_dir().as_deref(), &daemon.config.repo_root),
     };
     adapter::launch(&launch, &adapter::challenge_for(daemon.epoch))
 }
 
+/// The directory this daemon was started from, which is where a packaged
+/// install puts the adapter.
+fn daemon_exe_dir() -> Option<std::path::PathBuf> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
+}
+
 /// Where the runtime binary lives: beside the daemon in a packaged build, under
 /// `target/` in a checkout.
-fn native_runtime_command(repo_root: &str) -> Vec<String> {
-    let beside_exe = std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("step-studio-runtime")));
+///
+/// The bare name is tried, then the `.exe` one: Windows appends the extension
+/// to the installed file, so `step-studio-runtime` alone never matches and a
+/// packaged daemon launches no adapter at all.
+fn native_runtime_command(exe_dir: Option<&std::path::Path>, repo_root: &str) -> Vec<String> {
+    let beside_exe = exe_dir
+        .map(std::path::Path::to_path_buf)
+        .into_iter()
+        .flat_map(|dir| {
+            ["step-studio-runtime", "step-studio-runtime.exe"].map(move |name| dir.join(name))
+        });
     let root = std::path::Path::new(repo_root);
-    let candidates = beside_exe.into_iter().chain(
+    let candidates = beside_exe.chain(
         ["release", "debug"]
             .map(|profile| root.join(format!("target/{profile}/step-studio-runtime"))),
     );
@@ -1460,6 +1475,46 @@ mod tests {
             "the first frame was not the hello"
         );
         let _ = speaker.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A packaged Windows install puts `step-studio-runtime.exe` beside the
+    /// daemon, and the resolver used to look for the extension-less name only —
+    /// so an installed daemon launched no adapter at all. Both spellings are
+    /// accepted now; this pins the `.exe` one, the only spelling the installed
+    /// layout can produce.
+    #[test]
+    fn the_adapter_is_found_beside_the_daemon_with_or_without_the_exe_suffix() {
+        let dir = std::env::temp_dir().join(format!("ss-adapter-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("make an install dir");
+        let installed = dir.join("step-studio-runtime.exe");
+        std::fs::write(&installed, b"not a real binary").expect("write the sibling");
+
+        assert_eq!(
+            native_runtime_command(Some(&dir), "/nowhere"),
+            vec![installed.to_string_lossy().to_string()],
+            "the installed adapter was not found"
+        );
+
+        let checkout = dir.join("step-studio-runtime");
+        std::fs::write(&checkout, b"not a real binary").expect("write the sibling");
+        assert_eq!(
+            native_runtime_command(Some(&dir), "/nowhere"),
+            vec![checkout.to_string_lossy().to_string()],
+            "the checkout adapter was not found"
+        );
+
+        let _ = std::fs::remove_file(&checkout);
+        let _ = std::fs::remove_file(&installed);
+        assert!(
+            native_runtime_command(Some(&dir), "/nowhere").is_empty(),
+            "a directory with no adapter resolved to one"
+        );
+        assert!(
+            native_runtime_command(None, "/nowhere").is_empty(),
+            "no exe dir resolved to an adapter"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
