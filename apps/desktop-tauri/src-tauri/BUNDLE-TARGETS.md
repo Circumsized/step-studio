@@ -34,10 +34,46 @@ because expected value at line 1 column 1
 `cargo build` / `cargo test` 会。所以改完这三个文件要跑一次 Rust 门禁，
 不能只跑 `npm run check`。
 
+## 怎么真的打出一个安装包
+
+```
+cd apps/desktop-tauri
+tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin
+```
+
+三个参数都不是可选的：
+
+- **必须 `cd apps/desktop-tauri`**。`beforeBuildCommand` 的工作目录是调用 `tauri`
+  的目录，不是 `src-tauri`。在仓库根跑，`npm run build:bridge` 解析到根
+  `package.json`，直接 `Missing script`。
+- **必须 `--runner cargo-xwin`**。默认 runner 是 `cargo`，交叉目标下没有
+  `link.exe`，链接阶段失败。
+- **`--target` 要与 resources 路径里的三元组一致**，否则 Tauri 找不到要打包的文件。
+
+## `bundle.resources` 要写成映射，不能写成数组
+
+安装器要把 `step-studio-host.exe` 和 `step-studio-runtime.exe` 放到壳的同目录
+（`daemon_binary` / `native_runtime_command` 只在那里找）。数组形式会保留相对
+`src-tauri` 的路径结构，`../../../` 变成 NSIS 的 `_up_`，装到 `$INSTDIR` 上方三层：
+
+```nsis
+File /a "/oname=_up_\_up_\_up_\target\x86_64-pc-windows-msvc\release\step-studio-host.exe"
+```
+
+映射形式（源 → 目标文件名）才落到 `$INSTDIR` 根下：
+
+```json
+"resources": {
+  "../../../target/x86_64-pc-windows-msvc/release/step-studio-host.exe": "step-studio-host.exe"
+}
+```
+
 ## 还没有接上的部分
 
-配置写好了，但**产线没接**：没有任何 CI 或脚本调用 `tauri build`，安装器从未被
-产出过。`scripts/release-assets.mjs` 算出的
-`OMP-Studio-Setup-<版本>-windows-<arch>.exe` 一直指向一个不存在的文件。
+配置写好了，安装器也产出过了（`Step Studio_0.1.0_x64-setup.exe`，11.66 MiB），
+但**产线仍没接**：没有任何 CI 调用 `tauri build`。`scripts/release-assets.mjs` 算出的
+`OMP-Studio-Setup-<版本>-windows-<arch>.exe` 指向的路径与捆绑器实际输出的
+`Step Studio_<版本>_x64-setup.exe` 不是同一个，发布前要对一遍。
 
 Windows 侧还缺 WebView2 引导与 VC++ 运行时——NSIS 不自带这两个（M5.3）。
+`msi` 在 Linux 上产不出（Tauri 直接跳过），要 Windows 主机或 wine。

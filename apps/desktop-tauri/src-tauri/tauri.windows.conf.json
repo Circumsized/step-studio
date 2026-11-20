@@ -3,6 +3,13 @@
     "targets": [
       "nsis",
       "msi"
-    ]
+    ],
+    "resources": {
+      "../../../target/x86_64-pc-windows-msvc/release/step-studio-host.exe": "step-studio-host.exe",
+      "../../../target/x86_64-pc-windows-msvc/release/step-studio-runtime.exe": "step-studio-runtime.exe"
+    }
+  },
+  "build": {
+    "beforeBuildCommand": "npm run build:bridge && npm run build -w @omp-studio/renderer && cargo build --release --target x86_64-pc-windows-msvc -p step-studio-host -p step-studio-runtime"
   }
 }

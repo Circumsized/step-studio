@@ -2048,10 +2048,20 @@ cargo xwin build --release -p step-studio-desktop-tauri --target x86_64-pc-windo
 与平台无关），把 exe 拷到 Windows 机器即可直接运行。安装程序（setup.exe / msi）只是体验优化，
 不是分发前提。
 
-未验证项：`tauri build` 的 npm CLI 链路（NSIS 安装包）尚未跑通——需要让 `tauri build` 走
-xwin 的 clang-cl + lld-link 链接器，并把 `~/.cache/cargo-xwin` 里 MSVC CRT 的 include/lib
-路径配成持久化（cargo-xwin 自己是给子进程设环境变量，不写 `.cargo/config.toml`）。
-`makensis` 已装好（v3.09）。这条不影响 exe 产出，只影响"有没有安装向导"。
+**2026-11-20 NSIS 安装包已产出**：`Step Studio_0.1.0_x64-setup.exe`（11.66 MiB），
+内含 `Step Studio.exe`、`step-studio-host.exe`、`step-studio-runtime.exe` 三个文件，
+后两个落在 `$INSTDIR` 根下、与壳同目录（`bundle.resources` 的映射形式）。
+链路是 `tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin`，且必须在
+`apps/desktop-tauri` 目录下调——`beforeBuildCommand` 的 npm 脚本从调用目录解析，
+在仓库根跑找不到 `build:bridge`。
+
+打包过程中修掉一个挡路的真 bug：`daemon_binary`（`bridge.rs`）与
+`native_runtime_command`（`studio-host.rs`）都只按**不带扩展名**的名字找同级二进制，
+而 Windows 装上去的文件叫 `step-studio-host.exe`——所以安装版既起不了 daemon、
+daemon 也起不了 adapter。现在两个名字都试，两边各有一个用例钉住 `.exe` 那一支。
+
+仍未验证：`msi`（Linux 上 Tauri 跳过）、安装向导在真机上的实际行为、
+WebView2 Runtime 是否就位。
 
 exe 在目标机运行时需要 WebView2 Runtime（Windows 11 自带，Win10 需安装一次）。
 
