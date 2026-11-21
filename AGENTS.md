@@ -132,9 +132,9 @@ node scripts/check.mjs --list          # 看有哪些组和包
 
 - workspace 包之间的值依赖无环
 - 包只能依赖 `ALLOWED_INTERNAL_DEPS` 里声明的方向（例如 `client` 不能反向依赖 `studio-host`）
-- 只有 `apps/desktop` 可以依赖、导入 `electron`
+- 任何 workspace 都不得依赖、导入 `electron`（Electron 壳已删；`apps/desktop` 不复存在）
 - 只有 `apps/renderer` 可以依赖 `react` / `react-dom` / `@testing-library/*`
-- `apps/renderer` 源码不能直接 import Node 内置模块或 `electron`，必须走 preload
+- `apps/renderer` 源码不能直接 import Node 内置模块，必须走 preload（`apps/desktop-tauri/src/preload.ts`）
 - `packages/*/src` 不能 import `@omp-studio/testkit`（演示数据留在渲染层 preview）
 - `PREVIEW_MODE_SWITCH_ENABLED` 只有 `preview/mode.ts` 一处定义，只有 `preview/` 读它
 
@@ -145,7 +145,7 @@ node scripts/check.mjs --list          # 看有哪些组和包
 - `npm run build`（完整构建，含生产包）
 - `npm test`（按需运行完整工作区测试）
 - `npm run test:tooling`（打包、签名、更新脚本改动时运行）
-- `npm run preview`（Windows：构建后启动 Electron 预览）
+- `npm run tauri:dev` / `npm run tauri:build`（在 `apps/desktop-tauri` 下跑；构建产安装包的完整前提见 `src-tauri/BUNDLE-TARGETS.md`）
 
 普通 PR / main CI 跑 `npm run check -- --production`：架构规则、类型、核心测试和生产包各一次；纯文档改动跳过。完整双平台与 Runtime 检查通过 CI 的 `full` 手动运行，性能 workflow 也只手动触发。发布负责打包和产物校验，不重复跑源码测试。
 

@@ -59,10 +59,11 @@ install script documents those.
    work.
 
 The architecture rules in [`scripts/architecture.test.mjs`](scripts/architecture.test.mjs)
-fail fast on layering mistakes: a new package dependency, `electron` outside
-`apps/desktop`, `react` outside `apps/renderer`, Node built-ins or `electron` in
-renderer sources, fixtures imported by a Host package, or a second preview
-switch. When a rule has to change, change the table and the code in one commit.
+fail fast on layering mistakes: a new package dependency, `electron` anywhere in
+the workspace (the Electron shell is gone), `react` outside `apps/renderer`, Node
+built-ins in renderer sources, fixtures imported by a Host package, or a second
+preview switch. When a rule has to change, change the table and the code in one
+commit.
 
 ## Pull request checklist
 

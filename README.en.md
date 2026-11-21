@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Desktop console for OMP Runtime</strong><br>
-  Typed Studio Bridge · Electron workbench · Windows / macOS
+  Typed Studio Bridge · Tauri workbench · Windows / macOS
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 <p align="center">
   <a href="https://github.com/the-snowpear/omp-studio/actions/workflows/ci.yml"><img src="https://github.com/the-snowpear/omp-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.6-informational.svg" alt="0.1.6"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.17-informational.svg" alt="0.1.17"></a>
   <a href="docs/getting-started.md"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4.svg" alt="Windows | macOS"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22-339933.svg" alt="Node 22+"></a>
   <a href="https://linux.do/"><img src="https://img.shields.io/badge/LINUX%20DO-Community-FFB003.svg" alt="LINUX DO"></a>
@@ -87,9 +87,9 @@ The right-hand Git panel stages, diffs, and commits next to the conversation. Fe
 </p>
 
 > [!TIP]
-> **Installation & Getting Started:** Windows users can download the latest installer (`OMP-Studio-Setup-0.1.6-windows-x64.exe`) directly from [GitHub Releases](https://github.com/the-snowpear/omp-studio/releases), or run from source following the instructions below. Please file any bugs or suggestions as [Issues](https://github.com/the-snowpear/omp-studio/issues).
+> **Installation & Getting Started:** Windows users can download the latest installer directly from [GitHub Releases](https://github.com/the-snowpear/omp-studio/releases), or run from source following the instructions below. Please file any bugs or suggestions as [Issues](https://github.com/the-snowpear/omp-studio/issues).
 >
-> **macOS (Apple Silicon, macOS 13+):** when a release ships `OMP-Studio-<version>-macos-arm64.dmg`, open it and drag OMP Studio into Applications. It is an ad hoc signed, not yet notarized preview: macOS blocks the first launch, so choose "Open Anyway" in System Settings › Privacy & Security, or run `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`. You can also run from source or build it with `npm run pack:mac`, see [docs/getting-started.md](docs/getting-started.md).
+> **macOS (Apple Silicon, macOS 13+):** when a release ships `OMP-Studio-<version>-macos-arm64.dmg`, open it and drag OMP Studio into Applications. It is an ad hoc signed, not yet notarized preview: macOS blocks the first launch, so choose "Open Anyway" in System Settings › Privacy & Security, or run `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`. You can also run from source, see [docs/getting-started.md](docs/getting-started.md).
 
 ## What it does
 
@@ -107,11 +107,14 @@ Node.js 22+ is required. Full steps: [docs/getting-started.md](docs/getting-star
 git clone --recurse-submodules https://github.com/the-snowpear/omp-studio.git
 cd omp-studio
 npm install
-npm run omp:overlay:apply
-npm run preview
+cd apps/desktop-tauri
+npm run tauri:dev
 ```
 
-On Windows you can also double-click `preview.cmd` at the repo root. macOS needs the Xcode Command Line Tools; the steps are otherwise the same.
+`tauri:dev` builds the preload bridge and the renderer, then opens the desktop
+window. The first run takes a few minutes. For a distributable installer, swap
+the last line for `npm run tauri:build`; for what to run and capture on a Windows
+machine, see [docs/windows-real-machine-test.md](docs/windows-real-machine-test.md).
 
 Attach a real Runtime (slow the first time):
 
@@ -120,7 +123,8 @@ npm run omp:install-deps
 npm run omp:overlay:apply
 npm run omp:keys
 npm run omp:build:host
-npm run preview
+cd apps/desktop-tauri
+npm run tauri:dev
 ```
 
 Models and login use OMP’s `models.yml` / `omp login`. This repository does not ship provider secrets.
@@ -128,13 +132,14 @@ Models and login use OMP’s `models.yml` / `omp login`. This repository does no
 ## Layout
 
 ```
-apps/desktop          Electron main process
-apps/renderer         Vite + React workbench
+apps/desktop-tauri      Tauri shell (Rust) + preload bridge
+apps/desktop-tui       Terminal interface
+apps/renderer          Vite + React workbench
 packages/             protocol, Host, client, transports, platform
 omp-patch/overlay     Studio-owned Runtime sources
 omp-patch/patches     seam patches on upstream files (do not hand-edit)
 omp-patch/vendor      oh-my-pi submodule (commit the gitlink only)
-packaging/            Windows NSIS installer skeleton; macOS signing setup (packaging/mac)
+packaging/            Release signing keys and notes
 ui_reference/ver1     visual reference, not product code
 docs/                 user and contributor docs
 ```

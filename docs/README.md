@@ -7,6 +7,7 @@ Public documentation for OMP Studio.
 | [../README.md](../README.md) | 中文总览 |
 | [../README.en.md](../README.en.md) | English overview |
 | [getting-started.md](getting-started.md) | Run from source |
+| [windows-real-machine-test.md](windows-real-machine-test.md) | 把产物弄到 Windows 上跑起来、抓证据：带什么、日志在哪、怎么回报 |
 | [ssh-workspaces.md](ssh-workspaces.md) | SSH 工作区开发预览：连接、远端 Runtime、终端与当前限制 |
 | [../doc/ssh-workspace-test-prompt.md](../doc/ssh-workspace-test-prompt.md) | SSH 与账密功能的独立测试交接提示词 |
 | [model-adaptation.md](model-adaptation.md) | Model parameter recommendations, provenance and catalog maintenance |

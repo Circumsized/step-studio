@@ -18,9 +18,9 @@ fork 的状态与差异。
 **运行时链路已端到端跑通**（真实 Step CLI + 真实模型，不是 mock）：
 
 ```
-Renderer → @omp-studio/client → transport-desktop → apps/desktop (IPC)
-  → @omp-studio/host-client-api → studio-host
-  → [STUDIO_RUNTIME_EXECUTABLE] → @step-studio/runtime-stepcode
+Renderer → @omp-studio/client → transport-desktop → apps/desktop-tauri (Tauri IPC)
+  → @omp-studio/host-client-api → step-studio-host (Rust daemon)
+  → step-studio-runtime (Rust adapter)
   → step --mode rpc --include-live-events
 ```
 
@@ -47,12 +47,13 @@ npm run omp:overlay:apply                                # 首次
 npm run check                                            # 全量门禁
 
 # 只验证运行时链路（不需要 Electron / 显示器）
-cd packages/runtime-stepcode && npm run demo -- "hello"
+# `@step-studio/runtime-stepcode` 已在 c1ff302 删除，这一步随之作废；
+# 现在由 Rust 适配器承担：cd apps/desktop-tauri && npm run tauri:dev
 ```
 
 接真实 Step CLI 与自定义 provider 的完整步骤见
-[`packages/runtime-stepcode/README.md`](packages/runtime-stepcode/README.md)，
-坑点记录在 [`packages/runtime-stepcode/docs/step-rpc-integration.md`](packages/runtime-stepcode/docs/step-rpc-integration.md)。
+[`docs/getting-started.md`](../docs/getting-started.md)。
+原 `packages/runtime-stepcode/docs/step-rpc-integration.md` 随 c1ff302 删除，未迁移。
 
 Tauri 壳（M1.1，dev 模式自带 Vite dev server）：
 
@@ -79,8 +80,13 @@ Xvfb 下首帧慢（实测窗口约 30 秒后才映射），需要 `WEBKIT_DISAB
 桌面壳启动适配器：
 
 ```bash
-STUDIO_RUNTIME_EXECUTABLE=$PWD/packages/runtime-stepcode/bin/step-studio-runtime npm run preview
+cd apps/desktop-tauri && npm run tauri:dev
 ```
+
+壳按 `daemon_binary` 的顺序找 daemon：先自己同目录，再 `<repo>/target/{release,debug}/`；
+daemon 用同样的顺序找 adapter。原
+`STUDIO_RUNTIME_EXECUTABLE=$PWD/packages/runtime-stepcode/bin/step-studio-runtime npm run preview`
+随 c1ff302 作废——`preview` 脚本与它指向的 TS 适配器都不在了。
 
 Host 直接 spawn 这个可执行文件并传 `--mode studio-host ...`，所以它不能是 Node 脚本。
 

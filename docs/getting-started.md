@@ -1,10 +1,12 @@
 # Getting started
 
-OMP Studio ships Windows x64 and ARM64 Setup packages through [GitHub Releases](https://github.com/the-snowpear/omp-studio/releases). You can also build from source with `npm run pack:win`. Runtime and update catalogs use Ed25519 signatures; Windows Setup is not Authenticode-signed.
+The desktop app is a Tauri shell (`apps/desktop-tauri`) over a React renderer
+(`apps/renderer`). Runtime and update catalogs use Ed25519 signatures; the
+Windows Setup is not Authenticode-signed.
 
-macOS 13 or later on Apple Silicon also runs from source, or as an ad hoc signed
-app built with `npm run pack:mac` (not notarized yet; see
-[macOS app](#macos-app-ad-hoc-signed)).
+macOS 13 or later on Apple Silicon also runs from source. The ad hoc signed app
+path is not wired up yet — `npm run pack:mac` points at a script that does not
+exist in this checkout.
 
 ## Requirements
 
@@ -33,18 +35,21 @@ If you already cloned without submodules:
 git submodule update --init --recursive
 ```
 
-## Install and run (preview)
+## Install and run
 
 ```powershell
 npm install
-npm run omp:overlay:apply
-npm run preview
+cd apps\desktop-tauri
+npm run tauri:dev
 ```
 
-On Windows you can also double-click `preview.cmd` at the repository root.
-This builds the Electron main process and renderer, then opens the desktop
-window. On macOS the preview is the stock Electron app, so the Dock shows
-"Electron" rather than OMP Studio.
+`tauri:dev` runs `build.beforeDevCommand` — the preload bridge, then the Vite
+dev server on port 5173 — and opens the desktop window against it. The first
+start takes several minutes.
+
+There is no `npm run preview` and `preview.cmd` is dead: both point at
+`scripts/preview.mjs`, which is not in this checkout. The Electron preview they
+describe is gone with the Electron shell.
 
 The first start may take several minutes. This snapshot hides the in-app
 **预览** switch (`PREVIEW_MODE_SWITCH_ENABLED=false`) and uses Host / desktop
@@ -60,7 +65,8 @@ npm run omp:overlay:apply
 npm run omp:keys              # once per machine; writes keys under %APPDATA%\omp-studio\keys
                               # (macOS: ~/Library/Application Support/omp-studio/keys)
 npm run omp:build:host
-npm run preview
+cd apps\desktop-tauri
+npm run tauri:dev
 ```
 
 `omp:overlay:apply` copies Studio’s overlay and seam patches into the
@@ -73,45 +79,49 @@ Host logs: `%APPDATA%\omp-studio\logs\host-YYYY-MM-DD.log`; on macOS
 
 ## Windows installer (unsigned)
 
-Requires a machine that can already `npm run omp:build:host` (Bun, MSVC, Rust,
-and `npm run omp:keys` once). Then:
+`npm run pack:win` is declared in `package.json` but `scripts/pack-win.mjs` is
+not in this checkout, so it fails immediately. What does work is Tauri's own
+bundler, which produces a Setup carrying the shell, the daemon and the adapter:
 
 ```powershell
-npm run pack:win
+cd apps\desktop-tauri
+tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin
 ```
 
-Output: `outputs/installer/OMP-Studio-Setup-<version>-windows-<arch>.exe` (gitignored).
-The Setup is not Authenticode-signed; SmartScreen will warn. `pack:win` audits
-the unpacked tree so a Runtime **private** key cannot ship.
+Output: `target/x86_64-pc-windows-msvc/release/bundle/nsis/Step Studio_<version>_x64-setup.exe`.
+The Setup is not Authenticode-signed; SmartScreen will warn. Cross-building from
+Linux needs `cargo-xwin` for the MSVC sysroot, and the command must run from
+`apps/desktop-tauri` — see
+[BUNDLE-TARGETS.md](../apps/desktop-tauri/src-tauri/BUNDLE-TARGETS.md) for why
+each of those is load-bearing.
 
-Reuse an existing signed Runtime artifact:
-
-```powershell
-npm run pack:win -- --skip-host
-```
+To run on a Windows machine without installing, copy `step-studio-desktop-tauri.exe`,
+`step-studio-host.exe` and `step-studio-runtime.exe` into one directory and start
+the first one; the shell looks for the other two beside itself. What that run
+should measure is in
+[windows-real-machine-test.md](windows-real-machine-test.md).
 
 ## macOS app (ad hoc signed)
 
-On an Apple Silicon Mac that can already run `npm run omp:build:host`:
+Not wired up in this checkout. `npm run pack:mac` points at
+`scripts/pack-mac.mjs`, which does not exist, so the command fails before it
+builds anything. What Tauri's own bundler produces on an Apple Silicon Mac:
 
 ```bash
-npm run pack:mac                   # add -- --skip-host to reuse the signed Runtime artifact
+cd apps/desktop-tauri
+npm run tauri:build
 ```
 
-Output in `outputs/installer-mac/` (gitignored):
+Output in `target/release/bundle/`: `dmg/Step Studio_<version>_aarch64.dmg` and
+`macos/Step Studio.app`. Signing, notarization and the bundle audit described in
+[packaging/README.md](../packaging/README.md) are not part of that path yet.
 
-- `mac-arm64/OMP Studio.app`;
-- `OMP-Studio-<version>-macos-arm64.dmg`, for a first install;
-- `OMP-Studio-<version>-macos-arm64.zip`, the in-app update payload.
-
-The build fails closed if the bundle audit finds a problem (see
-[packaging/README.md](../packaging/README.md)).
-
-The app is signed ad hoc and not notarized, so the first launch is blocked.
+When it is signed ad hoc and not notarized, the first launch is blocked.
 Choose "Open Anyway" in System Settings › Privacy & Security, or run
 `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`. Every update
 changes the ad hoc signature, so macOS asks again for microphone, folder and
 local network access, and the Keychain may ask to allow access once more.
+
 
 ## Verify
 

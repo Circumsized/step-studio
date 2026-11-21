@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>OMP Runtime 的桌面控制台</strong><br>
-  类型化 Studio Bridge · Electron 工作台 · Windows / macOS
+  类型化 Studio Bridge · Tauri 工作台 · Windows / macOS
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
 <p align="center">
   <a href="https://github.com/the-snowpear/omp-studio/actions/workflows/ci.yml"><img src="https://github.com/the-snowpear/omp-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.6-informational.svg" alt="0.1.6"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.17-informational.svg" alt="0.1.17"></a>
   <a href="docs/getting-started.md"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4.svg" alt="Windows | macOS"></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22-339933.svg" alt="Node 22+"></a>
   <a href="https://linux.do/"><img src="https://img.shields.io/badge/LINUX%20DO-Community-FFB003.svg" alt="LINUX DO"></a>
@@ -89,7 +89,7 @@ Skills、Plugins、MCP、Slash Commands 同一页开关、探测和打开目录�
 > [!TIP]
 > **安装与运行：** 前往 [GitHub Releases](https://github.com/the-snowpear/omp-studio/releases) 下载 Windows x64 / ARM64 安装包或 macOS Apple Silicon DMG，或参考下方说明从源码构建运行。macOS 包为 ad hoc 签名，首次打开可能需要在「系统设置 → 隐私与安全性」确认。如遇问题欢迎提交 [Issue](https://github.com/the-snowpear/omp-studio/issues)。
 >
-> **macOS（Apple Silicon，macOS 13+）：** 发布附带 `OMP-Studio-<版本>-macos-arm64.dmg` 时，打开 dmg，把 OMP Studio 拖进“应用程序”。目前是 ad hoc 签名、尚未公证的预览版：首次打开会被拦截，请到“系统设置 › 隐私与安全性”点“仍要打开”，或执行 `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`。也可以按 [docs/getting-started.md](docs/getting-started.md) 从源码运行或用 `npm run pack:mac` 自行打包。
+> **macOS（Apple Silicon，macOS 13+）：** 发布附带 `OMP-Studio-<版本>-macos-arm64.dmg` 时，打开 dmg，把 OMP Studio 拖进“应用程序”。目前是 ad hoc 签名、尚未公证的预览版：首次打开会被拦截，请到“系统设置 › 隐私与安全性”点“仍要打开”，或执行 `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`。也可以按 [docs/getting-started.md](docs/getting-started.md) 从源码构建。
 
 ## 能做什么
 
@@ -108,11 +108,13 @@ Skills、Plugins、MCP、Slash Commands 同一页开关、探测和打开目录�
 git clone --recurse-submodules https://github.com/the-snowpear/omp-studio.git
 cd omp-studio
 npm install
-npm run omp:overlay:apply
-npm run preview
+cd apps\desktop-tauri
+npm run tauri:dev
 ```
 
-Windows 也可以双击仓库根目录的 `preview.cmd`。macOS 需要 Xcode Command Line Tools，其余步骤相同。
+`tauri:dev` 先构建 preload 桥与 renderer，再打开桌面窗口，首次需要几分钟。
+要的是可分发的安装包时，把最后一行换成 `npm run tauri:build`；拿到 Windows 上要跑什么、
+抓什么，见 [docs/windows-real-machine-test.md](docs/windows-real-machine-test.md)。
 
 接上真实 Runtime（首次较慢）：
 
@@ -121,7 +123,8 @@ npm run omp:install-deps
 npm run omp:overlay:apply
 npm run omp:keys
 npm run omp:build:host
-npm run preview
+cd apps\desktop-tauri
+npm run tauri:dev
 ```
 
 模型与登录沿用 OMP 的 `models.yml` / `omp login`。本仓库不内置任何供应商密钥。
@@ -129,13 +132,14 @@ npm run preview
 ## 仓库结构
 
 ```
-apps/desktop          Electron 主进程
-apps/renderer         Vite + React 工作台
+apps/desktop-tauri      Tauri 壳（Rust）+ preload 桥
+apps/desktop-tui       终端界面
+apps/renderer          Vite + React 工作台
 packages/             协议、Host、客户端、传输、平台
 omp-patch/overlay     Studio 自有 Runtime 源码
 omp-patch/patches     对上游文件的接缝补丁（不要手改）
 omp-patch/vendor      oh-my-pi 子模块（只提交 gitlink）
-packaging/            Windows NSIS 安装器骨架；macOS 签名配置（packaging/mac）
+packaging/            发布签名密钥与说明
 ui_reference/ver1     视觉参考，不是产品代码
 docs/                 使用与开发文档
 ```
