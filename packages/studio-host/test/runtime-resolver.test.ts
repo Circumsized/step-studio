@@ -14,9 +14,9 @@ import type {
   RuntimePreference,
   StateVersion,
   StudioHelloResponse,
-} from "@omp-studio/studio-protocol";
-import { FULL_PARITY_REQUIRED_CAPABILITIES } from "@omp-studio/studio-protocol";
-import { runtimeEntrypointFor } from "@omp-studio/runtime-installer";
+} from "@step-studio/studio-protocol";
+import { FULL_PARITY_REQUIRED_CAPABILITIES } from "@step-studio/studio-protocol";
+import { runtimeEntrypointFor } from "@step-studio/runtime-installer";
 import {
   buildProcessProbeArgs,
   createPathLocator,
@@ -99,7 +99,7 @@ function environment(partial: Partial<RuntimeResolverEnvironment> = {}): Runtime
 const HOST_ENTRYPOINT = runtimeEntrypointFor(process.platform);
 
 async function executableFile(): Promise<{ directory: string; path: string }> {
-  const directory = await mkdtemp(join(tmpdir(), "omp-studio-resolver-"));
+  const directory = await mkdtemp(join(tmpdir(), "step-studio-resolver-"));
   const path = join(directory, HOST_ENTRYPOINT);
   await writeFile(path, "fixture-bytes");
   return { directory, path };
@@ -376,10 +376,10 @@ test("path validation rejects relative, missing, and non-file targets", async ()
   const relative = await validateExecutablePath("relative\\omp.exe");
   assert.equal(relative.ok, false);
   assert.match(relative.reason ?? "", /absolute path/u);
-  const missing = await validateExecutablePath(join(tmpdir(), "omp-studio-missing-xyz"));
+  const missing = await validateExecutablePath(join(tmpdir(), "step-studio-missing-xyz"));
   assert.equal(missing.ok, false);
   assert.match(missing.reason ?? "", /does not exist/u);
-  const directory = await mkdtemp(join(tmpdir(), "omp-studio-resolver-dir-"));
+  const directory = await mkdtemp(join(tmpdir(), "step-studio-resolver-dir-"));
   const notFile = await validateExecutablePath(directory);
   assert.equal(notFile.ok, false);
   assert.match(notFile.reason ?? "", /regular file/u);
@@ -392,7 +392,7 @@ test("path validation rejects relative, missing, and non-file targets", async ()
 });
 
 test("a POSIX PATH symlink resolves to a safe real executable and nothing else", { skip: process.platform === "win32" ? "POSIX symlinks" : false }, async (t) => {
-  const root = await mkdtemp(join(tmpdir(), "omp-studio-resolver-link-"));
+  const root = await mkdtemp(join(tmpdir(), "step-studio-resolver-link-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const cellar = join(root, "Cellar", "omp", "1.0.0", "bin");
   const bin = join(root, "bin");

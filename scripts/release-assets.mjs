@@ -30,12 +30,12 @@ export function assetPlatformLabel(platform) {
 }
 
 export function runtimeArchiveAssetName(runtimeVersion, platform) {
-  return `OMP-Studio-Runtime-${runtimeVersion}-${assetPlatformLabel(platform)}.zip`;
+  return `Step-Studio-Runtime-${runtimeVersion}-${assetPlatformLabel(platform)}.zip`;
 }
 
 /** The desktop artifact the update catalog points at: the NSIS Setup, or the macOS update zip. */
 export function appUpdateAssetName(appVersion, platform) {
-  return runtimeOsOf(platform) === "darwin" ? macUpdateZipFileName(appVersion) : `OMP-Studio-Setup-${appVersion}-windows-${archOf(platform)}.exe`;
+  return runtimeOsOf(platform) === "darwin" ? macUpdateZipFileName(appVersion) : `Step-Studio-Setup-${appVersion}-windows-${archOf(platform)}.exe`;
 }
 
 /** Where pack:win / pack:mac leave that artifact. */

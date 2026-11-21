@@ -1,4 +1,4 @@
-import type { CapabilityManifest } from "@omp-studio/studio-protocol";
+import type { CapabilityManifest } from "@step-studio/studio-protocol";
 
 /**
  * Composer `gated` (busy / snapshotReady / executionMatches / can()) is

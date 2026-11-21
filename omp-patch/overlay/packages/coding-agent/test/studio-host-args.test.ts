@@ -11,16 +11,16 @@ describe("studio-host launch arguments", () => {
 			"--mode",
 			"studio-host",
 			"--bridge-endpoint",
-			"omp-studio-test",
+			"step-studio-test",
 			"--bridge-token-file",
-			"C:\\temp\\omp-studio.token",
+			"C:\\temp\\step-studio.token",
 			"--bridge-runtime-epoch",
 			"7",
 		]);
 
 		expect(parsed.mode).toBe("studio-host");
-		expect(parsed.bridgeEndpoint).toBe("omp-studio-test");
-		expect(parsed.bridgeTokenFile).toBe("C:\\temp\\omp-studio.token");
+		expect(parsed.bridgeEndpoint).toBe("step-studio-test");
+		expect(parsed.bridgeTokenFile).toBe("C:\\temp\\step-studio.token");
 		expect(parsed.bridgeRuntimeEpoch).toBe(7);
 		expect(parsed.unrecognizedFlags).toEqual([]);
 	});
@@ -30,7 +30,7 @@ describe("studio-host launch arguments", () => {
 	});
 
 	test("creates a distinct Studio session even when CLI auto-resume is enabled", async () => {
-		using directory = TempDir.createSync("@omp-studio-fresh-");
+		using directory = TempDir.createSync("@step-studio-fresh-");
 		const previous = SessionManager.create(directory.path(), directory.path());
 		previous.appendMessage({ role: "user", content: "Existing session", timestamp: Date.now() });
 		let created: SessionManager | undefined;
@@ -52,7 +52,7 @@ describe("studio-host launch arguments", () => {
 	});
 
 	test("keeps explicit Studio resume and ordinary CLI auto-resume", async () => {
-		using directory = TempDir.createSync("@omp-studio-resume-");
+		using directory = TempDir.createSync("@step-studio-resume-");
 		const previous = SessionManager.create(directory.path(), directory.path());
 		previous.appendMessage({ role: "user", content: "Existing session", timestamp: Date.now() });
 		await previous.ensureOnDisk();

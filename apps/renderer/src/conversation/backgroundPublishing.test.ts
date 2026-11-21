@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import type { SessionId } from "@omp-studio/client-contract";
+import type { SessionId } from "@step-studio/client-contract";
 import { ConversationStore } from "./conversationStore";
 
 const stores: ConversationStore[] = [];

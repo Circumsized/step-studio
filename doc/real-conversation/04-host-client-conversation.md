@@ -220,16 +220,16 @@ interface ConversationState {
 ## 11. 验收命令
 
 ```bash
-npm run typecheck -w @omp-studio/studio-host
-npm test -w @omp-studio/studio-host
-npm run typecheck -w @omp-studio/host-client-api
-npm test -w @omp-studio/host-client-api
-npm run typecheck -w @omp-studio/client-contract
-npm run typecheck -w @omp-studio/client
-npm test -w @omp-studio/client
-npm run typecheck -w @omp-studio/transport-desktop
-npm test -w @omp-studio/transport-desktop
-npm test -w @omp-studio/testkit
+npm run typecheck -w @step-studio/studio-host
+npm test -w @step-studio/studio-host
+npm run typecheck -w @step-studio/host-client-api
+npm test -w @step-studio/host-client-api
+npm run typecheck -w @step-studio/client-contract
+npm run typecheck -w @step-studio/client
+npm test -w @step-studio/client
+npm run typecheck -w @step-studio/transport-desktop
+npm test -w @step-studio/transport-desktop
+npm test -w @step-studio/testkit
 ```
 
 注意根 `npm test` 当前不一定覆盖 `host-client-api`；必须显式运行上面的 package test。

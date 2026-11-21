@@ -1,7 +1,7 @@
 import { selectOption } from "../test/selectOption";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import { I18nProvider } from "../i18n";
 import { PreviewModeProvider } from "../preview/PreviewContext";
 import { PREVIEW_MODE_STORAGE_KEY } from "../preview/mode";

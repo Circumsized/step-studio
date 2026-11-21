@@ -1,5 +1,5 @@
-import type { ClientEvent } from "@omp-studio/client-contract";
-import type { ClientState } from "@omp-studio/client";
+import type { ClientEvent } from "@step-studio/client-contract";
+import type { ClientState } from "@step-studio/client";
 
 /** Bottom-bar event log row: identity only, never the live payload. */
 export type ShellEventLogEntry = {

@@ -1,4 +1,4 @@
-import type { StudioAgentSnapshot } from "@omp-studio/studio-protocol";
+import type { StudioAgentSnapshot } from "@step-studio/studio-protocol";
 import { AssistantRunView, ConversationItemView, type AssistantRunEntry } from "./ConversationItemView";
 import type { AssistantSegment, TimelineRow } from "./conversationViewModel";
 import { timelineRowKey, timelineShapeToken, timelineStructureToken } from "./conversationViewModel";

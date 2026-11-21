@@ -1,6 +1,6 @@
 import { AppSelect } from "./AppSelect";
 import { useEffect, useRef, useState } from "react";
-import type { ForeignSessionSummary, ForeignSource, StudioClient, WorkspaceRecord, WorkspaceId } from "@omp-studio/client-contract";
+import type { ForeignSessionSummary, ForeignSource, StudioClient, WorkspaceRecord, WorkspaceId } from "@step-studio/client-contract";
 import { invokeUpgrade, useUpgradeAvailable } from "./runtimeUpgrade";
 import { hostErrorMessage } from "./hostError";
 import { usePreviewMode } from "./preview/PreviewContext";

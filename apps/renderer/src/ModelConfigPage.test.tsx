@@ -8,7 +8,7 @@ import type {
   ModelDiscoveryResult,
   ModelProviderRecord,
   StudioClient,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import { ModelConfigPage } from "./ModelConfigPage";
 import { PreviewModeProvider } from "./preview/PreviewContext";
@@ -121,7 +121,7 @@ function fakeClient(probe: ModelDiscoveryResult | Error = PROBE_OK, modelConfig?
   readonly query: ReturnType<typeof vi.fn>;
   readonly command: ReturnType<typeof vi.fn>;
 } {
-  const query = vi.fn(async (name: string, input: import("@omp-studio/client-contract").ModelAdaptationInput) => {
+  const query = vi.fn(async (name: string, input: import("@step-studio/client-contract").ModelAdaptationInput) => {
     if (name === "models.adaptation.resolve") {
       const result = previewModelAdaptation(input);
       if (input.modelId !== "glm-5") return result;

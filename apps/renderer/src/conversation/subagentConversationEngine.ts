@@ -1,6 +1,6 @@
-import type { ClientEvent, ConversationItem, SessionId, StudioClient } from "@omp-studio/client-contract";
-import { CONVERSATION_LIMITS, utf8ByteLength } from "@omp-studio/client-contract";
-import type { AgentId, ConversationTarget } from "@omp-studio/studio-protocol";
+import type { ClientEvent, ConversationItem, SessionId, StudioClient } from "@step-studio/client-contract";
+import { CONVERSATION_LIMITS, utf8ByteLength } from "@step-studio/client-contract";
+import type { AgentId, ConversationTarget } from "@step-studio/studio-protocol";
 import { previewSubagentConversationItems } from "../preview/subagentConversation";
 import { asClientError, identityKey, isStaleCursorError } from "./conversationHost";
 import { createConversationSource } from "./conversationSource";

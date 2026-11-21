@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ClientInteraction, InteractionResponseValue } from "@omp-studio/client-contract";
+import type { ClientInteraction, InteractionResponseValue } from "@step-studio/client-contract";
 import { ApprovalCard } from "./deck/ApprovalCard";
 import { AskActions, AskBody, AskHead } from "./deck/AskCard";
 import { ASK_GENIE_MS, prefersReducedMotion } from "./deck/askGenie";

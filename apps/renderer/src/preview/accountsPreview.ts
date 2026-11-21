@@ -1,4 +1,4 @@
-import type { AccountStatusResult } from "@omp-studio/studio-protocol";
+import type { AccountStatusResult } from "@step-studio/studio-protocol";
 const previewNow = Date.now();
 export const PREVIEW_ACCOUNT_STATUS: AccountStatusResult = {
   refreshing: false,

@@ -1,5 +1,5 @@
 {
-  "name": "@omp-studio/runtime-installer",
+  "name": "@step-studio/runtime-installer",
   "version": "0.1.17",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "test:built": "node --test \"dist/test/*.test.js\""
   },
   "dependencies": {
-    "@omp-studio/studio-protocol": "0.1.17",
+    "@step-studio/studio-protocol": "0.1.17",
     "fflate": "0.8.2"
   }
 }

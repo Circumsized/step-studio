@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
-import type { PredictionControlAction, PredictionControlState } from "@omp-studio/studio-protocol";
+import type { StudioClient } from "@step-studio/client-contract";
+import type { PredictionControlAction, PredictionControlState } from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";

@@ -33,7 +33,7 @@ it("fits automatic resize without taking focus away from the composer", async ()
     write: vi.fn().mockResolvedValue(undefined), resize: vi.fn().mockResolvedValue(undefined), dispose: vi.fn().mockResolvedValue(undefined),
     onData: vi.fn(() => () => {}), onExit: vi.fn(() => () => {}),
   };
-  vi.stubGlobal("ompStudioTerminal", api);
+  vi.stubGlobal("stepStudioTerminal", api);
   render(<><input aria-label="Composer" /><Harness visible /></>);
   await waitFor(() => expect(mocks.terminals).toHaveLength(1));
   await waitFor(() => expect(mocks.terminals[0]!.focus).toHaveBeenCalled());
@@ -58,7 +58,7 @@ it("updates live and hidden terminal fonts without recreating the shell or steal
     write: vi.fn().mockResolvedValue(undefined), resize: vi.fn().mockResolvedValue(undefined), dispose: vi.fn().mockResolvedValue(undefined),
     onData: vi.fn(listener => { onData = listener; return () => {}; }), onExit: vi.fn(() => () => {}),
   };
-  vi.stubGlobal("ompStudioTerminal", api);
+  vi.stubGlobal("stepStudioTerminal", api);
   const view = render(<Harness visible />);
   await waitFor(() => expect(mocks.terminals).toHaveLength(1));
   act(() => onData({ id: "shell-1", data: "retained shell output" }));

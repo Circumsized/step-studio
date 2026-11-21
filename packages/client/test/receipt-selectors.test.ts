@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { CommandRequestId, CommandState } from "@omp-studio/client-contract";
+import type { CommandRequestId, CommandState } from "@step-studio/client-contract";
 
 import { reduceClientState, createInitialClientState } from "../src/reducer.js";
 import { selectComposerReceipt, selectComposerTerminal } from "../src/receipt-selectors.js";

@@ -105,14 +105,14 @@ export async function listSettingsExtensionRoots(home: string, cwd: string): Pro
 
 ## 4. 测试结果
 
-### `npm test -w @omp-studio/host-client-api`（完整输出）
+### `npm test -w @step-studio/host-client-api`（完整输出）
 
 ```
-> @omp-studio/host-client-api@0.1.0 test
+> @step-studio/host-client-api@0.1.0 test
 > npm run build && node --test "dist/test/*.test.js"
 
 
-> @omp-studio/host-client-api@0.1.0 build
+> @step-studio/host-client-api@0.1.0 build
 > tsc -p tsconfig.json
 
 ▶ omp-discovery scope alignment
@@ -145,16 +145,16 @@ export async function listSettingsExtensionRoots(home: string, cwd: string): Pro
 ℹ duration_ms 240.2913
 ```
 
-### `npm run typecheck -w @omp-studio/host-client-api`（完整输出）
+### `npm run typecheck -w @step-studio/host-client-api`（完整输出）
 
 ```
-> @omp-studio/host-client-api@0.1.0 typecheck
+> @step-studio/host-client-api@0.1.0 typecheck
 > tsc -p tsconfig.json --noEmit
 ```
 
 （无输出，退出码 0）
 
-另跑 `npm run typecheck -w @omp-studio/renderer`（`tsc -b`）通过 —— UI 文案改动未破坏 renderer。
+另跑 `npm run typecheck -w @step-studio/renderer`（`tsc -b`）通过 —— UI 文案改动未破坏 renderer。
 
 ### 新用例列表（`test/omp-discovery.test.ts`）与验收标准对应
 

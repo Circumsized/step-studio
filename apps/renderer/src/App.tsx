@@ -32,7 +32,7 @@ import { useCompactTopbar } from "./layout/useCompactTopbar";
 import { beforeConversationLayoutChange } from "./conversation/conversationReflow";
 import { panelSize, SIDEBAR_LIMITS, SIDE_PANEL_LIMITS } from "./layout/workbenchLayout";
 import type { CSSProperties, FormEvent as ReactFormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { CLIENT_CONTRACT_VERSION } from "@omp-studio/client-contract";
+import { CLIENT_CONTRACT_VERSION } from "@step-studio/client-contract";
 import type {
   AuthorityEpoch,
   AuthorityId,
@@ -65,8 +65,8 @@ import type {
   WorkspaceFileTreeReadModel,
   PromptImageInput,
   ContinueTurnOutcome,
-} from "@omp-studio/client-contract";
-import { selectComposerReceipt, type ClientState } from "@omp-studio/client";
+} from "@step-studio/client-contract";
+import { selectComposerReceipt, type ClientState } from "@step-studio/client";
 import {
   clientShellChanged,
   layoutRestoreNeeded,
@@ -74,8 +74,8 @@ import {
   toShellEventLogEntry,
   type ShellEventLogEntry,
 } from "./shellMemory";
-import type { ApprovalMode, OperatorStateSnapshot, SessionTelemetrySnapshot, StudioAgentSnapshot } from "@omp-studio/studio-protocol";
-import type { OperatorCommandManifest } from "@omp-studio/studio-protocol";
+import type { ApprovalMode, OperatorStateSnapshot, SessionTelemetrySnapshot, StudioAgentSnapshot } from "@step-studio/studio-protocol";
+import type { OperatorCommandManifest } from "@step-studio/studio-protocol";
 import { AppIcon, Icon } from "./icons";
 import { FileRowMenu, MenuItem, type FileMenuAction, type FileMenuController, type FileMenuTarget, type FileOpenerOption } from "./menus";
 import { I18nProvider, useI18n, type TranslationParams } from "./i18n";
@@ -133,7 +133,7 @@ import {
 import { snapshotFromDoc, snapshotFromText, snapshotFromTextAndImages, snapshotIsEmpty } from "./composer/serialize";
 import { emptySnapshot, fileLabel, type ComposerSnapshot } from "./composer/types";
 import { mergeUsedSkills, skillNamesInDoc, skillNamesInText } from "./skills/skillUsage";
-import type { StudioSpeed } from "@omp-studio/studio-protocol";
+import type { StudioSpeed } from "@step-studio/studio-protocol";
 import { ComposerSpeedControl } from "./composer/ComposerSpeedControl";
 import { SessionModelRecovery } from "./models/SessionModelRecovery";
 import { RuntimeQueueBar } from "./composer/RuntimeQueueBar";
@@ -668,7 +668,7 @@ const TOASTED_NOTICE_MEMORY = 400;
 const TRAIL_MAX = 100;
 
 function setSlashUiIntent(ui: SlashNativeUi): void {
-  window.dispatchEvent(new CustomEvent("omp-studio-slash-ui", { detail: ui }));
+  window.dispatchEvent(new CustomEvent("step-studio-slash-ui", { detail: ui }));
   try {
     sessionStorage.setItem(SLASH_UI_INTENT_KEY, ui);
   } catch {
@@ -1348,7 +1348,7 @@ function VirtualEventTranscript({ events }: { events: readonly ShellEventLogEntr
   );
 }
 
-const CURRENT_PROJECT = { id: "omp-studio", name: "Step Studio" } as const;
+const CURRENT_PROJECT = { id: "step-studio", name: "Step Studio" } as const;
 
 type SelectedProject = { readonly id: string; readonly name: string };
 
@@ -3882,7 +3882,7 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
   const promptDispatchGate = useMemo(createComposerDispatchGate, []);
   useEffect(() => () => promptUnsub.current?.(), []);
   const terminalRef = useRef<TerminalPaneHandle>(null);
-  const terminalAvailable = typeof globalThis.ompStudioTerminal !== "undefined";
+  const terminalAvailable = typeof globalThis.stepStudioTerminal !== "undefined";
   const { preview } = usePreviewMode();
   const treeConfirm = useUserMessageTreeConfirm(preview);
   const [inspectTarget, setInspectTarget] = useState<SubagentHubTarget | null>(null);
@@ -5544,8 +5544,8 @@ function WorkbenchCanvas({ layoutOverlayDismiss, state, client, onOpenWorktree, 
     const ui = takeSlashUiIntent();
     if (ui !== undefined) openSlashUi(ui);
     const receive = (event: Event) => openSlashUi((event as CustomEvent<SlashNativeUi>).detail);
-    window.addEventListener("omp-studio-slash-ui", receive);
-    return () => window.removeEventListener("omp-studio-slash-ui", receive);
+    window.addEventListener("step-studio-slash-ui", receive);
+    return () => window.removeEventListener("step-studio-slash-ui", receive);
   }, []);
   async function runSlashCommand(command: StudioSlashCommand, args: string): Promise<boolean> {
     if (command.name === "local") { setLocalFileName(args.trim()); setLocalFilesOpen(true); return true; }

@@ -17,7 +17,7 @@ import type {
   ConversationRuntimeEvent,
   OpaqueCursor,
   SessionId,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import { ConversationPane } from "./conversation/ConversationPane";
 import { ConversationMinimap } from "./conversation/ConversationMinimap";
 import { ConversationStore } from "./conversation/conversationStore";

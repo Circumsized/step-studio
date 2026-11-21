@@ -1,7 +1,7 @@
 import { AppSelect } from "../AppSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CommandInput, SessionHistoryEntry, StudioClient, WorkspaceId, WorkspaceRecord } from "@omp-studio/client-contract";
-import type { SessionPortabilityResultMap, SessionPortabilityStatus } from "@omp-studio/studio-protocol";
+import type { CommandInput, SessionHistoryEntry, StudioClient, WorkspaceId, WorkspaceRecord } from "@step-studio/client-contract";
+import type { SessionPortabilityResultMap, SessionPortabilityStatus } from "@step-studio/studio-protocol";
 import type { NativeHistoryContext } from "./NativeArchivePane";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { PREVIEW_TRANSFER_SESSIONS, previewTransferExport, previewTransferImport } from "../preview/sessionPortabilityPreview";

@@ -1,4 +1,4 @@
-import type { ArtifactRecord } from "@omp-studio/studio-protocol";
+import type { ArtifactRecord } from "@step-studio/studio-protocol";
 import { shellSurface } from "../chrome";
 const MAX_AUDIO_SECONDS = 600;
 export async function uploadMediaBlob(blob: Blob, name: string, scope: { workspaceId?: string | undefined; sessionId?: string | undefined }, signal?: AbortSignal): Promise<ArtifactRecord> {

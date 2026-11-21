@@ -22,7 +22,7 @@ import type {
   AgentDefinitionUpsertInput,
   AgentThinkingLevel,
   ConfigWriteResult,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import { parseFrontmatter } from "./omp-discovery/frontmatter.js";
 import { listClaudePluginRoots } from "./omp-discovery/helpers.js";

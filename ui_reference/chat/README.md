@@ -187,7 +187,7 @@
 
 ```bash
 # 使用 Python
-cd D:\Project\omp-studio\ui_reference\chat
+cd D:\Project\step-studio\ui_reference\chat
 python -m http.server 8080
 
 # 或使用 Node.js

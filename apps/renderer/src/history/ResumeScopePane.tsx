@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { StudioClient, WorkspaceId } from "@omp-studio/client-contract";
-import type { SessionResumeRow, SessionWorktreeResultMap } from "@omp-studio/studio-protocol";
+import type { StudioClient, WorkspaceId } from "@step-studio/client-contract";
+import type { SessionResumeRow, SessionWorktreeResultMap } from "@step-studio/studio-protocol";
 import { AppSelect } from "../AppSelect";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { PREVIEW_RESUME_SESSIONS } from "../preview/resumeScopePreview";

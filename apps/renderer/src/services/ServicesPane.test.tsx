@@ -1,13 +1,13 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { ClientBootstrap, StudioClient } from "@omp-studio/client-contract";
+import type { ClientBootstrap, StudioClient } from "@step-studio/client-contract";
 import { I18nProvider } from "../i18n";
 import { PreviewModeProvider } from "../preview/PreviewContext";
 import { PREVIEW_MODE_STORAGE_KEY } from "../preview/mode";
 import { ServicesPane } from "./ServicesPane";
 
-const initialChrome = window.ompStudioChrome;
-afterEach(() => { cleanup(); window.localStorage.removeItem(PREVIEW_MODE_STORAGE_KEY); window.ompStudioChrome = initialChrome; });
+const initialChrome = window.stepStudioChrome;
+afterEach(() => { cleanup(); window.localStorage.removeItem(PREVIEW_MODE_STORAGE_KEY); window.stepStudioChrome = initialChrome; });
 function mount(preview: boolean) {
   window.localStorage.setItem(PREVIEW_MODE_STORAGE_KEY, preview ? "1" : "0");
   const client = { command: vi.fn(), subscribe: vi.fn() } as unknown as StudioClient;
@@ -18,7 +18,7 @@ function mount(preview: boolean) {
 }
 it("preview creates and controls demo services without calling Host or desktop storage", async () => {
   const save = vi.fn();
-  window.ompStudioChrome = { saveServiceDefinition: save } as unknown as NonNullable<typeof window.ompStudioChrome>;
+  window.stepStudioChrome = { saveServiceDefinition: save } as unknown as NonNullable<typeof window.stepStudioChrome>;
   const client = mount(true);
   await screen.findAllByText("web-dev");
   fireEvent.click(screen.getByRole("button", { name: "新建服务" }));
@@ -35,11 +35,11 @@ it("saving a real configuration never starts a process and defaults to session l
   // capability bit and that bit requires the whole group. A stub with two of the
   // three is a half-wired shell, and the bit correctly reports unavailable — which
   // is the behaviour the bit exists for, reached here by an incomplete fixture.
-  window.ompStudioChrome = {
+  window.stepStudioChrome = {
     listServiceDefinitions: vi.fn(async () => ({ ok: true, definitions: [] })),
     saveServiceDefinition: saved,
     removeServiceDefinition: vi.fn(async () => ({ ok: true, definitions: [] })),
-  } as unknown as NonNullable<typeof window.ompStudioChrome>;
+  } as unknown as NonNullable<typeof window.stepStudioChrome>;
   const client = mount(false);
   fireEvent.click(await screen.findByRole("button", { name: "新建服务" }));
   fireEvent.change(screen.getByLabelText("名称"), { target: { value: "server" } });

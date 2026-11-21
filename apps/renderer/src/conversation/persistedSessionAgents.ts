@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SessionId, StudioClient } from "@omp-studio/client-contract";
-import type { StudioAgentSnapshot } from "@omp-studio/studio-protocol";
+import type { SessionId, StudioClient } from "@step-studio/client-contract";
+import type { StudioAgentSnapshot } from "@step-studio/studio-protocol";
 
 /**
  * 落盘记录只补 live 缺的度量，不改 live 的身份/状态：Agent 停靠（park）后 runtime

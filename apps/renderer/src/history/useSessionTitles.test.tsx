@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import type {
   StudioClient,
   ClientBootstrap,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import { I18nProvider } from "../i18n";
 import { PreviewModeProvider } from "../preview/PreviewContext";
 import { PREVIEW_MODE_STORAGE_KEY } from "../preview/mode";

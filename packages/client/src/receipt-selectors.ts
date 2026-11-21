@@ -1,4 +1,4 @@
-import type { ClientError, CommandReceipt, CommandRequestId, CommandState } from "@omp-studio/client-contract";
+import type { ClientError, CommandReceipt, CommandRequestId, CommandState } from "@step-studio/client-contract";
 
 export type ComposerReceiptView =
   | { readonly phase: "unknown" }

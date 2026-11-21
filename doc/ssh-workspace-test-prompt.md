@@ -17,7 +17,7 @@ node --test apps/desktop/dist/test/remote-*.test.js
 ```
 
 ```bash
-npm run test -w @omp-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/workspaces/remoteTransport.test.ts src/workspaces/SshPasswordDialog.test.tsx src/conversation/useConversation.test.ts src/conversation/conversation.test.tsx src/terminalSessions.test.tsx src/sidebar/useProjectHistories.test.ts
+npm run test -w @step-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/workspaces/remoteTransport.test.ts src/workspaces/SshPasswordDialog.test.tsx src/conversation/useConversation.test.ts src/conversation/conversation.test.tsx src/terminalSessions.test.tsx src/sidebar/useProjectHistories.test.ts
 ```
 
 以下为先前的完整验收任务，安全边界继续有效；旧的“尚未构建”描述只代表交接时的历史状态。
@@ -30,7 +30,7 @@ npm run test -w @omp-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx
 
 ## 工作目录与现状
 
-- 工作目录：`D:\Project\omp-studio\.claude\worktrees\trusting-khorana-a24ebe`。
+- 工作目录：`D:\Project\step-studio\.claude\worktrees\trusting-khorana-a24ebe`。
 - 分支：`claude/trusting-khorana-a24ebe`，开发基线 `2a561ae374411e8f15c5ff393d26c20392bad755`。
 - 功能都在未提交改动中，包含未跟踪的新文件；不要只看 `git diff` 就漏掉 `apps/desktop/src/remote/` 等目录。不要切到原仓库根目录或创建一个不含这些改动的工作树来测试。
 - 先读 `AGENTS.md`、`doc/feature-index.md`、`docs/ssh-workspaces.md`、`doc/ssh-workspace-progress.md`。
@@ -71,7 +71,7 @@ node --test apps/desktop/dist/test/remote-host.test.js apps/desktop/dist/test/re
 ```
 
 ```bash
-npm run test -w @omp-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/terminalSessions.test.tsx
+npm run test -w @step-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/terminalSessions.test.tsx
 ```
 
 检查 Windows `csc.exe` helper 编译；确认生成的 `omp-ssh-askpass.exe` 位于 `apps/desktop/dist/ssh-askpass`，打包后位于 `resources/ssh-askpass`，没有被全局 EXE 排除规则或 asar 路径挡住。也检查 Mac 打包配置保留脚本可执行位、路径带空格、CRLF、`ELECTRON_RUN_AS_NODE` 以及 Electron run-as-node fuse 的兼容性，但不要把静态检查算作 Mac 实测。

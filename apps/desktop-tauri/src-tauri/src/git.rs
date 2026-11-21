@@ -377,6 +377,16 @@ mod tests {
 /// Same CLI-read decision as [`repository_get`]: one `git log` call with a
 /// record separator gives oid, parents, subject, author, date and every ref
 /// pointing at the commit, which is `GitLogCommitRecord` in full.
+/// Whether a page came back full, which is what `truncated` reports.
+///
+/// The walk fetches one more commit than asked for, so "the extra record
+/// arrived" is the signal — not "exactly this many existed". A repository with
+/// exactly `asked` commits fetches `asked` records and an empty `asked+1`-th,
+/// and must not report truncation.
+fn page_is_truncated(fetched: usize, asked: u64) -> bool {
+    fetched as u64 > asked
+}
+
 pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Value {
     let Some(root) = repo_root() else {
         return json!({
@@ -459,7 +469,7 @@ pub fn log_list(workspace_id: &str, limit: Option<u64>, skip: Option<u64>) -> Va
     // loop and broke at `limit`, so it never saw the `limit+1`-th record — a
     // repository with exactly `limit` commits reported more.
     let asked = limit.unwrap_or(50).min(500);
-    let truncated = commits.len() as u64 > asked;
+    let truncated = page_is_truncated(commits.len(), asked);
     let head = commits.first().map(|commit| commit.get("oid").cloned().unwrap_or(Value::Null));
     json!({
         "workspaceId": workspace_id,
@@ -622,12 +632,22 @@ mod log_tests {
 
     #[test]
     fn asking_for_one_more_than_exist_is_not_truncated() {
-        let model = log_list("ws-1", Some(500), None);
-        assert_eq!(
-            model.get("truncated").and_then(Value::as_bool),
-            Some(false),
-            "the history is shorter than what was asked for"
-        );
+        // The off-by-one, stated against a length the test controls.
+        //
+        // This used to ask the live repository for 500 commits and assert
+        // `truncated == false` — a claim that the history is shorter than 500.
+        // It held while the checkout was a shallow clone at 346 commits, and
+        // silently became unsatisfiable the moment the history was completed to
+        // 529: `log_list` caps a page at `limit.min(500)`, so no request against
+        // this repository can be "more than exists" any more. The bug it guards
+        // is real, so it is now tested where the length is known.
+        assert!(!page_is_truncated(50, 50), "exactly the asked-for count reported more");
+        assert!(!page_is_truncated(500, 500), "the cap boundary reported more");
+        assert!(!page_is_truncated(0, 50), "an empty history reported more");
+        // And one record past the limit does report it, so the check is not
+        // simply refusing.
+        assert!(page_is_truncated(51, 50), "one past the limit was accepted");
+        assert!(page_is_truncated(501, 500), "one past the cap was accepted");
     }
 
     #[test]

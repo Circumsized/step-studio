@@ -16,18 +16,18 @@ import {
 } from "./release-assets.mjs";
 
 test("curated release notes cannot advertise an unbuilt platform", () => {
-  const note = "[Mac](https://github.com/owner/repo/releases/download/v0.1.10/OMP-Studio-0.1.10-macos-arm64.dmg)";
+  const note = "[Mac](https://github.com/owner/repo/releases/download/v0.1.10/Step-Studio-0.1.10-macos-arm64.dmg)";
   assert.throws(() => assertReleaseNoteAssets(note, "owner/repo", "v0.1.10", ["windows.exe"]), /unavailable asset/u);
-  assert.doesNotThrow(() => assertReleaseNoteAssets(note, "owner/repo", "v0.1.10", ["OMP-Studio-0.1.10-macos-arm64.dmg"]));
+  assert.doesNotThrow(() => assertReleaseNoteAssets(note, "owner/repo", "v0.1.10", ["Step-Studio-0.1.10-macos-arm64.dmg"]));
   assert.doesNotThrow(() => assertReleaseNoteAssets(note, "owner/repo", "v0.1.11", []));
 });
 
 test("Windows release names and layout stay exactly as published before", () => {
   for (const arch of ["x64", "arm64"]) {
     const platform = `win32-${arch}`;
-    assert.equal(runtimeArchiveAssetName("18.2.5-studio.13", platform), `OMP-Studio-Runtime-18.2.5-studio.13-windows-${arch}.zip`);
-    assert.equal(appUpdateAssetName("0.2.0", platform), `OMP-Studio-Setup-0.2.0-windows-${arch}.exe`);
-    assert.equal(packagedAppAssetPath("/r", "0.2.0", platform), join("/r", "outputs", "installer", `OMP-Studio-Setup-0.2.0-windows-${arch}.exe`));
+    assert.equal(runtimeArchiveAssetName("18.2.5-studio.13", platform), `Step-Studio-Runtime-18.2.5-studio.13-windows-${arch}.zip`);
+    assert.equal(appUpdateAssetName("0.2.0", platform), `Step-Studio-Setup-0.2.0-windows-${arch}.exe`);
+    assert.equal(packagedAppAssetPath("/r", "0.2.0", platform), join("/r", "outputs", "installer", `Step-Studio-Setup-0.2.0-windows-${arch}.exe`));
     assert.equal(firstInstallAssetName("0.2.0", platform), undefined);
     assert.equal(releaseOutputDirectory("/r", platform), join("/r", "outputs", "release", arch));
     assert.equal(releaseCandidateName(platform), `release-candidate-${arch}`);
@@ -39,10 +39,10 @@ test("Windows release names and layout stay exactly as published before", () => 
 
 test("macOS release names: update zip, first-install dmg, no v1 index", () => {
   const platform = "darwin-arm64";
-  assert.equal(runtimeArchiveAssetName("18.2.5-studio.13", platform), "OMP-Studio-Runtime-18.2.5-studio.13-macos-arm64.zip");
-  assert.equal(appUpdateAssetName("0.2.0", platform), "OMP-Studio-0.2.0-macos-arm64.zip");
-  assert.equal(packagedAppAssetPath("/r", "0.2.0", platform), join("/r", "outputs", "installer-mac", "OMP-Studio-0.2.0-macos-arm64.zip"));
-  assert.equal(firstInstallAssetName("0.2.0", platform), "OMP-Studio-0.2.0-macos-arm64.dmg");
+  assert.equal(runtimeArchiveAssetName("18.2.5-studio.13", platform), "Step-Studio-Runtime-18.2.5-studio.13-macos-arm64.zip");
+  assert.equal(appUpdateAssetName("0.2.0", platform), "Step-Studio-0.2.0-macos-arm64.zip");
+  assert.equal(packagedAppAssetPath("/r", "0.2.0", platform), join("/r", "outputs", "installer-mac", "Step-Studio-0.2.0-macos-arm64.zip"));
+  assert.equal(firstInstallAssetName("0.2.0", platform), "Step-Studio-0.2.0-macos-arm64.dmg");
   assert.equal(legacyIndexName(platform), undefined);
   assert.equal(releaseOutputDirectory("/r", platform), join("/r", "outputs", "release", "darwin-arm64"), "never collides with win32-arm64");
   assert.equal(releaseCandidateName(platform), "release-candidate-darwin-arm64");

@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SessionHistoryEntry, SessionHistoryReadModel } from "@omp-studio/client-contract";
+import type { SessionHistoryEntry, SessionHistoryReadModel } from "@step-studio/client-contract";
 import { HistoryPage } from "./HistoryPage";
 import { I18nProvider } from "./i18n";
 import { PreviewModeProvider } from "./preview/PreviewContext";

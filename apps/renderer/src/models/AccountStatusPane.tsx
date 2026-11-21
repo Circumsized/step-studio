@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type {
   ClientBootstrap,
   StudioClient,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   AccountQuotaWindow,
   AccountStatusResult,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { PREVIEW_ACCOUNT_STATUS } from "../preview/accountsPreview";
 import { useI18n } from "../i18n";

@@ -1,4 +1,4 @@
-import type { JobWidgetBlock, JobWidgetTone, JobWidgetTrend, JobWidgetView } from "@omp-studio/studio-protocol";
+import type { JobWidgetBlock, JobWidgetTone, JobWidgetTrend, JobWidgetView } from "@step-studio/studio-protocol";
 import { useI18n } from "../i18n";
 import "./jobs.css";
 

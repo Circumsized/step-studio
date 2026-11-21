@@ -15,7 +15,7 @@
 
 - 仓库根 `AGENTS.md`：协作约定（工作方式、测试尺度、验证命令）。它是给协作者看的入口，
   不承载设计；设计一律落在本目录。
-- `README.md` / `CHANGELOG.md` / `doc/` / `docs/`：上游 omp-studio 自带文档，描述复用部分，
+- `README.md` / `CHANGELOG.md` / `doc/` / `docs/`：上游 step-studio 自带文档，描述复用部分，
   不是 Step Studio 的设计。它们与上游保持一致，不因本 fork 的改动而修改。
 
 ## 维护纪律

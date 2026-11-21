@@ -22,7 +22,7 @@ $ md5sum <before>/*.png | awk '{print $1}' | sort -u | wc -l
    `"workbench"`（`appSettings.ts:78`）；
 4. 十次导航全部落在 workbench，产出十个文件名、一张图。
 
-没有任何报错。脚本最后还打印「Next: compare each against omp-studio by eye」——
+没有任何报错。脚本最后还打印「Next: compare each against step-studio by eye」——
 一份看起来像证据的输出。**这比没有签收更糟**：它会被当成已经看过。
 
 已修两处，并加了不会再次静默的护栏：
@@ -173,7 +173,7 @@ Playwright 直接驱活 UI（点页签、开侧栏、收底栏、按 Ctrl+K）�
 ## 因此 M4.1 的真实剩余
 
 1. **IA 差异要一个决策**（不卡人眼）：设置页 taxonomy、顶栏 chrome、左侧 IDE 侧栏
-   与 omp-studio 不同。`comparison-checklist.md` 要求「缺」要么补实现、要么在
+   与 step-studio 不同。`comparison-checklist.md` 要求「缺」要么补实现、要么在
    `plan.md` 记一条决策。现在两者都没做。
 2. **Agents 卡片**：「当前动作 + 目标文件」行**已补**。剩嵌套子 Agent 的可折叠分组
    （参考用 `> 2 个子 Agent`，我们用树形字符平铺——层级都表达，差异在可折叠）。

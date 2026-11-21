@@ -12,7 +12,7 @@ import type {
   ArtifactRecord,
   ArtifactStorageState,
   StudioClient,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { PREVIEW_ARTIFACTS } from "../preview/mediaPreview";
 import { useI18n } from "../i18n";

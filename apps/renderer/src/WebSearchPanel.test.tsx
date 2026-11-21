@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { CommandReceipt, CommandRequestId, StudioClient, WebSearchConfigReadModel } from "@omp-studio/client-contract";
+import type { CommandReceipt, CommandRequestId, StudioClient, WebSearchConfigReadModel } from "@step-studio/client-contract";
 
 import { WebSearchPanel } from "./models/WebSearchPanel";
 

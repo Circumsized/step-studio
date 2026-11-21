@@ -118,7 +118,7 @@ describe("studio-host runtime", () => {
 
 		await runStudioHostMode(
 			session,
-			{ endpoint: "omp-studio-test", tokenFile: "C:\\temp\\omp-studio.token", runtimeEpoch: 7 },
+			{ endpoint: "step-studio-test", tokenFile: "C:\\temp\\step-studio.token", runtimeEpoch: 7 },
 			async runtime => {
 				tuiRuntime = runtime;
 			},
@@ -132,8 +132,8 @@ describe("studio-host runtime", () => {
 		expect(tuiRuntime?.session).toBe(session);
 		expect(tuiRuntime?.sessionManager).toBe(session.sessionManager);
 		expect(tuiRuntime?.bridgeConfig).toEqual({
-			endpoint: "omp-studio-test",
-			tokenFile: "C:\\temp\\omp-studio.token",
+			endpoint: "step-studio-test",
+			tokenFile: "C:\\temp\\step-studio.token",
 			runtimeEpoch: 7,
 		});
 		expect(stopCalls).toBe(1);
@@ -148,7 +148,7 @@ describe("studio-host runtime", () => {
 		};
 		await runStudioHostMode(
 			session,
-			{ endpoint: "omp-studio-test", tokenFile: "C:\\temp\\omp-studio.token", runtimeEpoch: 7 },
+			{ endpoint: "step-studio-test", tokenFile: "C:\\temp\\step-studio.token", runtimeEpoch: 7 },
 			async () => {},
 			{
 				createBridge: () => bridge,
@@ -208,7 +208,7 @@ describe("studio-host runtime", () => {
 	});
 
 	test("registers parked child transcripts before the Bridge handshake", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-persisted-subagents-");
+		using tempDir = TempDir.createSync("@step-studio-persisted-subagents-");
 		const parentFile = path.join(tempDir.path(), "parent.jsonl");
 		const childFile = path.join(tempDir.path(), "parent", "ToolTestA.jsonl");
 		await writeTranscript(parentFile, "parent-sess", "parent");
@@ -216,7 +216,7 @@ describe("studio-host runtime", () => {
 		const session = fakeSession("session-test", { getSessionFile: () => parentFile });
 		await runStudioHostMode(
 			session,
-			{ endpoint: "omp-studio-test", tokenFile: "C:\\temp\\omp-studio.token", runtimeEpoch: 7 },
+			{ endpoint: "step-studio-test", tokenFile: "C:\\temp\\step-studio.token", runtimeEpoch: 7 },
 			async runtime => {
 				const listed = runtime.services.agents.list({ includePersisted: true });
 				const row = listed.find(agent => agent.agentId === "ToolTestA");
@@ -230,7 +230,7 @@ describe("studio-host runtime", () => {
 	});
 
 	test("keeps a tombstoned child readable as aborted", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-persisted-tombstone-");
+		using tempDir = TempDir.createSync("@step-studio-persisted-tombstone-");
 		const parentFile = path.join(tempDir.path(), "parent.jsonl");
 		const childFile = path.join(tempDir.path(), "parent", "ToolTestA.jsonl");
 		await writeTranscript(parentFile, "parent-sess", "parent");
@@ -239,7 +239,7 @@ describe("studio-host runtime", () => {
 		const session = fakeSession("session-test", { getSessionFile: () => parentFile });
 		await runStudioHostMode(
 			session,
-			{ endpoint: "omp-studio-test", tokenFile: "C:\\temp\\omp-studio.token", runtimeEpoch: 7 },
+			{ endpoint: "step-studio-test", tokenFile: "C:\\temp\\step-studio.token", runtimeEpoch: 7 },
 			async runtime => {
 				const listed = runtime.services.agents.list({ includePersisted: true });
 				const row = listed.find(agent => agent.agentId === "ToolTestA");
@@ -253,7 +253,7 @@ describe("studio-host runtime", () => {
 	});
 
 	test("rescans child transcripts after an in-process session change", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-persisted-switch-");
+		using tempDir = TempDir.createSync("@step-studio-persisted-switch-");
 		const firstParent = path.join(tempDir.path(), "first.jsonl");
 		const secondParent = path.join(tempDir.path(), "second.jsonl");
 		await writeTranscript(firstParent, "first-sess", "first");
@@ -268,7 +268,7 @@ describe("studio-host runtime", () => {
 		});
 		await runStudioHostMode(
 			session,
-			{ endpoint: "omp-studio-test", tokenFile: "C:\\temp\\omp-studio.token", runtimeEpoch: 7 },
+			{ endpoint: "step-studio-test", tokenFile: "C:\\temp\\step-studio.token", runtimeEpoch: 7 },
 			async runtime => {
 				expect(
 					runtime.services.agents.list({ includePersisted: true }).some(agent => agent.agentId === "ToolTestA"),
@@ -330,7 +330,7 @@ describe("studio-host runtime", () => {
 	});
 
 	test("recycles the main Worker without replacing the Runtime identity", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-main-worker-");
+		using tempDir = TempDir.createSync("@step-studio-main-worker-");
 		const sessionFile = path.join(tempDir.path(), "main.jsonl");
 		let disposed = 0;
 		let revived = 0;
@@ -363,7 +363,7 @@ describe("studio-host runtime", () => {
 		let observed: StudioHostRuntime | undefined;
 		await runStudioHostMode(
 			initial,
-			{ endpoint: "omp-studio-test", tokenFile: "C:\\temp\\omp-studio.token", runtimeEpoch: 17 },
+			{ endpoint: "step-studio-test", tokenFile: "C:\\temp\\step-studio.token", runtimeEpoch: 17 },
 			async runtime => {
 				observed = runtime;
 				const listener = () => {};

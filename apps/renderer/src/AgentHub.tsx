@@ -29,7 +29,7 @@ import type {
   CommandName,
   SessionId,
   StudioClient,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   AgentId,
   AgentTranscriptMessage,
@@ -38,7 +38,7 @@ import type {
   JobWidgetView,
   StudioAgentSnapshot,
   StudioJobSnapshot,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { CompletionRing, JobWidget } from "./conversation/JobWidget";
 import { JobInspector } from "./conversation/JobInspector";
 import { agentJobTree, buildJobTree, type JobTreeRow } from "./conversation/jobTree";

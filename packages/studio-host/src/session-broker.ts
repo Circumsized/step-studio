@@ -1,4 +1,4 @@
-import type { RuntimeEpoch, SessionId, StateVersion } from "@omp-studio/studio-protocol";
+import type { RuntimeEpoch, SessionId, StateVersion } from "@step-studio/studio-protocol";
 
 export type SessionResidency =
   | "dormant"

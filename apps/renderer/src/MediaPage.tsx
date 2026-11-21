@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
-import type { MediaKind } from "@omp-studio/studio-protocol";
+import type { StudioClient } from "@step-studio/client-contract";
+import type { MediaKind } from "@step-studio/studio-protocol";
 import { LiveAudioPane } from "./media/LiveAudioPane";
 import { ArtifactLibraryPane } from "./media/ArtifactLibraryPane";
 import { MediaWorkbench, takeMediaIntent } from "./media/MediaWorkbench";

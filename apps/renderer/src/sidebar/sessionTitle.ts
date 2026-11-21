@@ -1,4 +1,4 @@
-import type { SessionId, WorkspaceId } from "@omp-studio/client-contract";
+import type { SessionId, WorkspaceId } from "@step-studio/client-contract";
 import type { ProjectHistoryCache } from "./useProjectHistories";
 
 /**

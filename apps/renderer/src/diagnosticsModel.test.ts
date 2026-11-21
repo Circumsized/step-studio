@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { EnvironmentReadModel, RuntimeConnection } from "@omp-studio/client-contract";
+import type { EnvironmentReadModel, RuntimeConnection } from "@step-studio/client-contract";
 import {
   deriveDiagnosticsView,
   formatRuntimeAutoRespawnCopy,

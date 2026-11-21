@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/the-snowpear/omp-studio/actions/workflows/ci.yml"><img src="https://github.com/the-snowpear/omp-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/the-snowpear/step-studio/actions/workflows/ci.yml"><img src="https://github.com/the-snowpear/step-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.17-informational.svg" alt="0.1.17"></a>
   <a href="docs/getting-started.md"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4.svg" alt="Windows | macOS"></a>
@@ -87,9 +87,9 @@ Skills、Plugins、MCP、Slash Commands 同一页开关、探测和打开目录�
 </p>
 
 > [!TIP]
-> **安装与运行：** 前往 [GitHub Releases](https://github.com/the-snowpear/omp-studio/releases) 下载 Windows x64 / ARM64 安装包或 macOS Apple Silicon DMG，或参考下方说明从源码构建运行。macOS 包为 ad hoc 签名，首次打开可能需要在「系统设置 → 隐私与安全性」确认。如遇问题欢迎提交 [Issue](https://github.com/the-snowpear/omp-studio/issues)。
+> **安装与运行：** 前往 [GitHub Releases](https://github.com/the-snowpear/step-studio/releases) 下载 Windows x64 / ARM64 安装包或 macOS Apple Silicon DMG，或参考下方说明从源码构建运行。macOS 包为 ad hoc 签名，首次打开可能需要在「系统设置 → 隐私与安全性」确认。如遇问题欢迎提交 [Issue](https://github.com/the-snowpear/step-studio/issues)。
 >
-> **macOS（Apple Silicon，macOS 13+）：** 发布附带 `OMP-Studio-<版本>-macos-arm64.dmg` 时，打开 dmg，把 OMP Studio 拖进“应用程序”。目前是 ad hoc 签名、尚未公证的预览版：首次打开会被拦截，请到“系统设置 › 隐私与安全性”点“仍要打开”，或执行 `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`。也可以按 [docs/getting-started.md](docs/getting-started.md) 从源码构建。
+> **macOS（Apple Silicon，macOS 13+）：** 发布附带 `Step-Studio-<版本>-macos-arm64.dmg` 时，打开 dmg，把 OMP Studio 拖进“应用程序”。目前是 ad hoc 签名、尚未公证的预览版：首次打开会被拦截，请到“系统设置 › 隐私与安全性”点“仍要打开”，或执行 `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`。也可以按 [docs/getting-started.md](docs/getting-started.md) 从源码构建。
 
 ## 能做什么
 
@@ -105,8 +105,8 @@ Skills、Plugins、MCP、Slash Commands 同一页开关、探测和打开目录�
 需要 Node.js 22+。完整步骤见 [docs/getting-started.md](docs/getting-started.md)。
 
 ```powershell
-git clone --recurse-submodules https://github.com/the-snowpear/omp-studio.git
-cd omp-studio
+git clone --recurse-submodules https://github.com/the-snowpear/step-studio.git
+cd step-studio
 npm install
 cd apps\desktop-tauri
 npm run tauri:dev

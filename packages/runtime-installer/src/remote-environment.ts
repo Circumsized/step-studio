@@ -13,7 +13,7 @@ export interface SignedRemoteEnvironment {
   signature: { algorithm: "ed25519"; keyId: string; value: string };
 }
 export function remoteEnvironmentSigningBytes(manifest: RemoteEnvironmentManifest): Buffer {
-  return Buffer.from(`omp-studio-remote-environment-v1\n${canonicalUpdateJson(manifest)}`, "utf8");
+  return Buffer.from(`step-studio-remote-environment-v1\n${canonicalUpdateJson(manifest)}`, "utf8");
 }
 /** The service boundary authenticates the archive before executing its bundled Node. */
 export function verifyRemoteEnvironment(value: unknown, keys: Readonly<Record<string, string | Buffer>>, repo: string, platform: string, appVersion: string): SignedRemoteEnvironment {

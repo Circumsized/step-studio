@@ -8,7 +8,7 @@
  * Security posture: the bridge is the ONLY renderer-visible Desktop API. It
  * exposes the fixed named method set (`bootstrap` / `query` / `command` /
  * `subscribe` / `close`) over the fixed internal channel constants from
- * `@omp-studio/transport-desktop` — never a caller-provided channel and
+ * `@step-studio/transport-desktop` — never a caller-provided channel and
  * never a generic `invoke`. The underlying sender object is never exposed:
  * `ipcRenderer` stays inside the preload closure.
  */
@@ -24,17 +24,17 @@ import type {
   QueryName,
   SubscriptionScope,
   Unsubscribe,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 // Keep the sandboxed preload on the Node-free client dependency graph.
-import { eventMatchesScope } from "@omp-studio/client";
+import { eventMatchesScope } from "@step-studio/client";
 import { DESKTOP_IPC_CHANNELS } from "./channels.js";
 import type { OmpStudioDesktopApi } from "./desktop-api.js";
 
 /**
  * Fixed window global under which the preload exposes the Desktop bridge.
- * The renderer reads `window.ompStudio` (never `ipcRenderer`).
+ * The renderer reads `window.stepStudio` (never `ipcRenderer`).
  */
-export const DESKTOP_BRIDGE_GLOBAL = "ompStudio" as const;
+export const DESKTOP_BRIDGE_GLOBAL = "stepStudio" as const;
 
 /**
  * Minimal sender surface the bridge needs from the IPC layer. Electron's

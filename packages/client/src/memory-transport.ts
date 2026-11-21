@@ -19,7 +19,7 @@ import type {
   QueryName,
   SubscriptionScope,
   Unsubscribe,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import { toClientError } from "./errors.js";
 import { eventMatchesScope } from "./scope.js";

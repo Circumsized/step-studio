@@ -28,7 +28,8 @@ Windows 安装器使用 WebView2 显示 720 × 480 的四步向导，NSIS 负责
 
 ### 数据与卸载
 
-程序目录包含桌面程序、公钥与随包提供的签名 Runtime。活跃 Runtime 位于 `%LOCALAPPDATA%omp-studiountimes`，会话、日志和设置位于 `%APPDATA%omp-studio`；详见 [更新系统](../docs/updates.md)。
+程序目录包含桌面程序、公钥与随包提供的签名 Runtime。活跃 Runtime 位于 `%LOCALAPPDATA%step-studio
+untimes`，会话、日志和设置位于 `%APPDATA%step-studio`；详见 [更新系统](../docs/updates.md)。
 
 真实卸载使用 electron-builder 的原生 MUI2 卸载器：删除程序目录、快捷方式、头像目录和旧版安装目录内的 `userdata`；保留会话、日志及外置 Runtime。升级调用旧卸载器时保留头像与 `userdata`，供迁移使用。
 
@@ -56,7 +57,7 @@ npm run pack:win:audit
 npm run test:tooling
 ```
 
-构建产物在 `outputs/installer/`：`win-unpacked/` 与 `OMP-Studio-Setup-<version>-windows-<arch>.exe`。一次构建一个架构：`OMP_TARGET_ARCH=x64` 或 `arm64`。ARM64 的小型 WebView2 宿主使用 x86，引导程序通过 Windows API 检查原生 ARM64 进程，界面显示真实目标架构。
+构建产物在 `outputs/installer/`：`win-unpacked/` 与 `Step-Studio-Setup-<version>-windows-<arch>.exe`。一次构建一个架构：`OMP_TARGET_ARCH=x64` 或 `arm64`。ARM64 的小型 WebView2 宿主使用 x86，引导程序通过 Windows API 检查原生 ARM64 进程，界面显示真实目标架构。
 
 `pack:win` 构建工作区和沙箱 preload、准备当前签名 Runtime 与公钥、编译 WebView2 宿主、打包并审计。`--skip-host --skip-build` 仅复用已准备好的构建与签名 Runtime。审计覆盖架构、Runtime 签名、必要资源及私钥泄露；不重复运行源码测试。
 
@@ -80,8 +81,8 @@ npm run pack:mac:audit            # 单独重跑审计
 前置同 `omp:build:host`（Xcode Command Line Tools、Rust、Bun ≥ 1.4.2、原生 arm64 Node），另用到系统自带的 `sips`、`iconutil`、`ditto`、`hdiutil`、`codesign`。产物在 `outputs/installer-mac/`（gitignore）：
 
 - `mac-arm64/OMP Studio.app`：ad hoc 签名的 bundle，审计对象。
-- `OMP-Studio-<ver>-macos-arm64.dmg`：首装用，拖进「应用程序」。
-- `OMP-Studio-<ver>-macos-arm64.zip`：整包更新载荷。用 `ditto` 打包，符号链接和签名 xattr 都能保留。
+- `Step-Studio-<ver>-macos-arm64.dmg`：首装用，拖进「应用程序」。
+- `Step-Studio-<ver>-macos-arm64.zip`：整包更新载荷。用 `ditto` 打包，符号链接和签名 xattr 都能保留。
 
 要点：
 
@@ -89,7 +90,7 @@ npm run pack:mac:audit            # 单独重跑审计
 - **签名由 pack-mac 自己做**：用 `@electron/osx-sign` 执行 `codesign --sign -`，不走 electron-builder 的证书查找——它按子串匹配 `-`，在开发机上可能挑中真证书。ad hoc 期间不开 hardened runtime（库验证会拒绝 ad hoc 框架），也不打时间戳。`packaging/mac/entitlements.mac*.plist` 已经嵌入，等换成 Developer ID 签名才生效。
 - **Runtime 不重签**：签名时整棵跳过 `Contents/Resources/runtime/**`。`omp` 保留上游构建时的签名与 entitlements，字节由 `checksums.json` 和 Ed25519 签名覆盖，审计会用包内公钥复验。
 - **隐私用途字符串**：`Info.plist` 写明麦克风、本地网络、Apple 事件、文稿 / 桌面 / 下载、可移除宗卷与网络宗卷的用途，中文放在 `zh_CN.lproj/InfoPlist.strings`。缺了麦克风说明，首次录音时 TCC 会直接结束进程。
-- **首次打开**：ad hoc 包没有公证。macOS 15 起要到“系统设置 › 隐私与安全性”点“仍要打开”，或执行 `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`。首启会把 Runtime 从包内复制到 `~/Library/Application Support/omp-studio/runtimes/`，并清除副本继承的 quarantine 标记（`apps/desktop/src/platform/quarantine.ts`）；包本身不动。
+- **首次打开**：ad hoc 包没有公证。macOS 15 起要到“系统设置 › 隐私与安全性”点“仍要打开”，或执行 `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`。首启会把 Runtime 从包内复制到 `~/Library/Application Support/step-studio/runtimes/`，并清除副本继承的 quarantine 标记（`apps/desktop/src/platform/quarantine.ts`）；包本身不动。
 - **ad hoc 的代价**：每次更新后签名身份都会变，麦克风、文件夹、本地网络授权会重新询问，钥匙串也会再次请求授权。换成 Developer ID 签名并公证后，这些都会解决。
 
 `scripts/audit-mac.mjs` 任一项不满足即失败：

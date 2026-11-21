@@ -12,7 +12,7 @@ function devices(getUserMedia: () => Promise<unknown>) {
   // whole upload lifecycle, and a stub that can start but not finish an upload
   // is a surface that cannot record. Wiring one member here made the pane report
   // unavailable and the tests then asserted on a disabled button.
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     beginMediaUpload: vi.fn(),
     appendMediaUpload: vi.fn(),
     finishMediaUpload: vi.fn(),

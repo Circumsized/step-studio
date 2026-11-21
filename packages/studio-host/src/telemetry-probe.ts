@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 
-import { parseSessionTelemetrySnapshot, type SessionTelemetrySnapshot } from "@omp-studio/studio-protocol";
+import { parseSessionTelemetrySnapshot, type SessionTelemetrySnapshot } from "@step-studio/studio-protocol";
 
 /**
  * Host-internal request to the one-shot OMP archived-session telemetry probe.

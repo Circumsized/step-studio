@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { StudioClient, WorkspaceFileTreeReadModel, WorkspaceId } from "@omp-studio/client-contract";
+import type { StudioClient, WorkspaceFileTreeReadModel, WorkspaceId } from "@step-studio/client-contract";
 
 import { buildGitStatusLookup } from "./git/treeStatus";
 import { I18nProvider } from "./i18n";

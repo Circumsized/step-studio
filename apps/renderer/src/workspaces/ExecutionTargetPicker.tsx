@@ -9,7 +9,7 @@ import { useExecutionTarget, useTargetMemory } from "./ExecutionTargets";
 import { SshPasswordDialog } from "./SshPasswordDialog";
 import { SshPreparationDialog } from "./SshPreparationDialog";
 import { remoteConnectionPending, remoteStatusLabel } from "./remoteStatus";
-import type { RemoteConnectionProfile, RemoteDirectoryList, RemoteNetworkMode } from "@omp-studio/platform";
+import type { RemoteConnectionProfile, RemoteDirectoryList, RemoteNetworkMode } from "@step-studio/platform";
 
 export function ExecutionTargetPicker({ onOpen, otherMenuOpen = false }: { onOpen?(): void; otherMenuOpen?: boolean }) {
   const target = useExecutionTarget();
@@ -203,6 +203,6 @@ export function ExecutionTargetPicker({ onOpen, otherMenuOpen = false }: { onOpe
       </form>}
     </dialog>, document.body) : null}
     {preview && demoPasswordProfile ? <SshPasswordDialog demo profile={demoPasswordProfile} onCancel={() => setDemoPasswordProfile(undefined)} onSubmit={() => { setDemoPreparation(demoPasswordProfile); setDemoPasswordProfile(undefined); }} /> : null}
-    {preview && demoPreparation ? <SshPreparationDialog demo profile={demoPreparation} status={{ id: demoPreparation.id, state: "awaiting-approval", stage: "confirmation", platform: "linux", arch: "x64", installRoot: "~/.local/share/omp-studio/remote" }} onCancel={() => setDemoPreparation(undefined)} onApprove={() => { setDemo(demoPreparation.name); setDemoPreparation(undefined); }} /> : null}
+    {preview && demoPreparation ? <SshPreparationDialog demo profile={demoPreparation} status={{ id: demoPreparation.id, state: "awaiting-approval", stage: "confirmation", platform: "linux", arch: "x64", installRoot: "~/.local/share/step-studio/remote" }} onCancel={() => setDemoPreparation(undefined)} onApprove={() => { setDemo(demoPreparation.name); setDemoPreparation(undefined); }} /> : null}
   </span>;
 }

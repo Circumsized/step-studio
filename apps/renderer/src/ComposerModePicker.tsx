@@ -14,8 +14,8 @@
 import { AppSelect } from "./AppSelect";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type MouseEvent as ReactMouseEvent } from "react";
 
-import type { CommandInput, CommandName } from "@omp-studio/client-contract";
-import type { OperatorStateSnapshot } from "@omp-studio/studio-protocol";
+import type { CommandInput, CommandName } from "@step-studio/client-contract";
+import type { OperatorStateSnapshot } from "@step-studio/studio-protocol";
 
 import { Icon } from "./icons";
 import { useI18n } from "./i18n";

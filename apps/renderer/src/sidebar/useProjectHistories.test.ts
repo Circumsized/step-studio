@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { SessionHistoryReadModel, StudioClient, WorkspaceId } from "@omp-studio/client-contract";
+import type { SessionHistoryReadModel, StudioClient, WorkspaceId } from "@step-studio/client-contract";
 
 import {
   PROJECT_HISTORY_INITIAL_LIMIT,

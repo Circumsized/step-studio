@@ -225,9 +225,9 @@ Renderer 当前没有 test script。添加最小 Vitest或项目统一的 React�
 ## 14. 验收命令
 
 ```bash
-npm run typecheck -w @omp-studio/renderer
-npm run build -w @omp-studio/renderer
-npm test -w @omp-studio/renderer
+npm run typecheck -w @step-studio/renderer
+npm run build -w @step-studio/renderer
+npm test -w @step-studio/renderer
 npm run preview
 ```
 

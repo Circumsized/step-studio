@@ -19,7 +19,7 @@ import type {
   QueryName,
   SubscriptionScope,
   Unsubscribe,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import type { OmpStudioDesktopApi } from "./desktop-api.js";
 

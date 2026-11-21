@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { StudioClient, RuntimeAuthProvider } from "@omp-studio/client-contract";
+import type { StudioClient, RuntimeAuthProvider } from "@step-studio/client-contract";
 import { invokeUpgrade, useUpgradeAvailable } from "../runtimeUpgrade";
 import { useI18n } from "../i18n";
 import { hostErrorMessage } from "../hostError";

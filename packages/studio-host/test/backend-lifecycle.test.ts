@@ -12,7 +12,7 @@ import type {
   SessionBinding,
   ThreadId,
   WorkspaceId,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import {
   CommandLedger,
   HostBackend,
@@ -62,7 +62,7 @@ test("REC-003 relaunch waits for owner loss, preserves version, and advances Run
 });
 
 test("WP-064 durable Thread bindings drive Runtime reference protection", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-bindings-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-bindings-"));
   const path = join(temporary, "thread-bindings.json");
   const store = new ThreadBindingStore(path);
   await store.bind(binding(), "sha256:executable");
@@ -76,7 +76,7 @@ test("WP-064 durable Thread bindings drive Runtime reference protection", async 
 });
 
 test("backend composition wires Thread references into installer retention", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-backend-composition-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-backend-composition-"));
   const backend = new HostBackend({ stateDirectory: temporary });
   await backend.initialize();
   await backend.bind(binding(), "sha256:executable");
@@ -86,7 +86,7 @@ test("backend composition wires Thread references into installer retention", asy
 });
 
 test("HostBackend keeps the managed Runtime tree at runtimeInstallDirectory", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-backend-runtime-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-backend-runtime-"));
   const install = join(temporary, "install-runtime");
   const backend = new HostBackend({
     stateDirectory: join(temporary, "profile"),

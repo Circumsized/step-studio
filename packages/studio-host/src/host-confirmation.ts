@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { canonicalJson, type StudioOperation } from "@omp-studio/studio-protocol";
+import { canonicalJson, type StudioOperation } from "@step-studio/studio-protocol";
 import { StudioHostError } from "./command-arbiter.js";
 
 export const DEFAULT_CONFIRMATION_TTL_MS = 5 * 60 * 1000;

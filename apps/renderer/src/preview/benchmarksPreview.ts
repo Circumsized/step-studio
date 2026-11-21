@@ -1,4 +1,4 @@
-import type { BenchmarkSnapshot, BenchmarkStats, BenchmarkSpec } from "@omp-studio/studio-protocol";
+import type { BenchmarkSnapshot, BenchmarkStats, BenchmarkSpec } from "@step-studio/studio-protocol";
 const metric = (value: number) => ({ mean: value, min: value * 0.8, p50: value, p95: value * 1.2, max: value * 1.2 });
 const stats = (ttft: number, tps: number): BenchmarkStats => ({ ttftMs: metric(ttft), durationMs: metric(1800), tokensPerSecond: metric(tps), generationTps: metric(tps * 1.2), prefillTps: metric(4000), inputTokens: 600, outputTokens: 180, cost: 0.002 });
 export function previewBenchmark(spec: BenchmarkSpec): BenchmarkSnapshot {

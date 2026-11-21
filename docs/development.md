@@ -121,7 +121,7 @@ Package-local test commands are useful when editing one feature, and
 `scripts/architecture.test.mjs` runs before anything compiles. It fails on a new
 workspace dependency cycle, a dependency outside the declared layering,
 `electron` outside `apps/desktop`, `react` outside `apps/renderer`, Node built-ins
-or `electron` in renderer sources, `@omp-studio/testkit` imported by a Host
+or `electron` in renderer sources, `@step-studio/testkit` imported by a Host
 package, or a second definition of `PREVIEW_MODE_SWITCH_ENABLED`. When a rule
 must change, change the table and the code in the same commit.
 

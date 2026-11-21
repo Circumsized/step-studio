@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, open, readFile, rename, unlink, realpath, lstat } from "node:fs/promises";
 import { basename, extname, isAbsolute, join } from "node:path";
-import { ARTIFACT_KINDS, ARTIFACT_TEXT_MAX_BYTES, validateArtifactTextInput, type ArtifactTextInput, type ArtifactTextResult, type ArtifactKind, type ArtifactRecord, type ArtifactListInput, type ArtifactPage, type ArtifactStorageState } from "@omp-studio/studio-protocol";
+import { ARTIFACT_KINDS, ARTIFACT_TEXT_MAX_BYTES, validateArtifactTextInput, type ArtifactTextInput, type ArtifactTextResult, type ArtifactKind, type ArtifactRecord, type ArtifactListInput, type ArtifactPage, type ArtifactStorageState } from "@step-studio/studio-protocol";
 
 interface StoredArtifact { record: ArtifactRecord; rootId: string; filename: string }
 interface Catalog {

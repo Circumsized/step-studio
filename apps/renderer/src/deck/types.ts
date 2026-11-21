@@ -17,8 +17,8 @@ export type DeckAskQuestion = {
 export type DeckAskAnswer = {
   readonly note?: string;
   readonly noteOption?: string;
-  readonly customInputImages?: readonly import("@omp-studio/studio-protocol").AskImage[];
-  readonly noteImages?: readonly import("@omp-studio/studio-protocol").AskImage[];
+  readonly customInputImages?: readonly import("@step-studio/studio-protocol").AskImage[];
+  readonly noteImages?: readonly import("@step-studio/studio-protocol").AskImage[];
   readonly picked: readonly string[];
   readonly custom: string;
 };

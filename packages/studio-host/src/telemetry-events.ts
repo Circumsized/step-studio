@@ -2,7 +2,7 @@ import {
   parseSessionTelemetryEvent,
   type SessionTelemetryEvent,
   type StudioEventEnvelope,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 export interface StudioTelemetryForward {
   readonly envelope: StudioEventEnvelope<SessionTelemetryEvent>;

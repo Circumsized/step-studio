@@ -27,7 +27,7 @@ import { CORE_NODE_SUITES, CORE_RENDERER_SUITES } from "./core-suites.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The fork adds its own scope for Step-specific packages; both are workspace-local.
-const scopes = ["@omp-studio/", "@step-studio/"];
+const scopes = ["@step-studio/", "@step-studio/"];
 const tscBin = join(root, "node_modules", "typescript", "bin", "tsc");
 const vitestBin = join(root, "node_modules", "vitest", "vitest.mjs");
 const viteBin = join(root, "node_modules", "vite", "bin", "vite.js");

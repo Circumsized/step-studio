@@ -2,7 +2,7 @@
 // artifact and activates it with the REAL default self-check runner (which
 // executes the installed `omp.exe --smoke-test`). Not part of the unit test
 // suite; run explicitly after `npm run omp:build:host` (or `npm run
-// omp:artifact`) and `npm run build -w @omp-studio/runtime-installer`.
+// omp:artifact`) and `npm run build -w @step-studio/runtime-installer`.
 //
 //   npm run omp:e2e:install [-- --artifact <path>]
 
@@ -62,7 +62,7 @@ if (!existsSync(join(artifactDirectory, "runtime-manifest.json"))) {
   );
 }
 
-const root = await mkdtemp(join(tmpdir(), "omp-studio-e2e-"));
+const root = await mkdtemp(join(tmpdir(), "step-studio-e2e-"));
 try {
   const trustedKeyPath = process.env.OMP_RUNTIME_TRUSTED_PUBLIC_KEY;
   const trustedKeyId = process.env.OMP_RUNTIME_SIGNING_KEY_ID;

@@ -31,8 +31,8 @@
 ## 存储和迁移
 
 - 当前用户默认安装目录：`%LOCALAPPDATA%\Programs\OMP Studio`，程序以普通用户权限启动。发布打包会在复制 Runtime 后立即使用 `packaging/keys/trusted-keys.json` 验证 Runtime manifest、checksums、signature 和 EXE 摘要；开发密钥或错误发行密钥会让打包失败。
-- 活跃 Runtime：`%LOCALAPPDATA%\omp-studio\runtimes`。
-- 更新缓存与事务：`%LOCALAPPDATA%\omp-studio\updates-v2`。
+- 活跃 Runtime：`%LOCALAPPDATA%\step-studio\runtimes`。
+- 更新缓存与事务：`%LOCALAPPDATA%\step-studio\updates-v2`。
 - 原有会话、设置、工作区记录和头像位置保持不变；不迁移用户项目。
 - 安装器保留签名 Runtime seed，用于初装离线启动，日常桌面更新不删除活跃 Runtime。
 
@@ -40,7 +40,7 @@
 
 ## 可信更新与恢复
 
-v2 清单采用 Ed25519 签名，包含组件、版本、通道、架构、序号、兼容协议、工件和 blockmap 的 SHA-256/SHA-512。签名域为 `omp-studio-update-v2`。下载与重建后的文件校验完整摘要；执行前重新校验。镜像只改变传输位置，不能改变信任来源。
+v2 清单采用 Ed25519 签名，包含组件、版本、通道、架构、序号、兼容协议、工件和 blockmap 的 SHA-256/SHA-512。签名域为 `step-studio-update-v2`。下载与重建后的文件校验完整摘要；执行前重新校验。镜像只改变传输位置，不能改变信任来源。
 
 发现按组件、通道与架构分别选择最大签名序号，保存防回退水位。Runtime 独立发行不使用 GitHub Latest。Canary 必须显式选择；同一个 Runtime 版本不能发布不同字节或不同通道。
 
@@ -57,12 +57,12 @@ v2 清单采用 Ed25519 签名，包含组件、版本、通道、架构、序�
 ## macOS
 
 - 目录：
-  - Runtime 在 `~/Library/Application Support/omp-studio/runtimes`；
-  - 更新缓存与事务在 `~/Library/Application Support/omp-studio/updates-v2`。
+  - Runtime 在 `~/Library/Application Support/step-studio/runtimes`；
+  - 更新缓存与事务在 `~/Library/Application Support/step-studio/updates-v2`。
 
   两者都在签名的 `.app` 之外，应用包本身只读，也不使用界面热载荷。
 - 载荷：
-  - 桌面更新载荷是 `OMP-Studio-<ver>-macos-arm64.zip`，即 `ditto` 打包的已签名 `.app`，同样按 blockmap 差分；dmg 只用于首次安装。
+  - 桌面更新载荷是 `Step-Studio-<ver>-macos-arm64.zip`，即 `ditto` 打包的已签名 `.app`，同样按 blockmap 差分；dmg 只用于首次安装。
   - 从 dmg 安装后本地没有基线，第一次桌面更新是全量下载，之后可以差分；「恢复上一桌面版本」也从第一次更新之后可用。
 - 替换：
   - 点击重启后，Main 用 `ditto --noqtn` 把新版本解到 `.app` 同级的隐藏目录。

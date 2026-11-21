@@ -1,4 +1,4 @@
-import type { RuntimeContainmentPort, RuntimeProcessHandle } from "@omp-studio/platform";
+import type { RuntimeContainmentPort, RuntimeProcessHandle } from "@step-studio/platform";
 import {
   assertNonEmptyString,
   assertWin32ProcessController,

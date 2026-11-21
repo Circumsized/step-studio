@@ -3,7 +3,7 @@ import type {
   GcPreview,
   SessionExportResult,
   NativeConnectionCheck,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 export function previewGc(categories: GcCategory[]): GcPreview {
   return {
     token: "demo-cleanup",

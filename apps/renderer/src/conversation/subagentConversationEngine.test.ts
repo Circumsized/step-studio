@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { conversationPages } from "@omp-studio/testkit";
-import type { AgentId, SessionId } from "@omp-studio/studio-protocol";
+import { conversationPages } from "@step-studio/testkit";
+import type { AgentId, SessionId } from "@step-studio/studio-protocol";
 import { activeSubagentConversationEngineCount, createSubagentConversationEngine } from "./subagentConversationEngine";
 
 describe("subagentConversationEngine", () => {

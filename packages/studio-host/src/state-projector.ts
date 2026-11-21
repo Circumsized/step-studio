@@ -3,7 +3,7 @@ import type {
   OperatorStateSnapshot,
   StateVersion,
   StudioEventEnvelope,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 export type ProjectedEvent = { kind: "state.changed"; snapshot: OperatorStateSnapshot };
 

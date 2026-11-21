@@ -9,7 +9,7 @@ import type {
   RuntimeDisconnectCode,
   RuntimeInstallState,
   RuntimeUnavailableCode,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import { zh } from "./i18n/locales/zh";
 
 type CapabilityManifest = ClientBootstrap["capabilityManifest"];

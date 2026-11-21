@@ -22,7 +22,7 @@ async function sessionFile(
 }
 
 test("session catalog distinguishes Studio and CLI sessions and supports the visibility toggle", async () => {
-  const root = await mkdtemp(join(tmpdir(), "omp-studio-catalog-"));
+  const root = await mkdtemp(join(tmpdir(), "step-studio-catalog-"));
   const project = join(root, "--project--");
   await mkdir(project);
   await sessionFile(project, "studio", {
@@ -49,7 +49,7 @@ test("session catalog distinguishes Studio and CLI sessions and supports the vis
 });
 
 test("session catalog hides Runtime metadata-only sessions until the first message", async () => {
-  const root = await mkdtemp(join(tmpdir(), "omp-studio-catalog-empty-"));
+  const root = await mkdtemp(join(tmpdir(), "step-studio-catalog-empty-"));
   const project = join(root, "--project--");
   await mkdir(project);
   const path = join(project, "empty.jsonl");
@@ -71,7 +71,7 @@ test("session catalog hides Runtime metadata-only sessions until the first messa
 });
 
 test("session catalog handles title slots, unknown origins, duplicates, corruption, oversize, and symlinks", async (t) => {
-  const root = await mkdtemp(join(tmpdir(), "omp-studio-catalog-edge-"));
+  const root = await mkdtemp(join(tmpdir(), "step-studio-catalog-edge-"));
   const project = join(root, "project");
   await mkdir(project);
   await writeFile(join(project, "title-slot.jsonl"), [
@@ -103,7 +103,7 @@ test("session catalog handles title slots, unknown origins, duplicates, corrupti
 });
 
 test("session catalog filters by allowedCwd without exposing the path", async () => {
-  const root = await mkdtemp(join(tmpdir(), "omp-studio-catalog-cwd-"));
+  const root = await mkdtemp(join(tmpdir(), "step-studio-catalog-cwd-"));
   const project = join(root, "project");
   await mkdir(project);
   const allowed = join(root, "workspace-a");
@@ -139,7 +139,7 @@ test("session catalog reports an unavailable root without exposing it", async ()
 });
 
 test("session catalog reads global pins and degrades safely for missing, corrupt, and stale ids", async () => {
-  const root = await mkdtemp(join(tmpdir(), "omp-studio-catalog-pins-"));
+  const root = await mkdtemp(join(tmpdir(), "step-studio-catalog-pins-"));
   const sessionsRoot = join(root, "sessions");
   const project = join(sessionsRoot, "project");
   await mkdir(project, { recursive: true });
@@ -195,7 +195,7 @@ test("session catalog reads global pins and degrades safely for missing, corrupt
 });
 
 test("session catalog scans the cold-archive tree and marks gz members archived", async () => {
-  const root = await mkdtemp(join(tmpdir(), "omp-studio-catalog-arch-"));
+  const root = await mkdtemp(join(tmpdir(), "step-studio-catalog-arch-"));
   const project = join(root, "--project--");
   const archiveProject = join(root, "archive", "sessions", "--project--");
   await mkdir(project, { recursive: true });

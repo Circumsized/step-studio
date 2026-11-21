@@ -13,12 +13,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { ClientEvent, SubscriptionScope } from "@omp-studio/client-contract";
+import type { ClientEvent, SubscriptionScope } from "@step-studio/client-contract";
 import {
   createDesktopIpcBridge,
   DESKTOP_IPC_CHANNELS,
   type DesktopIpcBridge,
-} from "@omp-studio/transport-desktop";
+} from "@step-studio/transport-desktop";
 
 import {
   createTauriDesktopSender,
@@ -114,7 +114,7 @@ describe("createTauriDesktopSender: positional arguments become named command ar
 
   test("a channel outside the fixed set is refused", async () => {
     const tauri = fakeTauri();
-    await assert.rejects(() => tauri.sender.invoke("omp-studio:desktop:invented"), /unknown channel/);
+    await assert.rejects(() => tauri.sender.invoke("step-studio:desktop:invented"), /unknown channel/);
     assert.equal(tauri.invokes.length, 0);
   });
 });
@@ -188,8 +188,8 @@ describe("createTauriDesktopSender: one Tauri listener fans out to every subscri
 
   test("the event channel is never invokable and unknown event channels are refused", () => {
     const tauri = fakeTauri();
-    assert.throws(() => tauri.sender.on("omp-studio:desktop:invented", () => {}), /unknown event channel/);
-    assert.throws(() => tauri.sender.removeListener("omp-studio:desktop:invented", () => {}), /unknown event channel/);
+    assert.throws(() => tauri.sender.on("step-studio:desktop:invented", () => {}), /unknown event channel/);
+    assert.throws(() => tauri.sender.removeListener("step-studio:desktop:invented", () => {}), /unknown event channel/);
     assert.deepEqual(tauri.listenCalls, [DESKTOP_IPC_CHANNELS.event]);
   });
 });

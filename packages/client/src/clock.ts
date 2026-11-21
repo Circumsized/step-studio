@@ -7,7 +7,7 @@
  * implementation.
  */
 
-import type { CommandRequestId, IdempotencyKey } from "@omp-studio/client-contract";
+import type { CommandRequestId, IdempotencyKey } from "@step-studio/client-contract";
 
 export interface ClientClockAndIds {
   /** Current time as an ISO-8601 string. */

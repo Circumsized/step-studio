@@ -1,7 +1,7 @@
 import { AppSelect } from "../AppSelect";
 import { useEffect, useRef, useState } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
-import type { AgentBtwOperation, AgentBtwState } from "@omp-studio/studio-protocol";
+import type { StudioClient } from "@step-studio/client-contract";
+import type { AgentBtwOperation, AgentBtwState } from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { agentBtwPreview, PREVIEW_CHILD_BTW_TURNS } from "../preview/agentBtwPreview";
 import { useI18n } from "../i18n";

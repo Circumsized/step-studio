@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { RuntimeConnection, StudioClient } from "@omp-studio/client-contract";
+import type { RuntimeConnection, StudioClient } from "@step-studio/client-contract";
 import { Icon } from "./icons";
 import { ActionProgressBar, type ActionProgress } from "./ActionProgressBar";
 import {

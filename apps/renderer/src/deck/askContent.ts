@@ -1,4 +1,4 @@
-import type { ClientInteraction } from "@omp-studio/client-contract";
+import type { ClientInteraction } from "@step-studio/client-contract";
 import { NO_ASK_ANSWER, type DeckAskAnswer, type DeckAskOption, type DeckAskQuestion } from "./types";
 
 const RECOMMENDED_SUFFIX = " (Recommended)";
@@ -133,8 +133,8 @@ export type AskSubmitPayload = {
     readonly customInput?: string;
     readonly note?: string;
     readonly noteOption?: string;
-    readonly customInputImages?: readonly import("@omp-studio/studio-protocol").AskImage[];
-    readonly noteImages?: readonly import("@omp-studio/studio-protocol").AskImage[];
+    readonly customInputImages?: readonly import("@step-studio/studio-protocol").AskImage[];
+    readonly noteImages?: readonly import("@step-studio/studio-protocol").AskImage[];
   }>;
 };
 

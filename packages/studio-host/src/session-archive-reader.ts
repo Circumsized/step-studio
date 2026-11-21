@@ -12,7 +12,7 @@ import {
   type JsonValue,
   type OpaqueCursor,
   type SessionId,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import { GzipFileError, readGunzipCapped, readGunzipPrefix } from "./gzip-file.js";
 import { defaultOmpArchiveRoot } from "./session-catalog.js";

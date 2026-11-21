@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ClientInteraction, InteractionId, SessionId } from "@omp-studio/client-contract";
+import type { ClientInteraction, InteractionId, SessionId } from "@step-studio/client-contract";
 import { NO_ASK_ANSWER, askToDeckView, selectToAskView, submitAskValue, submitSelectValue } from "./askContent";
 
 const SESSION = "session-1" as SessionId;

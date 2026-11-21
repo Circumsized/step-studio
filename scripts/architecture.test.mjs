@@ -12,8 +12,8 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const scopes = ["@omp-studio/", "@step-studio/"];
-const scope = "@omp-studio/";
+const scopes = ["@step-studio/", "@step-studio/"];
+const scope = "@step-studio/";
 const builtins = new Set(builtinModules.map(name => name.replace(/^node:/, "")));
 
 // Internal dependency direction. A package may only depend on what its row allows;

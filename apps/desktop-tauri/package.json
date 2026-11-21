@@ -14,7 +14,7 @@
     "tauri:build": "tauri build"
   },
   "dependencies": {
-    "@omp-studio/transport-desktop": "0.1.17",
+    "@step-studio/transport-desktop": "0.1.17",
     "@tauri-apps/api": "^2"
   },
   "devDependencies": {

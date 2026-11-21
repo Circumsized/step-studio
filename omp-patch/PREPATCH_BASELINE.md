@@ -7,7 +7,7 @@ Verified on Windows x64 on 2026-08-10, before the first OMP source patch.
 - Upstream commit: `45e12e5bb758198a920c6070e7e64cb33b21beac`
 - OMP version: `17.2.12`
 - Patched CLI/runtime executable: `omp.exe`
-- Future desktop application executable: `omp-studio.exe` (reserved; not part of this backend-only phase)
+- Future desktop application executable: `step-studio.exe` (reserved; not part of this backend-only phase)
 
 ## Toolchain
 

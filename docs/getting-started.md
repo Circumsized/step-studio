@@ -25,8 +25,8 @@ You still need an OMP-compatible model provider. Studio reads the same
 ## Clone
 
 ```powershell
-git clone --recurse-submodules https://github.com/the-snowpear/omp-studio.git
-cd omp-studio
+git clone --recurse-submodules https://github.com/the-snowpear/step-studio.git
+cd step-studio
 ```
 
 If you already cloned without submodules:
@@ -62,8 +62,8 @@ when one is running.
 npm install
 npm run omp:install-deps
 npm run omp:overlay:apply
-npm run omp:keys              # once per machine; writes keys under %APPDATA%\omp-studio\keys
-                              # (macOS: ~/Library/Application Support/omp-studio/keys)
+npm run omp:keys              # once per machine; writes keys under %APPDATA%\step-studio\keys
+                              # (macOS: ~/Library/Application Support/step-studio/keys)
 npm run omp:build:host
 cd apps\desktop-tauri
 npm run tauri:dev
@@ -74,8 +74,8 @@ submodule working tree. That **will** show as modified content inside
 `omp-patch/vendor/oh-my-pi`. Do not `git add` that dirty vendor tree. The
 source of truth is `omp-patch/overlay/` plus `omp-patch/patches/`.
 
-Host logs: `%APPDATA%\omp-studio\logs\host-YYYY-MM-DD.log`; on macOS
-`~/Library/Application Support/omp-studio/logs/host-YYYY-MM-DD.log`.
+Host logs: `%APPDATA%\step-studio\logs\host-YYYY-MM-DD.log`; on macOS
+`~/Library/Application Support/step-studio/logs/host-YYYY-MM-DD.log`.
 
 ## Windows installer (unsigned)
 

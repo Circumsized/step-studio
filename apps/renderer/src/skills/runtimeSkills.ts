@@ -1,5 +1,5 @@
-import type { StudioClient } from "@omp-studio/client-contract";
-import type { RuntimeSkillIdentity } from "@omp-studio/studio-protocol";
+import type { StudioClient } from "@step-studio/client-contract";
+import type { RuntimeSkillIdentity } from "@step-studio/studio-protocol";
 import { waitReceipt } from "../hostError";
 const cache=new WeakMap<StudioClient,Map<string,{at:number;value:Promise<RuntimeSkillIdentity[]>}>>();
 export function loadRuntimeSkills(client:StudioClient,sessionId:string):Promise<RuntimeSkillIdentity[]> {

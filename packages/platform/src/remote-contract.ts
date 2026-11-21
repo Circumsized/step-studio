@@ -9,13 +9,13 @@
  * used it stayed with Electron; only the contract moved.
  */
 
-import type { ClientBootstrap, ClientCommandAccepted, ClientCommandRequest, ClientEvent, ClientQueryRequest, ClientQueryResponse, CommandName, QueryName, WorkspaceListReadModel } from "@omp-studio/client-contract";
+import type { ClientBootstrap, ClientCommandAccepted, ClientCommandRequest, ClientEvent, ClientQueryRequest, ClientQueryResponse, CommandName, QueryName, WorkspaceListReadModel } from "@step-studio/client-contract";
 
 export const REMOTE_CHANNELS = {
-  installRuntime: "omp-studio:remote:install-runtime",
-  approve: "omp-studio:remote:approve", retryNetwork: "omp-studio:remote:retry-network",
-  list: "omp-studio:remote:list", save: "omp-studio:remote:save", remove: "omp-studio:remote:remove", connect: "omp-studio:remote:connect", disconnect: "omp-studio:remote:disconnect", select: "omp-studio:remote:select",
-  bootstrap: "omp-studio:remote:bootstrap", query: "omp-studio:remote:query", command: "omp-studio:remote:command", directories: "omp-studio:remote:directories", register: "omp-studio:remote:register", event: "omp-studio:remote:event", changed: "omp-studio:remote:changed",
+  installRuntime: "step-studio:remote:install-runtime",
+  approve: "step-studio:remote:approve", retryNetwork: "step-studio:remote:retry-network",
+  list: "step-studio:remote:list", save: "step-studio:remote:save", remove: "step-studio:remote:remove", connect: "step-studio:remote:connect", disconnect: "step-studio:remote:disconnect", select: "step-studio:remote:select",
+  bootstrap: "step-studio:remote:bootstrap", query: "step-studio:remote:query", command: "step-studio:remote:command", directories: "step-studio:remote:directories", register: "step-studio:remote:register", event: "step-studio:remote:event", changed: "step-studio:remote:changed",
 } as const;
 export type RemoteNetworkMode = "remote-first" | "remote-only" | "local-only";
 export type RemotePreparationStage = "probe" | "confirmation" | "download" | "upload" | "install" | "verify" | "configure" | "connect";

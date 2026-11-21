@@ -1,6 +1,6 @@
 import { RatchetPane } from "./RatchetPane";
 import { useEffect, useState } from "react";
-import type { AvailableModelRecord, ClientBootstrap, StudioClient } from "@omp-studio/client-contract";
+import type { AvailableModelRecord, ClientBootstrap, StudioClient } from "@step-studio/client-contract";
 import { BenchmarkPane } from "../models/BenchmarkPane";
 import { JudgmentsPane } from "../judgments/JudgmentsPane";
 import { loadRuntimeModels } from "../models/runtimeModels";

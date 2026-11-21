@@ -57,7 +57,7 @@
 先检查这些错误是否来自当前未提交的多会话改动：
 
 ```bash
-npm run build -w @omp-studio/desktop
+npm run build -w @step-studio/desktop
 ```
 
 要求：
@@ -666,20 +666,20 @@ omp-patch/patches/0018-studio-interaction-ui-bridge.patch
 ## 验收命令与完成条件
 
 ```bash
-npm run build -w @omp-studio/studio-protocol
-npm run build -w @omp-studio/client-contract
-npm run build -w @omp-studio/studio-host
-npm run build -w @omp-studio/host-client-api
-npm run build -w @omp-studio/client
-npm run build -w @omp-studio/renderer
-npm run build -w @omp-studio/desktop
+npm run build -w @step-studio/studio-protocol
+npm run build -w @step-studio/client-contract
+npm run build -w @step-studio/studio-host
+npm run build -w @step-studio/host-client-api
+npm run build -w @step-studio/client
+npm run build -w @step-studio/renderer
+npm run build -w @step-studio/desktop
 
-npm test -w @omp-studio/studio-protocol
-npm test -w @omp-studio/studio-host
-npm test -w @omp-studio/host-client-api
-npm test -w @omp-studio/client
-npm test -w @omp-studio/renderer
-npm test -w @omp-studio/desktop
+npm test -w @step-studio/studio-protocol
+npm test -w @step-studio/studio-host
+npm test -w @step-studio/host-client-api
+npm test -w @step-studio/client
+npm test -w @step-studio/renderer
+npm test -w @step-studio/desktop
 
 npm run omp:verify:patches
 npm run runtime:verify-source

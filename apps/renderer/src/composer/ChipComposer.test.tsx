@@ -8,7 +8,7 @@ import { splitChipLabel, type PromptImage } from "./types";
 
 afterEach(() => {
   cleanup();
-  Reflect.deleteProperty(globalThis, "ompStudioChrome");
+  Reflect.deleteProperty(globalThis, "stepStudioChrome");
 });
 
 function png(data: string): PromptImage {
@@ -338,7 +338,7 @@ describe("ChipComposer", () => {
       value: () => Promise.reject(new Error("unreadable")),
     });
     Object.assign(globalThis, {
-      ompStudioChrome: {
+      stepStudioChrome: {
         getPathForFile: () => "C:/shots/shot.png",
         resolveDroppedPaths: async () => [
           { ok: true, kind: "image" as const, scope: "absolute" as const, path: "C:/shots/shot.png", name: "shot.png" },
@@ -553,7 +553,7 @@ describe("ChipComposer", () => {
   it("copies and saves from the preview context menu through desktop chrome", async () => {
     const copyImage = vi.fn(async (_input: { mime: string; bytes: Uint8Array }) => ({ ok: true as const }));
     const saveImage = vi.fn(async (_input: { mime: string; bytes: Uint8Array; suggestedName: string }) => ({ ok: true as const }));
-    globalThis.ompStudioChrome = { copyImage, saveImage } as unknown as NonNullable<typeof globalThis.ompStudioChrome>;
+    globalThis.stepStudioChrome = { copyImage, saveImage } as unknown as NonNullable<typeof globalThis.stepStudioChrome>;
 
     const ref = createRef<ChipComposerHandle>();
     render(<ChipComposer ref={ref} placeholder="msg" />);

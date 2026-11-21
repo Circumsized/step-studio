@@ -122,7 +122,7 @@ function parseProbeInput(raw: string): { input: StudioTelemetryProbeInput; reque
 }
 
 /**
- * The Host's workspace path rule (`workspacePathKey` in `@omp-studio/studio-host`
+ * The Host's workspace path rule (`workspacePathKey` in `@step-studio/studio-host`
  * `workspace-path.ts`): case-insensitive on Windows; on macOS `/private/var`,
  * `/private/tmp` and `/private/etc` spelled the short way and names in NFC.
  */
@@ -337,7 +337,7 @@ export async function createProbeStatsSession(options: {
 	readonly settings: Settings;
 	readonly agentDir: string;
 }): Promise<ProbeStatsSession> {
-	const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-studio-telemetry-"));
+	const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "step-studio-telemetry-"));
 	const authStorage = await AuthStorage.create(path.join(workDir, "auth.db"));
 	const registry = new ModelRegistry(authStorage);
 	const manager = await SessionManager.open(options.sessionFile, undefined, undefined, {

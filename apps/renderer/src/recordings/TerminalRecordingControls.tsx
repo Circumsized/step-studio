@@ -3,7 +3,7 @@ import { useI18n } from "../i18n";
 import { WorkspaceStatus } from "../workspaces/Workspace";
 import { RecordingPlayer } from "./RecordingPlayer";
 import "./recordings.css";
-type Api = NonNullable<typeof globalThis.ompStudioTerminal>;
+type Api = NonNullable<typeof globalThis.stepStudioTerminal>;
 type Status = Awaited<ReturnType<NonNullable<Api["recordingStatus"]>>>;
 export function TerminalRecordingControls({
   api,

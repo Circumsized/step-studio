@@ -1,5 +1,5 @@
 import { memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { StudioAgentSnapshot } from "@omp-studio/studio-protocol";
+import type { StudioAgentSnapshot } from "@step-studio/studio-protocol";
 import { Icon } from "../icons";
 import { ToolBody, TruncationMark } from "./ToolBody";
 import { ToolCardScroll } from "./useToolCardFollowScroll";

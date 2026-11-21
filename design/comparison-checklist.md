@@ -1,6 +1,6 @@
 # 九基准面人工比对清单（M1.4）
 
-本文件是「功能与前端显示基本全复刻 omp-studio，仅 omp→step」的**验收工具**。
+本文件是「功能与前端显示基本全复刻 step-studio，仅 omp→step」的**验收工具**。
 逐面对照 `docs/images/` 九张官方截图，一条一条过，不靠印象。
 
 判定用三态，不用二元：
@@ -209,7 +209,7 @@ Heatmap 属「空」而非「缺」：`usage.get` 是 Host 面，未接。判据
 | 浏览器观察 | `browser.*` | 未排期 |
 | chrome 的 Host 面 | `beginMediaUpload` / `importArtifact` / `attachPrediction` / `listServiceDefinitions` 等 | 同上；recording 三件套同 |
 | 自动更新器 | `getUpdateSnapshot` / `prepareUpdates` / `applyUpdate` 等约 40 个 | 打包面，非产品面 |
-| remote | `ompStudioRemote` 全部 | 方案 §1.3 非目标 |
+| remote | `stepStudioRemote` 全部 | 方案 §1.3 非目标 |
 
 ## WebGL2 / CSS 冒烟（M1.4 第二项）
 

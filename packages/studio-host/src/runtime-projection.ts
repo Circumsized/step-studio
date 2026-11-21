@@ -6,7 +6,7 @@ import type {
   StudioHelloResponse,
   StudioSnapshotResponse,
   SessionTelemetryEvent,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 export type RuntimeEventApplyResult = "applied" | "stale" | "gap" | "snapshot-required";
 

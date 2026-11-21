@@ -14,7 +14,7 @@
  * before returning them and requests before forwarding them.
  */
 
-import { CLIENT_CONTRACT_VERSION } from "@omp-studio/client-contract";
+import { CLIENT_CONTRACT_VERSION } from "@step-studio/client-contract";
 import type {
   AuthorityEpoch,
   AuthorityId,
@@ -44,7 +44,7 @@ import type {
   ThreadId,
   Unsubscribe,
   WorkspaceId,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   DiagnosticReadModel,
   EnvironmentReadModel,
@@ -55,7 +55,7 @@ import type {
   RuntimeInstallState,
   SessionHistoryReadModel,
   SurfaceCapabilities,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   AgentId,
   AgentTranscriptPage,
@@ -64,7 +64,7 @@ import type {
   OpaqueCursor,
   OperatorCommandManifest,
   OperatorStateSnapshot,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import { conversationChangedEvent, conversationLiveSequence, conversationPages } from "./conversation-fixtures.js";
 import type { ContractFixtureApi, FixtureCalls, FixtureSubscription } from "./types.js";

@@ -1,4 +1,4 @@
-import type { SessionTitleRow } from "@omp-studio/studio-protocol";
+import type { SessionTitleRow } from "@step-studio/studio-protocol";
 import { useI18n } from "../i18n";
 import "./sessionTitles.css";
 export function SessionTitleMark({

@@ -1,4 +1,4 @@
-import type { JudgmentBatchItem, JudgmentBatchRow, JudgmentBatchSpec } from "@omp-studio/studio-protocol";
+import type { JudgmentBatchItem, JudgmentBatchRow, JudgmentBatchSpec } from "@step-studio/studio-protocol";
 
 export const PREVIEW_JUDGMENT_SPEC: JudgmentBatchSpec = {
   intent: "检查工作台验收说明", concurrency: 4, retries: 1, minOk: 1,

@@ -1,6 +1,6 @@
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, writeSync } from "node:fs";
 import { dirname } from "node:path";
-import type { CommandLedgerEntry } from "@omp-studio/studio-protocol";
+import type { CommandLedgerEntry } from "@step-studio/studio-protocol";
 
 export interface CommandLedgerStore {
   load(): CommandLedgerEntry[];

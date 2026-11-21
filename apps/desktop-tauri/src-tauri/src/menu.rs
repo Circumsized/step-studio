@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter, Runtime};
 
 /// The channel the renderer listens on. Namespaced like the rest of this shell's
 /// IPC, so a stray listener cannot pick up an unrelated event.
-pub const MENU_COMMAND_EVENT: &str = "omp-studio:chrome:menu-command";
+pub const MENU_COMMAND_EVENT: &str = "step-studio:chrome:menu-command";
 
 /// Every command a menu item may send.
 ///

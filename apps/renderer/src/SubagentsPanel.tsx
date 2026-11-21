@@ -12,7 +12,7 @@ import type {
   ModelConfigReadModel,
   ModelRoleRecord,
   StudioClient,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import { Icon } from "./icons";
 import { useI18n } from "./i18n";
 import { ToastHost } from "./ToastHost";

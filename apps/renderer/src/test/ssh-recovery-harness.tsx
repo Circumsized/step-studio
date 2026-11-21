@@ -1,10 +1,10 @@
 // Isolated QA entry, excluded from the packaged Vite inputs. Never connects to SSH.
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
-import { StudioClientImpl } from "@omp-studio/client";
-import type { ClientTransport } from "@omp-studio/client-contract";
-import { createContractFixtureApi } from "@omp-studio/testkit";
-import type { RemoteApi, RemoteConnectionStatus, RemoteInventory } from "@omp-studio/platform";
+import { StudioClientImpl } from "@step-studio/client";
+import type { ClientTransport } from "@step-studio/client-contract";
+import { createContractFixtureApi } from "@step-studio/testkit";
+import type { RemoteApi, RemoteConnectionStatus, RemoteInventory } from "@step-studio/platform";
 import { ExecutionTargets, useExecutionTarget } from "../workspaces/ExecutionTargets";
 import { ExecutionTargetPicker } from "../workspaces/ExecutionTargetPicker";
 import { RemoteScopeNotice } from "../workspaces/RemoteScopeNotice";
@@ -27,7 +27,7 @@ function setStatus(state: RemoteConnectionStatus["state"]) {
   for (const listener of listeners) listener();
 }
 const unavailable = async () => { throw new Error("隔离演示不执行实际操作"); };
-globalThis.ompStudioRemote = {
+globalThis.stepStudioRemote = {
   list: async () => inventory,
   onChanged: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; },
   onEvent: () => () => {},
@@ -58,4 +58,4 @@ function Surface() {
 }
 const mounted = createRoot(document.getElementById("root")!);
 mounted.render(<ExecutionTargets client={local}>{(_client, key) => <PreviewModeProvider switchEnabled><Surface key={key} /></PreviewModeProvider>}</ExecutionTargets>);
-import.meta.hot?.dispose(() => { mounted.unmount(); listeners.clear(); globalThis.ompStudioRemote = undefined; void local.close(); });
+import.meta.hot?.dispose(() => { mounted.unmount(); listeners.clear(); globalThis.stepStudioRemote = undefined; void local.close(); });

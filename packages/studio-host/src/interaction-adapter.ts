@@ -6,7 +6,7 @@ import type {
   RemoteInteractionResponse,
   StudioInteractionResolvedEvent,
   StudioOperation,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { CommandArbiter, StudioHostError, type InteractionSurface } from "./command-arbiter.js";
 import { HostConfirmationRegistry } from "./host-confirmation.js";
 

@@ -1,4 +1,4 @@
-//! The `ompStudioChrome` bridge: shell-level operations the renderer expects
+//! The `stepStudioChrome` bridge: shell-level operations the renderer expects
 //! from the desktop shell (M1.2c).
 //!
 //! Scope is deliberately narrow, and the boundary is a real one rather than a
@@ -51,7 +51,7 @@ pub(crate) type ChromeResult<T> = Result<T, ChromeError>;
 
 /// `<app_data>/step-studio`, the shell's own state directory.
 ///
-/// Mirrors what the Electron host keeps under `%APPDATA%\omp-studio`; the name
+/// Mirrors what the Electron host keeps under `%APPDATA%\step-studio`; the name
 /// is the only thing that changed.
 pub(crate) fn state_dir(app: &tauri::AppHandle) -> ChromeResult<PathBuf> {
     let dir = app

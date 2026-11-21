@@ -1,7 +1,7 @@
 import { AppSelect } from "../AppSelect";
 import { useEffect, useState } from "react";
-import { GUI_SETTING_DEFINITIONS, GUI_SETTING_KEYS, validateGuiSetting, type GuiSettingKey } from "@omp-studio/studio-protocol";
-import type { StudioRuntimeSettingValue } from "@omp-studio/client-contract";
+import { GUI_SETTING_DEFINITIONS, GUI_SETTING_KEYS, validateGuiSetting, type GuiSettingKey } from "@step-studio/studio-protocol";
+import type { StudioRuntimeSettingValue } from "@step-studio/client-contract";
 import { useI18n } from "../i18n";
 import type { RuntimeSettingsCtl } from "./tabs";
 import { SettingRow, SettingSection, Switch } from "./SettingRow";

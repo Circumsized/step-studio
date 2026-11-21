@@ -1,6 +1,6 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { ClientEvent, StudioClient } from "@omp-studio/client-contract";
+import type { ClientEvent, StudioClient } from "@step-studio/client-contract";
 import { useUpgradeAvailable } from "./runtimeUpgrade";
 
 afterEach(cleanup);

@@ -1,5 +1,5 @@
 {
-  "name": "@omp-studio/client",
+  "name": "@step-studio/client",
   "version": "0.1.17",
   "private": true,
   "type": "module",
@@ -21,7 +21,7 @@
     "test:built": "node --test dist/test/*.test.js"
   },
   "dependencies": {
-    "@omp-studio/client-contract": "0.1.17",
-    "@omp-studio/studio-protocol": "0.1.17"
+    "@step-studio/client-contract": "0.1.17",
+    "@step-studio/studio-protocol": "0.1.17"
   }
 }

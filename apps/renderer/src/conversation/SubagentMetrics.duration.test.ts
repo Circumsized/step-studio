@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StudioAgentSnapshot } from "@omp-studio/studio-protocol";
+import type { StudioAgentSnapshot } from "@step-studio/studio-protocol";
 import { applyLiveSubagentRoster, formatSubagentDuration, subagentDurationMs } from "./SubagentMetrics";
 import type { SubagentView } from "./toolMeta";
 

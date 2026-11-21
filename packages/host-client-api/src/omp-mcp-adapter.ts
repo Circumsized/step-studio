@@ -20,7 +20,7 @@ import type {
   McpServerRecord,
   McpTestResult,
   McpTransport,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import { classifyAgentPluginRoot } from "./omp-discovery/agent-plugin.js";
 import { listClaudePluginRoots, type ClaudePluginRoot } from "./omp-discovery/helpers.js";

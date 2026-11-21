@@ -16,7 +16,7 @@ const STUDIO_ORIGIN = "studio-host" as const;
 
 describe("Studio session origin compatibility", () => {
 	it("seeds the initial persisted session created by studio-host", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-origin-startup-");
+		using tempDir = TempDir.createSync("@step-studio-origin-startup-");
 		const parsed = parseArgs(["--mode", "studio-host", "--session-dir", tempDir.path()]);
 		const manager = await createSessionManager(parsed, tempDir.path(), Settings.isolated());
 
@@ -24,7 +24,7 @@ describe("Studio session origin compatibility", () => {
 	});
 
 	it("persists optional Studio metadata without changing the upstream session version", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-origin-");
+		using tempDir = TempDir.createSync("@step-studio-origin-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path(), undefined, {
 			studioOrigin: STUDIO_ORIGIN,
 		});
@@ -50,7 +50,7 @@ describe("Studio session origin compatibility", () => {
 	});
 
 	it("keeps a resumed legacy CLI session unmarked while marking the next new Studio session", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-origin-legacy-");
+		using tempDir = TempDir.createSync("@step-studio-origin-legacy-");
 		const legacy = SessionManager.create(tempDir.path(), tempDir.path());
 		legacy.appendMessage(makeAssistantMessage());
 		await legacy.flush();
@@ -68,7 +68,7 @@ describe("Studio session origin compatibility", () => {
 	});
 
 	it("marks a fork created by Studio without changing the source session", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-origin-fork-");
+		using tempDir = TempDir.createSync("@step-studio-origin-fork-");
 		const source = SessionManager.create(tempDir.path(), tempDir.path());
 		source.appendMessage(makeAssistantMessage());
 		await source.flush();

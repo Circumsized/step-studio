@@ -1,4 +1,4 @@
-import { mergeModelParameters, MODEL_PARAMETER_FIELDS, type ModelAdaptationInput, type ModelAdaptationResult, type ModelAdaptationCandidate } from "@omp-studio/client-contract";
+import { mergeModelParameters, MODEL_PARAMETER_FIELDS, type ModelAdaptationInput, type ModelAdaptationResult, type ModelAdaptationCandidate } from "@step-studio/client-contract";
 
 const entries: readonly ModelAdaptationCandidate[] = [
   { key: "demo/openai/glm-5", provider: "zhipu", api: "openai-completions", id: "glm-5", name: "GLM 5", aliases: ["glm-5-gateway"], values: { contextWindow: 202752, maxTokens: 65536, reasoning: true, thinkingConfig: { mode: "effort", efforts: ["low", "medium", "high"], defaultLevel: "high" } } },

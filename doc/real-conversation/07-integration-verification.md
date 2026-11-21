@@ -174,14 +174,14 @@ turn.completed
 先按包运行，便于定位：
 
 ```bash
-npm test -w @omp-studio/studio-protocol
-npm test -w @omp-studio/studio-host
-npm test -w @omp-studio/host-client-api
-npm test -w @omp-studio/client
-npm test -w @omp-studio/transport-desktop
-npm test -w @omp-studio/testkit
-npm test -w @omp-studio/desktop
-npm test -w @omp-studio/renderer
+npm test -w @step-studio/studio-protocol
+npm test -w @step-studio/studio-host
+npm test -w @step-studio/host-client-api
+npm test -w @step-studio/client
+npm test -w @step-studio/transport-desktop
+npm test -w @step-studio/testkit
+npm test -w @step-studio/desktop
+npm test -w @step-studio/renderer
 npm run omp:verify:patches
 npm run runtime:verify-source
 npm run check

@@ -120,7 +120,7 @@ zcode 的借鉴点限定为：语义合并、不变量测试、按消费需求�
 
 ## 三、可直接派发给 worker 的工单
 
-工程根目录：`D:\Project\omp-studio`。
+工程根目录：`D:\Project\step-studio`。
 
 工单中的文件所有权同时限制修改范围。需要改动范围外文件时，worker 应返回具体原因和建议补丁位置，由集成负责人调整工单；不得自行扩展任务。
 
@@ -128,8 +128,8 @@ zcode 的借鉴点限定为：语义合并、不变量测试、按消费需求�
 
 **所有权**
 
-- [现有 Chromium 门禁](D:/Project/omp-studio/scripts/streaming-perf-gate.mjs)
-- [Renderer 性能 harness](D:/Project/omp-studio/apps/renderer/src/perf-harness-entry.tsx)
+- [现有 Chromium 门禁](D:/Project/step-studio/scripts/streaming-perf-gate.mjs)
+- [Renderer 性能 harness](D:/Project/step-studio/apps/renderer/src/perf-harness-entry.tsx)
 - 新增测试专用 benchmark 脚本和 fixture，不修改产品行为。
 
 **实施步骤**
@@ -256,8 +256,8 @@ RSS、heap、external、ArrayBuffer 分开报告，不直接相加成“总内�
 
 **所有权**
 
-- [主会话 Engine](D:/Project/omp-studio/apps/renderer/src/conversation/conversationEngine.ts)
-- [子代理 Engine](D:/Project/omp-studio/apps/renderer/src/conversation/subagentConversationEngine.ts)
+- [主会话 Engine](D:/Project/step-studio/apps/renderer/src/conversation/conversationEngine.ts)
+- [子代理 Engine](D:/Project/step-studio/apps/renderer/src/conversation/subagentConversationEngine.ts)
 - 对应 Engine/Hook 生命周期测试。
 
 **实施步骤**
@@ -282,7 +282,7 @@ RSS、heap、external、ArrayBuffer 分开报告，不直接相加成“总内�
 
 **所有权**
 
-- [Host conversation replay](D:/Project/omp-studio/packages/studio-host/src/conversation-events.ts)
+- [Host conversation replay](D:/Project/step-studio/packages/studio-host/src/conversation-events.ts)
 - 新增私有文本缓冲辅助模块。
 - `conversation-events-replay.test.ts` 及对应基准。
 
@@ -325,7 +325,7 @@ RSS、heap、external、ArrayBuffer 分开报告，不直接相加成“总内�
 
 **所有权**
 
-- [会话事件解析器](D:/Project/omp-studio/packages/studio-protocol/src/conversation-validation.ts)
+- [会话事件解析器](D:/Project/step-studio/packages/studio-protocol/src/conversation-validation.ts)
 - 协议测试。
 - Facade 与出站校验的集成测试；默认不删除其校验调用。
 
@@ -447,7 +447,7 @@ interface ConversationViewState {
 
 **所有权**
 
-- 从 [Markdown 组件](D:/Project/omp-studio/apps/renderer/src/conversation/markdown.tsx) 提取 Mermaid 专用模块。
+- 从 [Markdown 组件](D:/Project/step-studio/apps/renderer/src/conversation/markdown.tsx) 提取 Mermaid 专用模块。
 - 新增 budget、queue、cache 的纯逻辑及组件测试。
 
 **实施步骤**
@@ -639,7 +639,7 @@ dev/production 两种分支测试、重复初始化、HMR 清理和性能录制�
 
 **实施步骤**
 
-1. 更新 [功能索引](D:/Project/omp-studio/doc/feature-index.md) 中对应入口，不把实现细节复制进 AGENTS.md。
+1. 更新 [功能索引](D:/Project/step-studio/doc/feature-index.md) 中对应入口，不把实现细节复制进 AGENTS.md。
 2. 增加性能维护文档，说明：
    - 数据路径与三层合流职责。
    - 缓存、队列、Worker 的所有者及释放条件。
@@ -748,18 +748,18 @@ npm run build
 Renderer 局部测试使用已有 Vitest：
 
 ```bash
-npm run test -w @omp-studio/renderer -- <测试文件路径>
-npm run typecheck -w @omp-studio/renderer
+npm run test -w @step-studio/renderer -- <测试文件路径>
+npm run typecheck -w @step-studio/renderer
 ```
 
 Node 包使用已有测试入口：
 
 ```bash
-npm run test -w @omp-studio/studio-protocol
-npm run test -w @omp-studio/studio-host
-npm run test -w @omp-studio/host-client-api
-npm run test -w @omp-studio/transport-desktop
-npm run test -w @omp-studio/desktop
+npm run test -w @step-studio/studio-protocol
+npm run test -w @step-studio/studio-host
+npm run test -w @step-studio/host-client-api
+npm run test -w @step-studio/transport-desktop
+npm run test -w @step-studio/desktop
 ```
 
 每个 worker 先运行受影响的测试；全部集成后由负责人运行：

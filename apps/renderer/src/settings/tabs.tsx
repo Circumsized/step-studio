@@ -32,7 +32,7 @@ import type {
   StudioRuntimeSettingKey,
   StudioRuntimeSettingValue,
   StudioRuntimeSettingsActivation,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 
 export type ApprovalModeId = "always-ask" | "always-ask-cached" | "write" | "yolo";

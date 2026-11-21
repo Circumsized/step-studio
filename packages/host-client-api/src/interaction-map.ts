@@ -12,8 +12,8 @@ import type {
   CommandRequestId,
   InteractionId,
   SessionId,
-} from "@omp-studio/client-contract";
-import type { RemoteInteractionRequest } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { RemoteInteractionRequest } from "@step-studio/studio-protocol";
 
 import { redactDetail } from "./read-models.js";
 

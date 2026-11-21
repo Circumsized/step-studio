@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { SessionId, SessionTelemetryReadResult, SessionTelemetrySnapshot, SessionTelemetrySource } from "@omp-studio/studio-protocol";
+import type { SessionId, SessionTelemetryReadResult, SessionTelemetrySnapshot, SessionTelemetrySource } from "@step-studio/studio-protocol";
 
 /**
  * Client surface consumed by the offline telemetry hook. Structural so tests

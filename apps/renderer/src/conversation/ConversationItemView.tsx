@@ -1,7 +1,7 @@
 import { AnnotationButton } from "../annotations/Annotations";
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
-import type { ConversationMessageError } from "@omp-studio/client-contract";
-import type { StudioAgentSnapshot } from "@omp-studio/studio-protocol";
+import type { ConversationMessageError } from "@step-studio/client-contract";
+import type { StudioAgentSnapshot } from "@step-studio/studio-protocol";
 import { Icon } from "../icons";
 import { PlanCreatedCard, type PlanCreatedLink } from "../deck/PlanCreatedCard";
 import { useAppSettings, type ToolActivityDetail } from "../settings/appSettings";

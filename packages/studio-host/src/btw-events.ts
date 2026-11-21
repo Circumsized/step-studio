@@ -2,7 +2,7 @@ import {
   parseBtwSnapshot,
   type BtwSnapshot,
   type StudioEventEnvelope,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 export interface StudioBtwEvent {
   readonly kind: "btw.changed";

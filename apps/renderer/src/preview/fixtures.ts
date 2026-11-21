@@ -590,8 +590,8 @@ export const PREVIEW_APP_UPDATE: PreviewAppUpdate = {
 - **双语国际化支持**：新增完整的中文与英文更新引导。
 - **性能与稳定性优化**：优化 Runtime Bridge 握手与 IPC 通信效率。`,
   publishedAt: "2026-08-20T00:00:00Z",
-  htmlUrl: "https://github.com/the-snowpear/omp-studio/releases/tag/v0.2.0",
-  downloadUrl: `https://github.com/the-snowpear/omp-studio/releases/download/v0.2.0/${PLATFORM === "darwin" ? "Step-Studio-0.2.0-macos-arm64.dmg" : "Step-Studio-Setup-0.2.0-windows-x64.exe"}`,
+  htmlUrl: "https://github.com/the-snowpear/step-studio/releases/tag/v0.2.0",
+  downloadUrl: `https://github.com/the-snowpear/step-studio/releases/download/v0.2.0/${PLATFORM === "darwin" ? "Step-Studio-0.2.0-macos-arm64.dmg" : "Step-Studio-Setup-0.2.0-windows-x64.exe"}`,
   assetName: PLATFORM === "darwin" ? "Step-Studio-0.2.0-macos-arm64.dmg" : "Step-Studio-Setup-0.2.0-windows-x64.exe",
   assetSize: 89452000,
 };

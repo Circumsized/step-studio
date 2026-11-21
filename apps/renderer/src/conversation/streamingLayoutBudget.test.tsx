@@ -1,7 +1,7 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useRef, type RefObject } from "react";
-import type { RuntimeEpoch, SessionId } from "@omp-studio/studio-protocol";
+import type { RuntimeEpoch, SessionId } from "@step-studio/studio-protocol";
 import { ConversationPane } from "./ConversationPane";
 import { ConversationMinimap, MEASURE_INTERVAL_MS, MEASURE_INTERVAL_STREAMING_MS } from "./ConversationMinimap";
 import { useConversationScroll } from "./useConversationScroll";

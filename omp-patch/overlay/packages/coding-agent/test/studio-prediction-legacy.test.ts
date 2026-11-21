@@ -9,7 +9,7 @@ import { cfgSpellingAutocomplete } from "../src/modes/settings";
 import { StudioPredictionService } from "../src/studio/services/prediction-service";
 
 test("draft queries never persist, and only accepted unique submissions train the namespace", async () => {
-	const directory = join(mkdtempSync(join(tmpdir(), "omp-studio-prediction-test-")), "new", "corpus");
+	const directory = join(mkdtempSync(join(tmpdir(), "step-studio-prediction-test-")), "new", "corpus");
 	let calls = 0;
 	const client = {
 		complete: async () => {
@@ -47,7 +47,7 @@ test("draft queries never persist, and only accepted unique submissions train th
 	}
 });
 test("explicit corpus clear stops the daemon before deleting learned state", async () => {
-	const directory = mkdtempSync(join(tmpdir(), "omp-studio-prediction-clear-"));
+	const directory = mkdtempSync(join(tmpdir(), "step-studio-prediction-clear-"));
 	let stopped = 0;
 	const client = {
 		complete: async () => ({ engine: "ngram" as const, suggestion: null }),

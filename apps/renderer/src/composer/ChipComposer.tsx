@@ -16,7 +16,7 @@ import {
 } from "react";
 
 import type { ComposerChip, ComposerSnapshot, MentionCandidate, PromptImage } from "./types";
-import type { PredictionResult } from "@omp-studio/studio-protocol";
+import type { PredictionResult } from "@step-studio/studio-protocol";
 import { emptySnapshot, newChipId } from "./types";
 import { snapshotFromDoc, snapshotIsEmpty } from "./serialize";
 import { fileToPromptImage, imagePreviewUrl, isImageFile } from "./ingest";

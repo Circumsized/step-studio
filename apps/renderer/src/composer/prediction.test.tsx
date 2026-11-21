@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react
 import { afterEach, expect, it, vi } from "vitest";
 import { createRef } from "react";
 import { ChipComposer, type ChipComposerHandle } from "./ChipComposer";
-import type { PredictionResult } from "@omp-studio/studio-protocol";
+import type { PredictionResult } from "@step-studio/studio-protocol";
 afterEach(()=>{cleanup();vi.restoreAllMocks();});
 function type(editor:HTMLElement,text:string){editor.textContent=text;editor.focus();const selection=window.getSelection()!;const range=document.createRange();range.setStart(editor.firstChild!,text.length);range.collapse(true);selection.removeAllRanges();selection.addRange(range);fireEvent.input(editor);}
 function rangeRects(){Object.defineProperty(Range.prototype,"getBoundingClientRect",{configurable:true,value:()=>({left:0,right:10,top:0,bottom:20,width:10,height:20})});}

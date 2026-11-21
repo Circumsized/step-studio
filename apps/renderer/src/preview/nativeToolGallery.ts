@@ -1,4 +1,4 @@
-import type { JsonValue } from "@omp-studio/client-contract";
+import type { JsonValue } from "@step-studio/client-contract";
 
 import { demoPath } from "./demoPaths";
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CONVERSATION_LIMITS, parseConversationRuntimeEvent, type ConversationRuntimeEvent, type SessionId, type StudioEventEnvelope } from "@omp-studio/studio-protocol";
+import { CONVERSATION_LIMITS, parseConversationRuntimeEvent, type ConversationRuntimeEvent, type SessionId, type StudioEventEnvelope } from "@step-studio/studio-protocol";
 import { ConversationEventFanout, type StudioConversationForward } from "../src/conversation-events.js";
 
 const sessionId = "session" as SessionId;

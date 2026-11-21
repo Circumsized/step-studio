@@ -12,8 +12,8 @@ import type {
   RuntimePreference,
   RuntimeProbeResult,
   StudioHelloResponse,
-} from "@omp-studio/studio-protocol";
-import { FULL_PARITY_REQUIRED_CAPABILITIES, STUDIO_PROTOCOL_VERSION } from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
+import { FULL_PARITY_REQUIRED_CAPABILITIES, STUDIO_PROTOCOL_VERSION } from "@step-studio/studio-protocol";
 import { StudioBridgeClient, StudioBridgeHandshakeError, StudioBridgeRequestError } from "./bridge-client.js";
 import {
   createBridgeBootstrap,
@@ -640,7 +640,7 @@ export function buildProcessProbeArgs(
 export function createProcessProbe(options: ProcessProbeOptions = {}): RuntimeProbePort {
   return {
     async probe(context) {
-      const workspace = await mkdtemp(join(resolve(context.workspaceDirectory), "omp-studio-probe-"));
+      const workspace = await mkdtemp(join(resolve(context.workspaceDirectory), "step-studio-probe-"));
       const cleanup = options.cleanupWorkspace !== false;
       let bootstrap: { endpoint: string; token: string; tokenFile: string };
       // A socket inside the mkdtemp workspace would exceed macOS's sun_path limit.

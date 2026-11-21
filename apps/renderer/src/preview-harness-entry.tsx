@@ -3,9 +3,9 @@
  * 仅用于本地 UI 验证，不属于产品代码。
  */
 import { createRoot } from "react-dom/client";
-import { StudioClientImpl } from "@omp-studio/client";
-import type { ClientTransport } from "@omp-studio/client-contract";
-import { createContractFixtureApi } from "@omp-studio/testkit";
+import { StudioClientImpl } from "@step-studio/client";
+import type { ClientTransport } from "@step-studio/client-contract";
+import { createContractFixtureApi } from "@step-studio/testkit";
 
 import { PreviewModeProvider } from "./preview/PreviewContext";
 import { ModelConfigPage } from "./ModelConfigPage";

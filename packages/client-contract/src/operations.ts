@@ -1,9 +1,9 @@
-import type { ContextViewOperation, ContextViewResultMap } from "@omp-studio/studio-protocol";
+import type { ContextViewOperation, ContextViewResultMap } from "@step-studio/studio-protocol";
 import type { ModelAdaptationInput, ModelAdaptationResult, ModelCatalogRefreshResult } from "./model-adaptation.js";
-import type { WorkbenchOperation, WorkbenchResultMap } from "@omp-studio/studio-protocol";
-import type { PredictionQuery, PredictionResult } from "@omp-studio/studio-protocol";
-import type { UpgradeOperation, UpgradeResultMap } from "@omp-studio/studio-protocol";
-import type { EvaluationOperation } from "@omp-studio/studio-protocol";
+import type { WorkbenchOperation, WorkbenchResultMap } from "@step-studio/studio-protocol";
+import type { PredictionQuery, PredictionResult } from "@step-studio/studio-protocol";
+import type { UpgradeOperation, UpgradeResultMap } from "@step-studio/studio-protocol";
+import type { EvaluationOperation } from "@step-studio/studio-protocol";
 /**
  * Semantic request/response maps and envelopes for the product client.
  *
@@ -34,7 +34,7 @@ import type {
   StudioRuntimeSettingSetInput,
   StudioRuntimeSettingsGetResult,
   StudioRuntimeSettingsSetResult,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import type { ConversationTranscriptReadPage } from "./conversation.js";
 import type {
@@ -98,7 +98,7 @@ type ContextViewQueryMap = { [K in ContextViewOperation["kind"]]: Omit<Extract<C
 export interface QueryInputMap extends ContextViewQueryMap {
   "prediction.query": PredictionQuery;
   "artifacts.text.read": { readonly artifactId: string };
-  "artifacts.list": import("@omp-studio/studio-protocol").ArtifactListInput;
+  "artifacts.list": import("@step-studio/studio-protocol").ArtifactListInput;
   "artifacts.storage.get": EmptyInput;
   "environment.get": EmptyInput;
   "capabilities.get": EmptyInput;
@@ -165,9 +165,9 @@ export interface QueryInputMap extends ContextViewQueryMap {
 
 export interface QueryResultMap extends ContextViewResultMap {
   "prediction.query": PredictionResult;
-  "artifacts.text.read": import("@omp-studio/studio-protocol").ArtifactTextResult;
-  "artifacts.list": import("@omp-studio/studio-protocol").ArtifactPage;
-  "artifacts.storage.get": import("@omp-studio/studio-protocol").ArtifactStorageState;
+  "artifacts.text.read": import("@step-studio/studio-protocol").ArtifactTextResult;
+  "artifacts.list": import("@step-studio/studio-protocol").ArtifactPage;
+  "artifacts.storage.get": import("@step-studio/studio-protocol").ArtifactStorageState;
   "environment.get": EnvironmentReadModel;
   /** Capability read model; the protocol manifest is the safe public shape. */
   "capabilities.get": CapabilityManifest;
@@ -504,7 +504,7 @@ export type InteractionResponseValue =
   | Readonly<Record<string, unknown>>;
 
 interface CoreCommandInputMap {
-  "artifacts.saveText": import("@omp-studio/studio-protocol").ArtifactTextInput;
+  "artifacts.saveText": import("@step-studio/studio-protocol").ArtifactTextInput;
   "artifacts.delete": { readonly artifactId: string };
   /** Install or update the trusted runtime (environment page action). */
   "runtime.install": { readonly channel?: RuntimeChannel };
@@ -696,7 +696,7 @@ interface CoreCommandInputMap {
 export type CommandInputMap = CoreCommandInputMap & RuntimeCommandInputMap;
 
 interface CoreCommandResultMap {
-  "artifacts.saveText": import("@omp-studio/studio-protocol").ArtifactRecord;
+  "artifacts.saveText": import("@step-studio/studio-protocol").ArtifactRecord;
   "artifacts.delete": { readonly deleted: true; readonly artifactId: string };
   "runtime.install": RuntimeInstallState;
   "runtime.ensure": RuntimeConnection;

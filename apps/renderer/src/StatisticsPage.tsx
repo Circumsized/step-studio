@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import { usePreviewMode } from "./preview/PreviewContext";
 import { PREVIEW_STATS_TOTALS } from "./preview/fixtures";
 import { useI18n } from "./i18n";

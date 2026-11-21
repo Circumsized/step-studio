@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import { PreviewModeProvider } from "./preview/PreviewContext";
 import { SessionBudgetPane } from "./models/SessionBudgetPane";
 import { LocalFilesPane } from "./capabilities/LocalFilesPane";

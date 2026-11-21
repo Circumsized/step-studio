@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
-import type { ModelAdaptationInput, ModelAdaptationResult, StudioClient } from "@omp-studio/client-contract";
+import type { ModelAdaptationInput, ModelAdaptationResult, StudioClient } from "@step-studio/client-contract";
 import { ModelParameterEditor } from "./ModelParameterEditor";
 import { createModelParameterDraft, effectiveModelParameters, effectiveParameterSources, type ModelParameterDraft } from "./modelParameterDraft";
 import { selectOption } from "../test/selectOption";

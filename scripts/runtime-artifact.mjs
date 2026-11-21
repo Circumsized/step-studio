@@ -31,7 +31,7 @@
 // -----------------
 // The managed Runtime CLI is `omp.exe` on Windows and `omp` on macOS, chosen
 // from the artifact platform (never the build machine) through the shared
-// table in target-platform.mjs. `omp-studio.exe` is reserved for the desktop
+// table in target-platform.mjs. `step-studio.exe` is reserved for the desktop
 // application and is rejected here.
 
 import { createHash, sign as signPayload } from "node:crypto";
@@ -636,7 +636,7 @@ export async function buildManifest({
   const managedEntrypoint = runtimeEntrypointFor(platform);
   if (entrypoint !== managedEntrypoint) {
     throw new Error(
-      `Managed Runtime entrypoint for ${platform} must be "${managedEntrypoint}"; "omp-studio.exe" is reserved for the desktop application`,
+      `Managed Runtime entrypoint for ${platform} must be "${managedEntrypoint}"; "step-studio.exe" is reserved for the desktop application`,
     );
   }
   if (basename(binaryPath) !== entrypoint) {

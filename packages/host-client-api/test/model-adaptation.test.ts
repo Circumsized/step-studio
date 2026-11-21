@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { MODEL_THINKING_MODES, modelParameterValues, thinkingForRoleModel, clampRoleThinking, type ModelCatalogDocument, type ModelThinkingConfig } from "@omp-studio/client-contract";
+import { MODEL_THINKING_MODES, modelParameterValues, thinkingForRoleModel, clampRoleThinking, type ModelCatalogDocument, type ModelThinkingConfig } from "@step-studio/client-contract";
 import { createModelCatalogService, resolveModelAdaptation, decodeModelCatalog, MODEL_CATALOG_URL } from "../src/model-adaptation.js";
 import { BUILTIN_MODEL_CATALOG } from "../src/model-catalog.generated.js";
 import { createOmpModelsService, toYamlProvider } from "../src/omp-models-adapter.js";

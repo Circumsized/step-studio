@@ -23,7 +23,7 @@
 
 ## Runtime 与模型配置
 
-首次连接先体检远端系统，展示准备目录并请求确认，然后下载、验签、上传并激活匹配的私有环境。桌面发布附件中的 `remote-environment-<平台>.json` 和 `omp-studio-remote-<版本>-<平台>.*` 供应用自动使用；也可在执行位置菜单中 **导入签名 Runtime** 进行维护。只接受桌面应用既有可信公钥验证通过的制品，不信任 ZIP 自带的公钥。
+首次连接先体检远端系统，展示准备目录并请求确认，然后下载、验签、上传并激活匹配的私有环境。桌面发布附件中的 `remote-environment-<平台>.json` 和 `step-studio-remote-<版本>-<平台>.*` 供应用自动使用；也可在执行位置菜单中 **导入签名 Runtime** 进行维护。只接受桌面应用既有可信公钥验证通过的制品，不信任 ZIP 自带的公钥。
 
 安装前必须完成远端任务、审批并关闭该目标终端。安装会验证签名、上传并校验文件、等待 Host 及 Runtime 退出、运行自检、激活后重连。不会修改正在运行的 EXE，不注册系统服务，也不改 `sshd` 或防火墙。
 
@@ -33,9 +33,9 @@
 
 | 平台 | Host 默认数据根 |
 |---|---|
-| Linux | `$XDG_DATA_HOME/omp-studio/remote`，未设置时 `~/.local/share/omp-studio/remote` |
-| Windows | `%LOCALAPPDATA%\omp-studio\remote` |
-| macOS | `~/Library/Application Support/omp-studio/remote` |
+| Linux | `$XDG_DATA_HOME/step-studio/remote`，未设置时 `~/.local/share/step-studio/remote` |
+| Windows | `%LOCALAPPDATA%\step-studio\remote` |
+| macOS | `~/Library/Application Support/step-studio/remote` |
 
 其下 `environments/` 存放完整私有环境，`current-environment.json` 记录当前版本；`state/` 保存工作区注册表与私有连接信息，`state/agent/` 是独立 agent 配置，`state/runtimes/` 为签名 Runtime 安装。旧部署可能保留 `versions/` 中的 Host。
 

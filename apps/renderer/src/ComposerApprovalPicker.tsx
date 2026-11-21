@@ -8,7 +8,7 @@
 
 import { useState, type MouseEvent as ReactMouseEvent } from "react";
 
-import type { ApprovalMode } from "@omp-studio/studio-protocol";
+import type { ApprovalMode } from "@step-studio/studio-protocol";
 
 import { Icon } from "./icons";
 import { useI18n } from "./i18n";

@@ -5,7 +5,7 @@ import type { ModelProviderModelInput } from "./operations.js";
  *
  * This is the single source of truth for "what node does this form produce".
  * The renderer derives its live YAML card from it, and the Host writer
- * (`toYamlProvider` in `@omp-studio/host-client-api`) is pinned to it by the
+ * (`toYamlProvider` in `@step-studio/host-client-api`) is pinned to it by the
  * parity test `provider-yaml-draft-parity.test.ts` — a change here fails that
  * test until the Host writer matches, so the card can never silently promise
  * something a save would drop.

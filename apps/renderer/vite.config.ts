@@ -82,7 +82,7 @@ export default defineConfig({
           ];
           const pkg = id.split(/node_modules[/\\]/)[1] ?? "";
           if (mermaidPackages.some((name) => pkg.startsWith(name))) return "mermaid";
-          if (id.includes("@omp-studio")) return "studio-client";
+          if (id.includes("@step-studio")) return "studio-client";
           if (/node_modules[/\\](?:react-dom|react|scheduler)[/\\]/.test(id)) return "react";
           return "vendor";
         },

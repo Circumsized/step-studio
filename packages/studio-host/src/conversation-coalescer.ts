@@ -1,4 +1,4 @@
-import { CONVERSATION_LIMITS, type ConversationRuntimeEvent, type StudioEventEnvelope } from "@omp-studio/studio-protocol";
+import { CONVERSATION_LIMITS, type ConversationRuntimeEvent, type StudioEventEnvelope } from "@step-studio/studio-protocol";
 
 type Envelope = StudioEventEnvelope<ConversationRuntimeEvent>;
 type Group = { last: Envelope; chunks: string[]; bytes: number; truncated: boolean; hasOutput: boolean; items: number; retainedBytes: number; ascii: boolean };

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ClientBootstrap, StudioClient } from "@omp-studio/client-contract";
-import type { SessionBudgetState, SessionOptionsResultMap } from "@omp-studio/studio-protocol";
+import type { ClientBootstrap, StudioClient } from "@step-studio/client-contract";
+import type { SessionBudgetState, SessionOptionsResultMap } from "@step-studio/studio-protocol";
 import { AppSelect } from "../AppSelect";
 import { useI18n } from "../i18n";
 import { usePreviewMode } from "../preview/PreviewContext";

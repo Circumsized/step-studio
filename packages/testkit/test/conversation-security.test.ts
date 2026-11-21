@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { redactDetail, redactText } from "@omp-studio/host-client-api";
+import { redactDetail, redactText } from "@step-studio/host-client-api";
 import {
   CONVERSATION_LIMITS,
   ContractValidationError,
   encodeFrame,
   parseConversationRuntimeEvent,
   parseConversationTranscriptPage,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import {
   CONVERSATION_FIXTURE_IDS,
@@ -31,7 +31,7 @@ test("unsafe secret arguments are flagged by the public-safety checker", () => {
 test("redactText and redactDetail strip home paths and token-like values", () => {
   assert.match(redactText("C:\\Users\\alice\\project"), /redacted/i);
   assert.match(redactText("/Users/alice/secret"), /redacted/i);
-  for (const macPath of ["/private/var/folders/ab/T/omp-1", "/Volumes/Data/project", "/Library/Application Support/omp-studio"]) {
+  for (const macPath of ["/private/var/folders/ab/T/omp-1", "/Volumes/Data/project", "/Library/Application Support/step-studio"]) {
     assert.match(redactText(`failed at ${macPath}`), /redacted/i, macPath);
   }
   const redacted = redactDetail({

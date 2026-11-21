@@ -84,8 +84,8 @@ test("platform table follows the artifact platform", () => {
   assert.deepEqual([...UPDATE_PLATFORMS], ["win32-x64", "win32-arm64", "darwin-arm64"]);
 });
 test("a macOS catalog ships the desktop as a zipped app and rejects the Windows installer", () => {
-  const m = manifest(); m.platform = "darwin-arm64"; m.app!.file = file("OMP-Studio-1.0.0-macos-arm64.zip"); m.app!.blockmap = file("OMP-Studio-1.0.0-macos-arm64.zip.blockmap");
-  m.runtime = { ...m.app!, file: file("OMP-Studio-Runtime-18.0.0-macos-arm64.zip"), blockmap: file("OMP-Studio-Runtime-18.0.0-macos-arm64.zip.blockmap") };
+  const m = manifest(); m.platform = "darwin-arm64"; m.app!.file = file("Step-Studio-1.0.0-macos-arm64.zip"); m.app!.blockmap = file("Step-Studio-1.0.0-macos-arm64.zip.blockmap");
+  m.runtime = { ...m.app!, file: file("Step-Studio-Runtime-18.0.0-macos-arm64.zip"), blockmap: file("Step-Studio-Runtime-18.0.0-macos-arm64.zip.blockmap") };
   assert.equal(verifyUpdateManifest(envelope(m), { test: key }, "owner/repo", "darwin-arm64").manifest.platform, "darwin-arm64");
   const exe = manifest(); exe.platform = "darwin-arm64";
   assert.throws(() => verifyUpdateManifest(envelope(exe), { test: key }, "owner/repo", "darwin-arm64"), /metadata/);
@@ -95,8 +95,8 @@ test("a macOS catalog ships the desktop as a zipped app and rejects the Windows 
   assert.throws(() => verifyUpdateManifest(envelope(intel), { test: key }, "owner/repo", "darwin-x64"), /identity/);
 });
 test("a macOS first-install dmg survives verification, so the journaled catalog verifies again", () => {
-  const m = manifest(); m.platform = "darwin-arm64"; m.app!.file = file("OMP-Studio-1.0.0-macos-arm64.zip"); m.app!.blockmap = file("OMP-Studio-1.0.0-macos-arm64.zip.blockmap");
-  m.firstInstall = file("OMP-Studio-1.0.0-macos-arm64.dmg");
+  const m = manifest(); m.platform = "darwin-arm64"; m.app!.file = file("Step-Studio-1.0.0-macos-arm64.zip"); m.app!.blockmap = file("Step-Studio-1.0.0-macos-arm64.zip.blockmap");
+  m.firstInstall = file("Step-Studio-1.0.0-macos-arm64.dmg");
   const once = verifyUpdateManifest(envelope(m), { test: key }, "owner/repo", "darwin-arm64");
   assert.deepEqual(once.manifest.firstInstall, m.firstInstall);
   assert.deepEqual(verifyUpdateManifest(JSON.parse(JSON.stringify(once)), { test: key }, "owner/repo", "darwin-arm64"), once);

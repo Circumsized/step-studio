@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import type { SessionId } from "@omp-studio/client-contract";
-import type { StudioAgentSnapshot } from "@omp-studio/studio-protocol";
+import type { SessionId } from "@step-studio/client-contract";
+import type { StudioAgentSnapshot } from "@step-studio/studio-protocol";
 import type { MentionCandidate } from "../composer/types";
 import { Icon } from "../icons";
 import { SubagentConversationPane } from "./SubagentConversationPane";

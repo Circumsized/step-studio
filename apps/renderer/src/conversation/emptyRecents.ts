@@ -1,4 +1,4 @@
-import type { SessionHistoryEntry } from "@omp-studio/client-contract";
+import type { SessionHistoryEntry } from "@step-studio/client-contract";
 import { PREVIEW_PROJECTS, type PreviewThread } from "../preview/fixtures";
 
 export type EmptyRecentStatus = "running" | "approval" | "idle";

@@ -1,7 +1,7 @@
 import { selectOption } from "./test/selectOption";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import { PreviewModeProvider } from "./preview/PreviewContext";
 import { FeatureSettingsPane } from "./settings/FeatureSettingsPane";
 import { AgentPoolsPane } from "./models/AgentPoolsPane";
@@ -57,7 +57,7 @@ it("separates compression scanning from applying the reviewed inventory", async 
   preview(<SessionCompressionPane client={client} visible />);
   expect(screen.queryByRole("button", { name: "压缩这些文件" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "扫描候选文件" }));
-  await screen.findByText("sessions/omp-studio/queue.jsonl");
+  await screen.findByText("sessions/step-studio/queue.jsonl");
   fireEvent.click(screen.getByRole("button", { name: "压缩这些文件" }));
   await screen.findByText(/已压缩 3 \/ 3/);
   expect(command).not.toHaveBeenCalled();

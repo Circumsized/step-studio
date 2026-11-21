@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
-import type { SessionId } from "@omp-studio/client-contract";
+import type { SessionId } from "@step-studio/client-contract";
 import { createSubagentConversationEngine, subagentEngineInput, type SubagentConversationClient, type SubagentConversationSnapshot } from "./subagentConversationEngine";
 import type { SubagentHubTarget } from "./toolMeta";
 import { useExecutionTarget } from "../workspaces/ExecutionTargets";

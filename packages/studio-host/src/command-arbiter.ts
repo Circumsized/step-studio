@@ -11,7 +11,7 @@ import {
   type StudioErrorCode,
   type StudioOperation,
   type StudioRequest,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 export interface ArbiterState {
   runtimeEpoch: RuntimeEpoch;

@@ -28,9 +28,9 @@ Studio 的 pin、patchset 和制品身份以以下文件为真值：
 | patchset digest | sha256:2ab946b985a6ba9103b6051c191508e1bf984b0ae6e183144641278afd1ae4b3 | 覆盖 overlay 与 seam patch 内容和路径 |
 | seam patch 顺序 | 0001-studio-cli-entry.patch → 0002-studio-session-runtime.patch → 0003-studio-modes-and-pause.patch → 0004-studio-extensibility.patch | 只能由 regen 脚本生成，不手改 patch |
 | Runtime 制品版本 | 18.0.3-studio.10 | 上游版本与 patchset 的联合身份 |
-| Windows entrypoint | omp.exe | 以 omp --mode studio-host 启动；omp-studio.exe 仍预留给未来桌面壳 |
+| Windows entrypoint | omp.exe | 以 omp --mode studio-host 启动；step-studio.exe 仍预留给未来桌面壳 |
 | 首个平台 | win32-x64 | upstream.json 的 firstPlatform |
-| Studio Protocol | omp-studio / v1 | 根 packages/studio-protocol 是 canonical contract |
+| Studio Protocol | step-studio / v1 | 根 packages/studio-protocol 是 canonical contract |
 
 vendor 工作树在开发态可能带有 overlay 和已应用 seam 的 dirty 标记；这不等于制品身份变化。发布前必须由 apply/verify 流程确认：overlay 与 canonical 副本一致、四组 patch 可应用和反向检查、vendor 的上游基线没有未声明修改。
 
@@ -225,17 +225,17 @@ Settings props、Plan save callback、History pinned 显示都保持可选；预
 | patch verifier | npm run omp:verify:patches | 每个 patch git apply --check 通过；overlay 不触碰 upstream-owned 文件；finally 反向应用并清理成功 | 通过 |
 | OMP TypeScript | 在 omp-patch/vendor/oh-my-pi 执行 bun run check:ts | vendor fork 在 overlay+seam 状态下无类型错误 | 通过；由 omp:verify:patches 验收 |
 | Runtime focused | vendor studio agent/session、bridge/manifest、job/modes、transcript、compatibility focused tests | Studio hook 与 v18 上游行为一致；后台 job/terminal 语义无回归 | 通过；459/459 |
-| Biome | 在 omp-patch/vendor/oh-my-pi 执行 bun run check:ts（内含 biome check .） | 所有纳入检查的文件格式/静态规则一致 | 通过；4596 files。注意：Biome 属于 vendor 上游门禁，omp-studio 根门禁（npm run check）不含任何 lint/format 检查 |
+| Biome | 在 omp-patch/vendor/oh-my-pi 执行 bun run check:ts（内含 biome check .） | 所有纳入检查的文件格式/静态规则一致 | 通过；4596 files。注意：Biome 属于 vendor 上游门禁，step-studio 根门禁（npm run check）不含任何 lint/format 检查 |
 | OMP metadata | npm run omp:test:metadata | artifact、installer、manifest、目录和 self-check 测试通过 | 通过；23/23 |
-| Protocol | npm run build -w @omp-studio/studio-protocol；npm run test -w @omp-studio/studio-protocol | runtime settings、plan result、session pinned、image validation fixtures 通过，protocol 仍 v1 | 通过；纳入 root check |
-| Client contract/reducer | npm run build -w @omp-studio/client-contract；npm run test -w @omp-studio/client | 旧 snapshot 缺可选字段安全；pinned、settings、job event 映射稳定 | 通过；纳入 root check |
-| Transport | npm run test -w @omp-studio/transport-desktop；npm run test -w @omp-studio/transport-web | runtime mirror whitelist、plan path/result、Base64 MIME/16 张/16 MiB 单张/64 MiB 总量和严格 trailing bits 校验通过；web 侧 pairing/CSRF/origin 与 health 不泄敏 | 通过；两个 transport 均已纳入 root check |
-| Host catalog | npm run test -w @omp-studio/studio-host | missing、corrupt、oversize、too-many、long-id、normal、stale、排序和分页测试通过 | 通过；纳入 root check |
-| Host API | npm run test -w @omp-studio/host-client-api | snapshot、refresh、command、event 和旧 Runtime fallback 不泄漏绝对路径 | 通过；纳入 root check |
-| Runtime installer | npm run test -w @omp-studio/runtime-installer | semver prerelease 边界、stable/canary、manifest、目录安全、activate/rollback/self-check 通过 | 通过；纳入 root check |
-| Desktop | npm run typecheck -w @omp-studio/desktop；npm run test -w @omp-studio/desktop | runtime resident identity、history workspace、session lifecycle、Plan saveAndQuit、unexpected stop 非 terminal 事件通过 | 通过；190 |
-| Renderer type/build | npm run typecheck -w @omp-studio/renderer；npm run build -w @omp-studio/renderer | exactOptionalPropertyTypes、App 接线、preview/real 分支和 i18n 无错误 | 通过；390 |
-| Renderer focused | npm run test -w @omp-studio/renderer -- src/RuntimeSettings.test.tsx src/deck/PlanSaveAndQuit.test.tsx src/sidebar/useProjectHistories.test.ts | 缺省禁用、七 key onSet、preview 不调 Host、compaction 状态、PLAN.md/default/cancel、QueuedDeck 透传、History pinned 排序展示通过 | 通过；focused UI 31 |
+| Protocol | npm run build -w @step-studio/studio-protocol；npm run test -w @step-studio/studio-protocol | runtime settings、plan result、session pinned、image validation fixtures 通过，protocol 仍 v1 | 通过；纳入 root check |
+| Client contract/reducer | npm run build -w @step-studio/client-contract；npm run test -w @step-studio/client | 旧 snapshot 缺可选字段安全；pinned、settings、job event 映射稳定 | 通过；纳入 root check |
+| Transport | npm run test -w @step-studio/transport-desktop；npm run test -w @step-studio/transport-web | runtime mirror whitelist、plan path/result、Base64 MIME/16 张/16 MiB 单张/64 MiB 总量和严格 trailing bits 校验通过；web 侧 pairing/CSRF/origin 与 health 不泄敏 | 通过；两个 transport 均已纳入 root check |
+| Host catalog | npm run test -w @step-studio/studio-host | missing、corrupt、oversize、too-many、long-id、normal、stale、排序和分页测试通过 | 通过；纳入 root check |
+| Host API | npm run test -w @step-studio/host-client-api | snapshot、refresh、command、event 和旧 Runtime fallback 不泄漏绝对路径 | 通过；纳入 root check |
+| Runtime installer | npm run test -w @step-studio/runtime-installer | semver prerelease 边界、stable/canary、manifest、目录安全、activate/rollback/self-check 通过 | 通过；纳入 root check |
+| Desktop | npm run typecheck -w @step-studio/desktop；npm run test -w @step-studio/desktop | runtime resident identity、history workspace、session lifecycle、Plan saveAndQuit、unexpected stop 非 terminal 事件通过 | 通过；190 |
+| Renderer type/build | npm run typecheck -w @step-studio/renderer；npm run build -w @step-studio/renderer | exactOptionalPropertyTypes、App 接线、preview/real 分支和 i18n 无错误 | 通过；390 |
+| Renderer focused | npm run test -w @step-studio/renderer -- src/RuntimeSettings.test.tsx src/deck/PlanSaveAndQuit.test.tsx src/sidebar/useProjectHistories.test.ts | 缺省禁用、七 key onSet、preview 不调 Host、compaction 状态、PLAN.md/default/cancel、QueuedDeck 透传、History pinned 排序展示通过 | 通过；focused UI 31 |
 | Root package gates | npm run check | 根 packages、Desktop、Renderer、协议、transport 和静态门禁全部通过 | 通过 |
 | Host artifact | npm run omp:build:host | Windows omp.exe 成功构建并可探测 | 通过；omp:build:host 成功 |
 | Binary identity | 构建出的 omp.exe --version、--smoke-test 和 authenticated identity probe | CLI --version 输出 omp/18.0.3；认证 identity probe 输出 18.0.3-studio.10；hello、manifest hash 和 patchset 一致 | 通过；两种身份已明确区分 |
@@ -362,19 +362,19 @@ Set-Location ../../..
 npm run omp:test:metadata
 
 # 4. 根 packages
-npm run build -w @omp-studio/studio-protocol
-npm run test -w @omp-studio/studio-protocol
-npm run test -w @omp-studio/transport-desktop
-npm run test -w @omp-studio/studio-host
-npm run test -w @omp-studio/host-client-api
-npm run test -w @omp-studio/client
+npm run build -w @step-studio/studio-protocol
+npm run test -w @step-studio/studio-protocol
+npm run test -w @step-studio/transport-desktop
+npm run test -w @step-studio/studio-host
+npm run test -w @step-studio/host-client-api
+npm run test -w @step-studio/client
 
 # 5. Desktop/Renderer focused and package gates
-npm run typecheck -w @omp-studio/desktop
-npm run test -w @omp-studio/desktop
-npm run typecheck -w @omp-studio/renderer
-npm run test -w @omp-studio/renderer -- src/RuntimeSettings.test.tsx src/deck/PlanSaveAndQuit.test.tsx src/sidebar/useProjectHistories.test.ts
-npm run build -w @omp-studio/renderer
+npm run typecheck -w @step-studio/desktop
+npm run test -w @step-studio/desktop
+npm run typecheck -w @step-studio/renderer
+npm run test -w @step-studio/renderer -- src/RuntimeSettings.test.tsx src/deck/PlanSaveAndQuit.test.tsx src/sidebar/useProjectHistories.test.ts
+npm run build -w @step-studio/renderer
 
 # 6. 全门禁（本轮已完成；后续改动需重跑）
 npm run build

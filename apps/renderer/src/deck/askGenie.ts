@@ -1,4 +1,4 @@
-import type { ClientInteraction } from "@omp-studio/client-contract";
+import type { ClientInteraction } from "@step-studio/client-contract";
 
 /** 与 `.sa-inspect` / `.deck.is-ask-enter` 打开时长对齐。收起另见 ASK_GENIE_LEAVE_MS。 */
 export const ASK_GENIE_MS = 480;

@@ -1,4 +1,4 @@
-import type { NativePlanReview } from "@omp-studio/studio-protocol";
+import type { NativePlanReview } from "@step-studio/studio-protocol";
 export const PREVIEW_PLAN_EXECUTION: NativePlanReview = {
   available: true, reviewId: "demo-plan-review", selectedRole: "default",
   tiers: [

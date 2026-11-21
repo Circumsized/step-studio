@@ -4,7 +4,7 @@ import type {
   SessionHistoryReadModel,
   StudioClient,
   WorkspaceId,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 export const PROJECT_HISTORY_INITIAL_LIMIT = 6;
 export const PROJECT_HISTORY_PAGE_SIZE = 10;

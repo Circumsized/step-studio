@@ -212,7 +212,7 @@ fn the_decoder_survives_adversarial_input_without_panicking() {
         ("non-utf8 in the body", {
             let mut v = 30u32.to_be_bytes().to_vec();
             v.extend_from_slice(&24u32.to_be_bytes());
-            v.extend_from_slice(b"{\"protocol\":\"omp-studio\",");
+            v.extend_from_slice(b"{\"protocol\":\"step-studio\",");
             v.extend_from_slice(&[0xff, 0xfe, 0xfd]);
             v
         }),

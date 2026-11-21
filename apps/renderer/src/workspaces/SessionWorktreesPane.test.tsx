@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import { WorktreeLaunchGate } from "./SessionWorktreesPane";
 import { waitReceipt } from "../hostError";
 

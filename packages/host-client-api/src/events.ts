@@ -27,14 +27,14 @@ import type {
   Unsubscribe,
   OperationProgress,
   GitRepositoryChanged,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   BtwSnapshot,
   CommandLedgerEntry,
   ConversationRuntimeEvent,
   SessionTelemetrySnapshot,
-} from "@omp-studio/studio-protocol";
-import type { OperatorStateSnapshot } from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
+import type { OperatorStateSnapshot } from "@step-studio/studio-protocol";
 
 /** Runtime state the bus consults when an event seed omits epoch/version. */
 export interface HostEventContext {

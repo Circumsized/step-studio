@@ -3,7 +3,7 @@
  *
  * The bridge itself — the frozen five-method surface, the fixed channel
  * constants, the per-scope event filtering — is NOT reimplemented here. It
- * comes from `createDesktopIpcBridge` in `@omp-studio/transport-desktop`,
+ * comes from `createDesktopIpcBridge` in `@step-studio/transport-desktop`,
  * the same module the Electron preload uses. This file only adapts Tauri's
  * `invoke`/`listen` to the `DesktopIpcBridge` sender shape that module
  * expects, so the renderer and `transport-desktop` keep a zero diff.
@@ -40,7 +40,7 @@ import {
   DESKTOP_BRIDGE_GLOBAL,
   DESKTOP_IPC_CHANNELS,
   type DesktopIpcBridge,
-} from "@omp-studio/transport-desktop";
+} from "@step-studio/transport-desktop";
 
 /** Tauri delivers `Event<T>`; the bridge's listener wants the bare payload. */
 interface TauriEventLike<T> {
@@ -64,7 +64,7 @@ interface CommandRow {
 }
 
 /** The family prefix every Host channel carries; the command is the remainder. */
-export const DESKTOP_COMMAND_PREFIX = "omp-studio:desktop:";
+export const DESKTOP_COMMAND_PREFIX = "step-studio:desktop:";
 
 const COMMANDS: Readonly<Record<string, CommandRow>> = Object.freeze({
   [DESKTOP_IPC_CHANNELS.bootstrap]: { command: "bootstrap", args: [] },

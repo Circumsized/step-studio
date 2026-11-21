@@ -2,7 +2,7 @@ import {
   MODEL_PARAMETER_FIELDS, mergeModelParameters, modelParameterValues,
   type ModelParameterValues, type ModelParameterSources, type ModelParameterField,
   type ModelAdaptationResult, type ModelCatalogEntry, type ModelOverridePatch,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 export interface ModelParameterDraft {
   readonly values: ModelParameterValues;

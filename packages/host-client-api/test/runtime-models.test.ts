@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { PublicAuthorityIdentity } from "@omp-studio/client-contract";
-import type { HostBackend, StudioRuntimeSessionController } from "@omp-studio/studio-host";
+import type { PublicAuthorityIdentity } from "@step-studio/client-contract";
+import type { HostBackend, StudioRuntimeSessionController } from "@step-studio/studio-host";
 
 import { createDefaultHostDiagnosticsFactory, StudioHostClientFacade } from "../src/index.js";
 

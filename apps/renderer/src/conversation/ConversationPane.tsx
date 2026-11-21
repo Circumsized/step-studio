@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type ComponentProps, type ReactNode, type RefObject } from "react";
-import type { StudioAgentSnapshot } from "@omp-studio/studio-protocol";
+import type { StudioAgentSnapshot } from "@step-studio/studio-protocol";
 import { Icon } from "../icons";
 import { ActivityLine } from "./ActivityLine";
 import { ConvoTranscript } from "./ConvoTranscript";

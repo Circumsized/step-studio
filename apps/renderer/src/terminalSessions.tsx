@@ -3,7 +3,7 @@ import type { Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { TerminalGraphicsDecoder, type TerminalGraphic } from "./terminalGraphics";
 
-type Api = NonNullable<typeof globalThis.ompStudioTerminal>;
+type Api = NonNullable<typeof globalThis.stepStudioTerminal>;
 export interface TerminalSession {
   readonly targetId: string | null;
   readonly workspaceId?: string;
@@ -111,7 +111,7 @@ export class TerminalSessions {
 
 const Context = createContext<TerminalSessions | undefined>(undefined);
 export function TerminalSessionsProvider({ children }: { children: ReactNode }) {
-  const store = useMemo(() => new TerminalSessions(globalThis.ompStudioTerminal), []);
+  const store = useMemo(() => new TerminalSessions(globalThis.stepStudioTerminal), []);
   useEffect(() => () => store.close(), [store]);
   return <Context.Provider value={store}>{children}</Context.Provider>;
 }

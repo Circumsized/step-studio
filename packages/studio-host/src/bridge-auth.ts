@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { RuntimeInstanceId } from "@omp-studio/studio-protocol";
+import type { RuntimeInstanceId } from "@step-studio/studio-protocol";
 import { privateSocketPath, randomSocketName } from "./socket-paths.js";
 
 export interface BridgeBootstrap {
@@ -90,7 +90,7 @@ export async function createBridgeBootstrap(
   const tokenFile = join(privateDirectory, `${opaqueName}.token`);
   const endpoint =
     platform === "win32"
-      ? `\\\\.\\pipe\\omp-studio-${opaqueName}`
+      ? `\\\\.\\pipe\\step-studio-${opaqueName}`
       : options.socketDirectory !== undefined
         ? privateSocketPath(options.socketDirectory, randomSocketName("b"))
         : privateSocketPath(privateDirectory, `${opaqueName}.sock`);

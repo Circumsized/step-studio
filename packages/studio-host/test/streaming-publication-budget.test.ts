@@ -19,7 +19,7 @@ import type {
   StateVersion,
   StudioReceipt,
   StudioRequest,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { COMMAND_LEDGER_TERMINAL_CAP, CommandLedger, RuntimePublicationStore } from "../src/index.js";
 import type { CommandLedgerStore } from "../src/command-ledger-store.js";
 

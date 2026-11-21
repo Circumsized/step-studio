@@ -1,4 +1,4 @@
-import type { BtwSnapshot } from "@omp-studio/client-contract";
+import type { BtwSnapshot } from "@step-studio/client-contract";
 
 /**
  * BTW demo snapshots for preview mode.

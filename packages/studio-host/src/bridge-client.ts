@@ -1,5 +1,5 @@
-import type { SessionOwnerState } from "@omp-studio/studio-protocol";
-import type { ContextViewOperation, ContextViewResultMap } from "@omp-studio/studio-protocol";
+import type { SessionOwnerState } from "@step-studio/studio-protocol";
+import type { ContextViewOperation, ContextViewResultMap } from "@step-studio/studio-protocol";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createConnection, type Socket } from "node:net";
 import {
@@ -31,7 +31,7 @@ import {
   type StudioSnapshotResponse,
   type OperatorCommandManifest,
   type SessionTranscriptRead,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { verifyChallengeProof } from "./bridge-auth.js";
 import { StudioHostError } from "./command-arbiter.js";
 import { RuntimeProjection } from "./runtime-projection.js";
@@ -785,4 +785,4 @@ export class StudioBridgeClient {
     for (const listener of this.#projectionListeners) listener(published);
   }
 }
-import { type PredictionQuery, type PredictionResult, validatePredictionResult } from "@omp-studio/studio-protocol";
+import { type PredictionQuery, type PredictionResult, validatePredictionResult } from "@step-studio/studio-protocol";

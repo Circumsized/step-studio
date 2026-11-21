@@ -3,15 +3,15 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, expect, it, vi } from "vitest";
 import { selectOption } from "../test/selectOption";
 import { useState } from "react";
-import type { ClientBootstrap, StudioClient } from "@omp-studio/client-contract";
-import type { RemoteApi, RemoteInventory } from "@omp-studio/platform";
+import type { ClientBootstrap, StudioClient } from "@step-studio/client-contract";
+import type { RemoteApi, RemoteInventory } from "@step-studio/platform";
 import { RemoteScopeNotice } from "./RemoteScopeNotice";
 import { ExecutionTargets, useExecutionTarget, useTargetMemory } from "./ExecutionTargets";
 import { ExecutionTargetPicker } from "./ExecutionTargetPicker";
 import { PreviewModeProvider } from "../preview/PreviewContext";
 
 const local = { subscribe: () => () => {}, close: async () => {} } as unknown as StudioClient;
-afterEach(() => { cleanup(); globalThis.ompStudioRemote = undefined; localStorage.clear(); });
+afterEach(() => { cleanup(); globalThis.stepStudioRemote = undefined; localStorage.clear(); });
 function Surface() {
   const target = useExecutionTarget();
   const [draft, setDraft] = useTargetMemory("draft", () => "");
@@ -29,7 +29,7 @@ function api() {
   return { list: vi.fn(async () => ({ profiles: [{ id: "remote", name: "Test", host: "test", platform: "linux" }], statuses: [{ id: "remote", state: "connected" }] })), onChanged: () => () => {}, onEvent: () => () => {}, select: vi.fn(async () => {}), bootstrap: vi.fn(async () => bootstrap()), connect: vi.fn(), save: vi.fn(), disconnect: vi.fn() } as unknown as RemoteApi;
 }
 it("keeps drafts on their original execution target when switching back", async () => {
-  globalThis.ompStudioRemote = api();
+  globalThis.stepStudioRemote = api();
   render(<ExecutionTargets client={local}>{(_client, key) => <Surface key={key} />}</ExecutionTargets>);
   fireEvent.change(await screen.findByLabelText("draft"), { target: { value: "local-only" } });
   fireEvent.click(screen.getByText("remote"));
@@ -41,7 +41,7 @@ it("keeps drafts on their original execution target when switching back", async 
   expect((screen.getByLabelText("draft") as HTMLInputElement).value).toBe("local-only");
 });
 it("a failed remote bootstrap preserves the local target and draft", async () => {
-  const remote = api(); remote.bootstrap = vi.fn(async () => { throw new Error("SSH unavailable"); }); globalThis.ompStudioRemote = remote;
+  const remote = api(); remote.bootstrap = vi.fn(async () => { throw new Error("SSH unavailable"); }); globalThis.stepStudioRemote = remote;
   render(<ExecutionTargets client={local}>{(_client, key) => <Surface key={key} />}</ExecutionTargets>);
   fireEvent.change(await screen.findByLabelText("draft"), { target: { value: "keep me" } }); fireEvent.click(screen.getByText("remote"));
   await screen.findByText("SSH unavailable");
@@ -59,7 +59,7 @@ function recoveryApi() {
   remote.list = vi.fn(async () => inventory);
   remote.onChanged = listener => { changed = listener; return () => {}; };
   remote.disconnect = vi.fn(async () => { inventory = { ...inventory, statuses: [{ id: "remote", state: "disconnected", generation: inventory.statuses[0]?.generation ?? 0 }] }; changed(); });
-  globalThis.ompStudioRemote = remote;
+  globalThis.stepStudioRemote = remote;
   render(<ExecutionTargets client={local}>{(_client, key) => <PreviewModeProvider switchEnabled><RecoverySurface key={key} /></PreviewModeProvider>}</ExecutionTargets>);
   return { remote, update: (state: RemoteInventory["statuses"][number]["state"], generation = 1) => { inventory = { ...inventory, statuses: [{ id: "remote", state, generation }] }; changed(); } };
 }
@@ -100,7 +100,7 @@ it("cancel during recovery calls disconnect without changing execution target", 
   expect(f.remote.select).not.toHaveBeenCalled();
 });
 it("preview target selection never connects to a real SSH host", async () => {
-  const remote = api(); globalThis.ompStudioRemote = remote; localStorage.setItem("omp.previewMode", "1");
+  const remote = api(); globalThis.stepStudioRemote = remote; localStorage.setItem("omp.previewMode", "1");
   render(<ExecutionTargets client={local}>{() => <PreviewModeProvider switchEnabled><ExecutionTargetPicker /></PreviewModeProvider>}</ExecutionTargets>);
   fireEvent.click(await screen.findByRole("button", { name: /此计算机/ })); fireEvent.click(screen.getByRole("menuitem", { name: /dev-linux/ }));
   expect(screen.getByRole("button", { name: /SSH · dev-linux/ })).toBeTruthy(); expect(remote.connect).not.toHaveBeenCalled(); expect(remote.select).not.toHaveBeenCalled();
@@ -111,7 +111,7 @@ it("keeps authentication inside the connection dialog and identifies the target 
     showModal(this: HTMLDialogElement) { this.setAttribute("open", ""); },
     close(this: HTMLDialogElement) { this.removeAttribute("open"); },
   });
-  const remote = api(); globalThis.ompStudioRemote = remote;
+  const remote = api(); globalThis.stepStudioRemote = remote;
   render(<ExecutionTargets client={local}>{() => <PreviewModeProvider switchEnabled><ExecutionTargetPicker /></PreviewModeProvider>}</ExecutionTargets>);
   fireEvent.click(await screen.findByRole("button", { name: /此计算机/ }));
   fireEvent.click(screen.getByRole("menuitem", { name: "添加 SSH 连接" }));
@@ -133,7 +133,7 @@ it("loads a just-saved connection when connect runs before the inventory rerende
   remote.connect = vi.fn(async () => {});
   remote.save = vi.fn(async () => { throw new Error("not used"); });
   remote.onChanged = () => () => {};
-  globalThis.ompStudioRemote = remote;
+  globalThis.stepStudioRemote = remote;
   render(<ExecutionTargets client={local}>{() => <ConnectSurface />}</ExecutionTargets>);
   await screen.findByText("connect new");
   inventory = { profiles: [{ id: "new-remote", name: "New", host: "new" }], statuses: [{ id: "new-remote", state: "disconnected" }] };

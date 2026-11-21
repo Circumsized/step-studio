@@ -162,7 +162,7 @@ export class StudioPredictionService {
 			folder = path.join(this.directory, "prediction");
 		const endpoint =
 			process.platform === "win32"
-				? "\\\\.\\pipe\\omp-studio-predict-" + id
+				? "\\\\.\\pipe\\step-studio-predict-" + id
 				: path.join(this.socketDirectory!, predictionSocketName(id));
 		if (process.platform !== "win32" && Buffer.byteLength(endpoint) > 103)
 			throw new SessionControlError("COMMAND_BLOCKED", "Prediction socket path is too long");

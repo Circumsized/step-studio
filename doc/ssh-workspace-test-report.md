@@ -21,7 +21,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 工作树 | `D:\Project\omp-studio\.claude\worktrees\trusting-khorana-a24ebe` |
+| 工作树 | `D:\Project\step-studio\.claude\worktrees\trusting-khorana-a24ebe` |
 | 分支 / HEAD | `claude/trusting-khorana-a24ebe` / `2a561ae374411e8f15c5ff393d26c20392bad755` |
 | 本机 | Windows 11 家庭版中文版 build 26300 x64 |
 | 本机 SSH | OpenSSH_for_Windows_9.5p2（`C:\Windows\System32\OpenSSH\ssh.exe`） |
@@ -38,14 +38,14 @@
 |---|---|---|---|
 | 1 | `npm run check` | 0 | build 通过；Node 313 pass；Renderer 128 pass；0 fail |
 | 2 | `node --test apps/desktop/dist/test/remote-{host,manager,terminal}.test.js scripts/target-platform.test.mjs scripts/runtime-artifact.test.mjs` | 0 | 39/39 pass（见下方环境前置） |
-| 3 | `npm run test -w @omp-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/terminalSessions.test.tsx` | 0 | 5/5 pass |
+| 3 | `npm run test -w @step-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/terminalSessions.test.tsx` | 0 | 5/5 pass |
 | 4 | `node --test apps/desktop/dist/test/remote-authentication.test.js`（新增） | 0 | 9 pass / 1 todo / 0 fail |
-| 5 | `npm run test -w @omp-studio/renderer -- src/workspaces/SshPasswordDialog.test.tsx`（新增） | 0 | 3/3 pass |
+| 5 | `npm run test -w @step-studio/renderer -- src/workspaces/SshPasswordDialog.test.tsx`（新增） | 0 | 3/3 pass |
 | 6 | `node scripts/test-remote-ssh.mjs deskserver` | 0 | 部署、文件树、Git、重连同 authority 通过 |
 | 7 | `node scripts/test-remote-terminal.mjs deskserver` | 0 | PTY cwd/输入输出/resize/Ctrl-C/关闭通过 |
 | 8 | `node scripts/test-remote-ssh.mjs ucloud`（3 次） | 1 | 前两步通过，重连阶段 TCP 超时 |
 | 9 | `node scripts/test-remote-terminal.mjs ucloud` | 1 | attach 阶段 TCP 超时 |
-| 10 | `npm run typecheck -w @omp-studio/renderer` / `-desktop` | 0 / 0 | 新增测试文件类型干净 |
+| 10 | `npm run typecheck -w @step-studio/renderer` / `-desktop` | 0 / 0 | 新增测试文件类型干净 |
 
 环境前置（非产品缺陷）：
 
@@ -232,13 +232,13 @@ ucloud 失败细节：`ssh: connect to host 165.154.23.36 port 22: Connection ti
 
 | 主机 | 路径 | 处理 |
 |---|---|---|
-| deskserver | `…\AppData\Local\Temp\omp-studio-ssh-test-1792919656734` | 已删除，复核不存在 |
-| deskserver | `…\AppData\Local\Temp\omp-studio-terminal-test-1792919670212` | 已删除，复核不存在 |
-| ucloud | `~/.cache/omp-studio-ssh-test-1792919566852` | 先 kill 该目录的 Host PID 3088698，再删除，复核不存在 |
-| ucloud | `~/.cache/omp-studio-ssh-test-1792919715094` | 已删除，复核不存在 |
-| ucloud | `~/.cache/omp-studio-terminal-test-1792919938350` | 已 kill 对应进程并删除，复核不存在（`procs=0`） |
+| deskserver | `…\AppData\Local\Temp\step-studio-ssh-test-1792919656734` | 已删除，复核不存在 |
+| deskserver | `…\AppData\Local\Temp\step-studio-terminal-test-1792919670212` | 已删除，复核不存在 |
+| ucloud | `~/.cache/step-studio-ssh-test-1792919566852` | 先 kill 该目录的 Host PID 3088698，再删除，复核不存在 |
+| ucloud | `~/.cache/step-studio-ssh-test-1792919715094` | 已删除，复核不存在 |
+| ucloud | `~/.cache/step-studio-terminal-test-1792919938350` | 已 kill 对应进程并删除，复核不存在（`procs=0`） |
 
-**未处理、留给负责人确认**（不属于本次创建）：`~/.cache/omp-studio-ssh-test-1792860425334`、`-1792860751905`、`-1792910548838`、`omp-studio-terminal-test-1792864271694`、`-1792910695322`、`-1792911440082`、`omp-studio-runtime-test-1792865634980`；其中 `-1792860425334` 的 Host 进程（PID 2641164，自 10-24 起）仍在运行，占用该临时数据根。未按模糊进程名或通配符清理。`tmp/ssh-debug/experiments/` 未运行、未改动。
+**未处理、留给负责人确认**（不属于本次创建）：`~/.cache/step-studio-ssh-test-1792860425334`、`-1792860751905`、`-1792910548838`、`step-studio-terminal-test-1792864271694`、`-1792910695322`、`-1792911440082`、`step-studio-runtime-test-1792865634980`；其中 `-1792860425334` 的 Host 进程（PID 2641164，自 10-24 起）仍在运行，占用该临时数据根。未按模糊进程名或通配符清理。`tmp/ssh-debug/experiments/` 未运行、未改动。
 
 ## 结论
 

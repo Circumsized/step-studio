@@ -18,4 +18,4 @@ class StudioLiveCapture extends AudioWorkletProcessor {
     return true;
   }
 }
-registerProcessor("omp-studio-live-capture", StudioLiveCapture);
+registerProcessor("step-studio-live-capture", StudioLiveCapture);

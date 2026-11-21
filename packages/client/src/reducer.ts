@@ -54,8 +54,8 @@ import type {
   ResidentsReadModel,
   StateVersion,
   SurfaceCapabilities,
-} from "@omp-studio/client-contract";
-import type { CapabilityManifest, OperatorStateSnapshot } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { CapabilityManifest, OperatorStateSnapshot } from "@step-studio/studio-protocol";
 
 /** Renderer-owned area; the client reducer never reads or writes it. */
 export type ClientUiState = Readonly<Record<string, unknown>>;

@@ -35,7 +35,7 @@ import type {
   QueryName,
   SubscriptionScope,
   ThreadId,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import { contractFixtures, createContractFixtureApi } from "./fixtures.js";
 import type { ContractFixtureApi, TransportFactory } from "./types.js";

@@ -1,4 +1,4 @@
-import { privateEndpoint, type PrivateEndpoint } from "@omp-studio/platform";
+import { privateEndpoint, type PrivateEndpoint } from "@step-studio/platform";
 import { assertNonEmptyString } from "./win32-services.js";
 
 /**

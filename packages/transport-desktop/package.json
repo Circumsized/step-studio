@@ -1,5 +1,5 @@
 {
-  "name": "@omp-studio/transport-desktop",
+  "name": "@step-studio/transport-desktop",
   "version": "0.1.17",
   "private": true,
   "type": "module",
@@ -19,7 +19,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@omp-studio/client": "0.1.17",
-    "@omp-studio/client-contract": "0.1.17"
+    "@step-studio/client": "0.1.17",
+    "@step-studio/client-contract": "0.1.17"
   }
 }

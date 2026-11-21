@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CommandInput } from "@omp-studio/client-contract";
+import type { CommandInput } from "@step-studio/client-contract";
 import type {
   StudioIdaResultMap,
   StudioIdaStatus,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import type { SessionOptionsProps } from "../models/SessionOptionsPane";
 import { PREVIEW_IDA } from "../preview/idaPreview";
 import { usePreviewMode } from "../preview/PreviewContext";

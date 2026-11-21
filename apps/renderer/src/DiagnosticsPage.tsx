@@ -11,8 +11,8 @@ import type {
   RuntimeChannel,
   RuntimeInstallState,
   StudioClient,
-} from "@omp-studio/client-contract";
-import type { SessionBuildIdentity, SessionBuildProvenance } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { SessionBuildIdentity, SessionBuildProvenance } from "@step-studio/studio-protocol";
 import { Icon } from "./icons";
 import { ProcessMemoryPanel } from "./ProcessMemoryPanel";
 import { ToastHost } from "./ToastHost";

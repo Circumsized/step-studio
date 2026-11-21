@@ -17,13 +17,13 @@
  * supplies the Tauri sender and installs the result on the one global name
  * the renderer reads (`apps/renderer/src/main.tsx:74`).
  *
- * M1.1 exposed `ompStudio` only. M1.2c adds `ompStudioChrome` (the shell-level
- * subset — see `chrome-bridge.ts`) and `ompStudioTerminal` (a real PTY — see
- * `terminal-bridge.ts`). `ompStudioRemote` is still absent; the renderer treats
+ * M1.1 exposed `stepStudio` only. M1.2c adds `stepStudioChrome` (the shell-level
+ * subset — see `chrome-bridge.ts`) and `stepStudioTerminal` (a real PTY — see
+ * `terminal-bridge.ts`). `stepStudioRemote` is still absent; the renderer treats
  * all three as optional, so their absence degrades instead of breaking.
  */
 
-import { createDesktopIpcBridge, DESKTOP_BRIDGE_GLOBAL } from "@omp-studio/transport-desktop";
+import { createDesktopIpcBridge, DESKTOP_BRIDGE_GLOBAL } from "@step-studio/transport-desktop";
 
 import { createTauriChromeBridge } from "./chrome-bridge.js";
 import { createTauriTerminalBridge } from "./terminal-bridge.js";
@@ -38,14 +38,14 @@ Object.defineProperty(window, DESKTOP_BRIDGE_GLOBAL, {
   enumerable: true,
 });
 
-Object.defineProperty(window, "ompStudioChrome", {
+Object.defineProperty(window, "stepStudioChrome", {
   value: createTauriChromeBridge(),
   writable: false,
   configurable: false,
   enumerable: true,
 });
 
-Object.defineProperty(window, "ompStudioTerminal", {
+Object.defineProperty(window, "stepStudioTerminal", {
   value: createTauriTerminalBridge(),
   writable: false,
   configurable: false,

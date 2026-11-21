@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ConversationMessageItem, ConversationRuntimeEvent, SessionId } from "@omp-studio/client-contract";
+import type { ConversationMessageItem, ConversationRuntimeEvent, SessionId } from "@step-studio/client-contract";
 import { ConversationStore } from "./conversationStore";
 import { subagentTurnRunning } from "./subagentComposerGate";
 import { timelineStructureToken, tailInterrupted } from "./conversationViewModel";

@@ -1,4 +1,4 @@
-import type { ContextViewIndex, ContextEntrySummary } from "@omp-studio/studio-protocol";
+import type { ContextViewIndex, ContextEntrySummary } from "@step-studio/studio-protocol";
 export const PREVIEW_CONTEXT_VIEW: ContextViewIndex = {
   sessionId: "demo-context", snapshotId: "demo-snapshot", capturedAt: "2026-10-28T10:00:00Z", contextWindow: 200000, usedTokens: 38200, freeTokens: 145800, bufferTokens: 16000, thresholdTokens: 160000, savedTokens: 6400, truncated: false,
   categories: [

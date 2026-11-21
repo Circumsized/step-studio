@@ -4,7 +4,7 @@
  * page and must not be written through to Host commands.
  */
 
-import type { JobInspection, JobWidgetView } from "@omp-studio/studio-protocol";
+import type { JobInspection, JobWidgetView } from "@step-studio/studio-protocol";
 
 export type PreviewMetrics = {
   cost: number;
@@ -136,7 +136,7 @@ export function previewJobInspections(now = Date.now()): Record<string, JobInspe
     "job-91": {
       jobId: "job-91",
       command: "bunx tsc --noEmit -p tsconfig.json",
-      cwd: "~/projects/omp-studio",
+      cwd: "~/projects/step-studio",
       pids: [48213, 48220],
       output: "packages/client/src/reducer.ts(311,3): error TS2353\nsrc/AgentHub.tsx(2210,7): error TS2322\n…checking packages/client",
       widget: previewTypecheckWidget(now),
@@ -144,7 +144,7 @@ export function previewJobInspections(now = Date.now()): Record<string, JobInspe
     "job-83": {
       jobId: "job-83",
       command: "grep -rn \"pi-core\" package-lock.json",
-      cwd: "~/projects/omp-studio",
+      cwd: "~/projects/step-studio",
       pids: [],
       exitCode: 0,
       output: "package-lock.json:1182:  \"node_modules/@earendil-works/pi-core\": {\npackage-lock.json:1190:    \"pi-core\": \"0.82.1\"",

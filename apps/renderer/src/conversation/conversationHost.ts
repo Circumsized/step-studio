@@ -6,8 +6,8 @@ import type {
   RuntimeEpoch,
   SessionId,
   StudioClient,
-} from "@omp-studio/client-contract";
-import { CONVERSATION_LIMITS, SESSION_TRANSCRIPT_READ_KIND } from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
+import { CONVERSATION_LIMITS, SESSION_TRANSCRIPT_READ_KIND } from "@step-studio/client-contract";
 
 export const TRANSCRIPT_QUERY_NAME = SESSION_TRANSCRIPT_READ_KIND;
 export const ARCHIVE_TRANSCRIPT_QUERY_NAME = "session.transcript.readPage" as const;

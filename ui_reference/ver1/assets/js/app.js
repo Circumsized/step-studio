@@ -8,7 +8,7 @@
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
   /* ---------------- 状态（布局持久化） ---------------- */
-  const LS_KEY = 'omp-studio-layout';
+  const LS_KEY = 'step-studio-layout';
   const state = {
     sidebarW: 272,
     ratio: 0.46,               // 项目对话区占比

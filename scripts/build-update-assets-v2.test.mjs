@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { buildUpdateAssetsV2, buildMigrationIndex } from "./build-update-assets-v2.mjs";
 import { verifyUpdateAssets } from "./verify-update-assets-v2.mjs";
-import { verifyUpdateManifest } from "@omp-studio/runtime-installer";
+import { verifyUpdateManifest } from "@step-studio/runtime-installer";
 import { parseUpdateIndex } from "../packages/runtime-installer/dist/src/index.js";
 
 const { privateKey: signingKey, publicKey } = generateKeyPairSync("ed25519");
@@ -19,7 +19,7 @@ async function fixture(channel = "stable", runtimeVersion = "18.0.0-studio.1", e
   const sums = Buffer.from(JSON.stringify({ algorithm: "sha256", files: { "omp.exe": hash(exe), "runtime-manifest.json": hash(manifest) } }));
   const payload = Buffer.concat([manifest, Buffer.from("\0"), sums]);
   for (const [name, bytes] of [["omp.exe", exe], ["runtime-manifest.json", manifest], ["checksums.json", sums], ["runtime-signature.json", JSON.stringify({ algorithm: "ed25519", keyId, payloadSha256: hash(payload), signature: sign(null, payload, signingKey).toString("base64url") })]]) await writeFile(join(runtimeDir, name), bytes);
-  const setupPath = join(root, "OMP-Studio-Setup-1.0.0-windows-x64.exe"); await writeFile(setupPath, "setup-fixture");
+  const setupPath = join(root, "Step-Studio-Setup-1.0.0-windows-x64.exe"); await writeFile(setupPath, "setup-fixture");
   return { root, runtimeDir, setupPath, arch: "x64", appVersion: "1.0.0", repo: "owner/repo", keys, signingKey, keyId };
 }
 test("v2 desktop publishes only documented artifacts and verifies every byte", async () => {
@@ -99,8 +99,8 @@ async function darwinFixture(channel = "stable") {
   for (const [name, bytes] of [["omp", exe], ["runtime-manifest.json", manifest], ["checksums.json", sums], ["runtime-signature.json", JSON.stringify({ algorithm: "ed25519", keyId, payloadSha256: hash(payload), signature: sign(null, payload, signingKey).toString("base64url") })]]) await writeFile(join(runtimeDir, name), bytes);
   const installer = join(root, "outputs", "installer-mac");
   await mkdir(installer, { recursive: true });
-  await writeFile(join(installer, "OMP-Studio-1.0.0-macos-arm64.zip"), "app-zip-fixture");
-  await writeFile(join(installer, "OMP-Studio-1.0.0-macos-arm64.dmg"), "dmg-fixture");
+  await writeFile(join(installer, "Step-Studio-1.0.0-macos-arm64.zip"), "app-zip-fixture");
+  await writeFile(join(installer, "Step-Studio-1.0.0-macos-arm64.dmg"), "dmg-fixture");
   return { root, runtimeDir, platform: "darwin-arm64", appVersion: "1.0.0", repo: "owner/repo", keys, signingKey, keyId };
 }
 
@@ -109,15 +109,15 @@ test("a macOS desktop release: the update zip in the catalog, the signed dmg bes
   const { out, manifest, notes } = await buildUpdateAssetsV2({ ...options, previousIndex: join(options.root, "never-read.json") });
   assert.equal(out, join(options.root, "outputs", "release", "darwin-arm64"));
   assert.equal(manifest.platform, "darwin-arm64");
-  assert.equal(manifest.app.file.asset, "OMP-Studio-1.0.0-macos-arm64.zip");
-  assert.equal(manifest.runtime.file.asset, "OMP-Studio-Runtime-18.0.0-studio.1-macos-arm64.zip");
-  assert.equal(manifest.firstInstall.url, "https://github.com/owner/repo/releases/download/v1.0.0/OMP-Studio-1.0.0-macos-arm64.dmg");
+  assert.equal(manifest.app.file.asset, "Step-Studio-1.0.0-macos-arm64.zip");
+  assert.equal(manifest.runtime.file.asset, "Step-Studio-Runtime-18.0.0-studio.1-macos-arm64.zip");
+  assert.equal(manifest.firstInstall.url, "https://github.com/owner/repo/releases/download/v1.0.0/Step-Studio-1.0.0-macos-arm64.dmg");
   assert.deepEqual((await readdir(out)).sort(), [
-    "OMP-Studio-1.0.0-macos-arm64.dmg",
-    "OMP-Studio-1.0.0-macos-arm64.zip",
-    "OMP-Studio-1.0.0-macos-arm64.zip.blockmap",
-    "OMP-Studio-Runtime-18.0.0-studio.1-macos-arm64.zip",
-    "OMP-Studio-Runtime-18.0.0-studio.1-macos-arm64.zip.blockmap",
+    "Step-Studio-1.0.0-macos-arm64.dmg",
+    "Step-Studio-1.0.0-macos-arm64.zip",
+    "Step-Studio-1.0.0-macos-arm64.zip.blockmap",
+    "Step-Studio-Runtime-18.0.0-studio.1-macos-arm64.zip",
+    "Step-Studio-Runtime-18.0.0-studio.1-macos-arm64.zip.blockmap",
     "release-notes.md",
     "updates-darwin-arm64.json",
   ]);
@@ -125,15 +125,15 @@ test("a macOS desktop release: the update zip in the catalog, the signed dmg bes
   // The desktop journals the verified envelope and verifies it again on every start.
   const once = verifyUpdateManifest(JSON.parse(await readFile(join(out, "updates-darwin-arm64.json"), "utf8")), keys, "owner/repo", "darwin-arm64");
   assert.deepEqual(verifyUpdateManifest(JSON.parse(JSON.stringify(once)), keys, "owner/repo", "darwin-arm64"), once);
-  assert.equal(once.manifest.firstInstall.asset, "OMP-Studio-1.0.0-macos-arm64.dmg");
-  assert.match(notes, /下载 dmg\]\(https:\/\/github\.com\/owner\/repo\/releases\/download\/v1\.0\.0\/OMP-Studio-1\.0\.0-macos-arm64\.dmg\)/u);
+  assert.equal(once.manifest.firstInstall.asset, "Step-Studio-1.0.0-macos-arm64.dmg");
+  assert.match(notes, /下载 dmg\]\(https:\/\/github\.com\/owner\/repo\/releases\/download\/v1\.0\.0\/Step-Studio-1\.0\.0-macos-arm64\.dmg\)/u);
   assert.match(notes, /仍要打开/u);
   assert.doesNotMatch(notes, /update-index/u);
 
-  await writeFile(join(out, "OMP-Studio-1.0.0-macos-arm64.dmg"), "tampered");
-  await assert.rejects(() => verifyUpdateAssets(out, keys, "owner/repo", "darwin-arm64"), /mismatch: OMP-Studio-1\.0\.0-macos-arm64\.dmg/u);
+  await writeFile(join(out, "Step-Studio-1.0.0-macos-arm64.dmg"), "tampered");
+  await assert.rejects(() => verifyUpdateAssets(out, keys, "owner/repo", "darwin-arm64"), /mismatch: Step-Studio-1\.0\.0-macos-arm64\.dmg/u);
   const { rm } = await import("node:fs/promises");
-  await rm(join(out, "OMP-Studio-1.0.0-macos-arm64.dmg"));
+  await rm(join(out, "Step-Studio-1.0.0-macos-arm64.dmg"));
   await assert.rejects(() => verifyUpdateAssets(out, keys, "owner/repo", "darwin-arm64"), /ENOENT/u);
 });
 

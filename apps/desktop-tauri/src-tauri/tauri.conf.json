@@ -2,12 +2,12 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Step Studio",
   "version": "0.1.0",
-  "identifier": "com.snowpear.omp-studio",
+  "identifier": "com.snowpear.step-studio",
   "build": {
     "frontendDist": "../../renderer/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run build:bridge && npm run dev -w @omp-studio/renderer -- --strictPort",
-    "beforeBuildCommand": "npm run build:bridge && npm run build -w @omp-studio/renderer"
+    "beforeDevCommand": "npm run build:bridge && npm run dev -w @step-studio/renderer -- --strictPort",
+    "beforeBuildCommand": "npm run build:bridge && npm run build -w @step-studio/renderer"
   },
   "app": {
     "windows": [],

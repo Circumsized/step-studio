@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CommandInput } from "@omp-studio/client-contract";
-import type { CompressionState, AutoCompressionStatus, SessionCompressionResultMap } from "@omp-studio/studio-protocol";
+import type { CommandInput } from "@step-studio/client-contract";
+import type { CompressionState, AutoCompressionStatus, SessionCompressionResultMap } from "@step-studio/studio-protocol";
 import type { FeatureSettingsProps } from "../settings/useFeatureSettings";
 import { FeatureSettingsPane } from "../settings/FeatureSettingsPane";
 import { usePreviewMode } from "../preview/PreviewContext";

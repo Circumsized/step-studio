@@ -2,7 +2,7 @@ import {cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react";
 import {afterEach,expect,it,vi} from "vitest";
 import {AskBody} from "./AskCard";
 import {submitAskValue} from "./askContent";
-import {validateAskAnswerPayload} from "@omp-studio/studio-protocol";
+import {validateAskAnswerPayload} from "@step-studio/studio-protocol";
 afterEach(cleanup);
 it("answer and note images serialize under their owning question and separate native fields",()=>{
  const image={type:"image" as const,mimeType:"image/png" as const,data:"AA=="};const questions=[{id:"a",question:"A",options:[],multiple:false},{id:"b",question:"B",options:[],multiple:false}];

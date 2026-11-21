@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
-import type { Generation } from "@omp-studio/studio-protocol";
+import type { StudioClient } from "@step-studio/client-contract";
+import type { Generation } from "@step-studio/studio-protocol";
 import {
   canFlushQueuedMessage,
   composerFollowUpEnabled,

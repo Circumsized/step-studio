@@ -159,7 +159,7 @@ export function AppUpdateDialog({
 
   const openGithub = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
-    const url = update.htmlUrl ?? "https://github.com/the-snowpear/omp-studio/releases";
+    const url = update.htmlUrl ?? "https://github.com/the-snowpear/step-studio/releases";
     const openUrl = shellSurface()?.openUrl;
     if (openUrl !== undefined) {
       void openUrl({ url });

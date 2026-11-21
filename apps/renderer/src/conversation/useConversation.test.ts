@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook } from "@testing-library/react";
-import type { SessionId } from "@omp-studio/client-contract";
-import type { ConversationOpenResult, RuntimeEpoch } from "@omp-studio/studio-protocol";
+import type { SessionId } from "@step-studio/client-contract";
+import type { ConversationOpenResult, RuntimeEpoch } from "@step-studio/studio-protocol";
 import { activeConversationEngineCount, type ConversationSnapshot } from "./conversationEngine";
 import type { ConversationClient } from "./conversationHost";
 import { resetConversation, type HydrateStatus } from "./conversationViewModel";

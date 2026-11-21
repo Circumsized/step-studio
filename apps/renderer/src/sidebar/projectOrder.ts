@@ -1,4 +1,4 @@
-import type { WorkspaceListReadModel, WorkspaceRecord } from "@omp-studio/client-contract";
+import type { WorkspaceListReadModel, WorkspaceRecord } from "@step-studio/client-contract";
 
 /**
  * Sidebar project-tree order.

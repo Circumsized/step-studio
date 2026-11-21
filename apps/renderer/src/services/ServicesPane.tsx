@@ -9,13 +9,13 @@ import type {
   StudioClient,
   ClientBootstrap,
   CommandInput,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import {
   validateServiceSpec,
   type StudioServiceSpec,
   type StudioServiceRow,
   type WorkbenchResultMap,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import {
   PREVIEW_SERVICES,

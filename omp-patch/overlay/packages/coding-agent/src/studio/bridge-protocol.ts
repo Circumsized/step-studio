@@ -31,7 +31,7 @@ import {
 
 export * from "./conversation-protocol";
 
-export const STUDIO_PROTOCOL_NAME = "omp-studio" as const;
+export const STUDIO_PROTOCOL_NAME = "step-studio" as const;
 export const STUDIO_PROTOCOL_VERSION = 1 as const;
 export const DEFAULT_MAX_CONTROL_FRAME_BYTES = 1024 * 1024;
 const LENGTH_PREFIX_BYTES = 4;

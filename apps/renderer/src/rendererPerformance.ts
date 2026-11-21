@@ -1,4 +1,4 @@
-import { createCounterRegistry, createDiagnosticsSampler, createMemorySampleGate, type MemorySample } from "@omp-studio/studio-protocol";
+import { createCounterRegistry, createDiagnosticsSampler, createMemorySampleGate, type MemorySample } from "@step-studio/studio-protocol";
 import { collectRendererResources } from "./rendererResources";
 import { highlightPool } from "./highlight/service";
 import { mermaidQueue } from "./conversation/LazyMermaid";

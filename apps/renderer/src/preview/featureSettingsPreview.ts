@@ -1,4 +1,4 @@
-import type { FeatureSettingRow, PoolAccountOption } from "@omp-studio/studio-protocol";
+import type { FeatureSettingRow, PoolAccountOption } from "@step-studio/studio-protocol";
 export const PREVIEW_FEATURE_SETTINGS: FeatureSettingRow[] = [
   { key: "task.agentAccountPools", value: { reviewer: { anthropic: ["email:review@example.test"] } }, source: "project" },
   { key: "compaction.modelThresholds", value: {}, source: "default" },

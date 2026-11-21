@@ -1,5 +1,5 @@
 //! Length-prefixed framing, byte-for-byte compatible with
-//! `@omp-studio/studio-protocol`'s `frame-codec.ts`.
+//! `@step-studio/studio-protocol`'s `frame-codec.ts`.
 //!
 //! Layout, all lengths big-endian:
 //!   [4B payloadLength][4B headerLength][header JSON][body JSON]
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
 /// Protocol name the peer checks before anything else.
-pub const PROTOCOL_NAME: &str = "omp-studio";
+pub const PROTOCOL_NAME: &str = "step-studio";
 /// Protocol version this crate speaks.
 pub const PROTOCOL_VERSION: u32 = 1;
 /// Bytes each length prefix occupies.

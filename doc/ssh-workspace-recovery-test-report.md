@@ -1,7 +1,7 @@
 # SSH 工作区连接稳定性：实机恢复验收报告
 
 验收日期：2026-10-26（GMT+8）。执行者：独立验收 agent。
-运行标识：`omp-studio-recovery-20261026-1718-a7f3`。
+运行标识：`step-studio-recovery-20261026-1718-a7f3`。
 口径：**通过 / 失败 / 阻塞 / 未测试** 四类互斥；每项另标证据层级（本地隔离 / 实际 SSH 通道 / 通道字节迟滞 / 应用通道 TCP / 正常 Electron / 独立 Electron 测试入口 / 安装包）。
 本报告为新增文件，`doc/ssh-workspace-test-report.md`（2026-10-25）保持原样未改写。
 
@@ -19,21 +19,21 @@
 
 | 项目 | 值 |
 |---|---|
-| 工作树 | `D:\Project\omp-studio\.claude\worktrees\trusting-khorana-a24ebe` |
+| 工作树 | `D:\Project\step-studio\.claude\worktrees\trusting-khorana-a24ebe` |
 | 分支 / HEAD | `claude/trusting-khorana-a24ebe` / `2a561ae374411e8f15c5ff393d26c20392bad755`（未切换、未提交、未推送） |
 | 工作树状态 | 70 项改动（含未跟踪 `apps/desktop/src/remote/`），本轮未修改任何产品源码 |
 | 本机 | Windows 11 build 10.0.26300 x64；Node v22.22.2；npm 10.9.7；OpenSSH_10.3p1（`C:\Windows\System32\OpenSSH\ssh.exe`） |
 | 远端 `deskserver` | Windows 10.0.19045 x64；OpenSSH_10.3p1（服务端）；Node v24.16.0；Git 2.54.0；登录 Shell = Git Bash（未修改） |
 | 远端 `ucloud` | Ubuntu 24.04.4 LTS；kernel 6.8.0-101-generic x86_64；OpenSSH_9.6p1；Node v22.23.2；Git 2.43.0 |
-| 本轮目录 | 脚本与结果：`tmp/ssh-recovery-20261026-1718-a7f3/`；数据/日志：`tmp/ssh-recovery-omp-studio-recovery-20261026-1718-a7f3/`（均在 gitignored `tmp/`） |
-| 远端私有根 | deskserver：`%TEMP%\omp-studio-recovery-20261026-1718-a7f3-final-desk\root`；ucloud：`~/.cache/omp-studio-recovery-20261026-1718-a7f3-final-uc2/root` |
+| 本轮目录 | 脚本与结果：`tmp/ssh-recovery-20261026-1718-a7f3/`；数据/日志：`tmp/ssh-recovery-step-studio-recovery-20261026-1718-a7f3/`（均在 gitignored `tmp/`） |
+| 远端私有根 | deskserver：`%TEMP%\step-studio-recovery-20261026-1718-a7f3-final-desk\root`；ucloud：`~/.cache/step-studio-recovery-20261026-1718-a7f3-final-uc2/root` |
 
 ### 源码与实际运行的 bundle 对应关系
 
 | 产物 | 构建命令 | 结果 |
 |---|---|---|
 | `packages/*` | `npm run build:packages` | tsc 通过 |
-| `apps/desktop/dist`（含 `src/remote/*`、`test/*`） | `npm run build -w @omp-studio/desktop` | tsc 通过，测试与 harness 都导入这份 dist |
+| `apps/desktop/dist`（含 `src/remote/*`、`test/*`） | `npm run build -w @step-studio/desktop` | tsc 通过，测试与 harness 都导入这份 dist |
 | `apps/desktop/dist/remote-host/host.mjs`（远端 Host） | `node scripts/bundle-remote-host.mjs` | 生成 1,697,710 B，`host.json` 同步 |
 | `apps/desktop/dist/ssh-askpass/omp-ssh-askpass.exe` | 同上 | 5,632 B（本轮未走账密，未使用） |
 | `apps/renderer/dist` | `npx vite build --outDir <私有目录>` | 见第 4 节：产物文件名哈希与源码构建一致（`index-B5EO9SoB.js`），用于 Electron 闭环 |
@@ -45,14 +45,14 @@
 
 harness 全部位于 `tmp/ssh-recovery-20261026-1718-a7f3/`：
 
-- `gate.mjs`：测试进程内包装 `node:child_process.spawn`（`syncBuiltinESMExports()`），**持有本轮每条系统 SSH 子进程的真实句柄**，只对本轮 ssh 的 `-T` 控制通道做帧级代理（`@omp-studio/studio-protocol` 的 `FrameDecoder/encodeFrame`），其余进程原样返回；另包装 `node-pty.spawn` 取得 PTY 的真实 pid。
+- `gate.mjs`：测试进程内包装 `node:child_process.spawn`（`syncBuiltinESMExports()`），**持有本轮每条系统 SSH 子进程的真实句柄**，只对本轮 ssh 的 `-T` 控制通道做帧级代理（`@step-studio/studio-protocol` 的 `FrameDecoder/encodeFrame`），其余进程原样返回；另包装 `node-pty.spawn` 取得 PTY 的真实 pid。
 - `lib.mjs`：真实 `RemoteConnectionManager` 夹具、状态时间线、等待/断言、真实 `runSsh` 证据读取。
 - `run-host.mjs`：15 个场景；`ui-test-main.mjs` + `ui-flow.mjs` + `cdp.mjs`：Electron 闭环。
 
 隔离方式（唯一注入点，与交接要求一致）：
 
 1. `services.probeRemote` 实际调用产品 `probeRemote`，**只把返回的 `environment.root` 换成本轮私有根**；`deployRemote` / `attachRemote` / OpenSSH / 远端 Host 全部真实实现。
-2. manager 的 profiles 文件、helper 目录指向本轮私有路径；不使用默认 `omp-studio/remote/state`。
+2. manager 的 profiles 文件、helper 目录指向本轮私有路径；不使用默认 `step-studio/remote/state`。
 3. Electron 闭环使用**独立测试入口**（`tmp/.../ui-test-main.mjs`），复用真实 preload（`dist/preload.cjs`）、真实 renderer 产物、真实 `RemoteConnectionManager` 与 `registerRemoteIpc`，另注入两项：私有远端根、自动接受部署确认（正常安装包使用原生对话框，自动化无法点击）。报告不把它当作安装包证据。
 
 故障注入的证据层级（诚实标注）：
@@ -73,10 +73,10 @@ harness 全部位于 `tmp/ssh-recovery-20261026-1718-a7f3/`：
 | # | 命令 | 退出码 | 结果 |
 |---|---|---|---|
 | 1 | `npm run check` | **1** | **环境阻塞**：`vite build` 清空 `apps/renderer/dist` 时被宿主批量删除护栏拦下（`[safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED] count=55 threshold=50`，目标 `dist/brands`）。按授权未移动/删除目标绕过 |
-| 2 | `npm run build:packages && npm run build -w @omp-studio/desktop && node scripts/bundle-remote-host.mjs` | 0 | 分部构建通过（等价替代 #1 的构建部分） |
+| 2 | `npm run build:packages && npm run build -w @step-studio/desktop && node scripts/bundle-remote-host.mjs` | 0 | 分部构建通过（等价替代 #1 的构建部分） |
 | 3 | `npx vite build --outDir tmp/.../renderer-build` | 0 | 通过；`index.html` 与 `apps/renderer/dist/index.html` 逐字节相同，主 chunk 哈希同为 `index-B5EO9SoB.js` |
 | 4 | `node --test apps/desktop/dist/test/remote-*.test.js` | 0 | **47 pass / 0 fail / 0 skipped / 0 todo** |
-| 5 | `npm run test -w @omp-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/workspaces/remoteTransport.test.ts src/workspaces/SshPasswordDialog.test.tsx src/conversation/useConversation.test.ts src/conversation/conversation.test.tsx src/terminalSessions.test.tsx src/sidebar/useProjectHistories.test.ts` | 0 | **7 files / 37 tests pass** |
+| 5 | `npm run test -w @step-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/workspaces/remoteTransport.test.ts src/workspaces/SshPasswordDialog.test.tsx src/conversation/useConversation.test.ts src/conversation/conversation.test.tsx src/terminalSessions.test.tsx src/sidebar/useProjectHistories.test.ts` | 0 | **7 files / 37 tests pass** |
 | 6 | `node scripts/test-remote-ssh.mjs deskserver` / `test-remote-terminal.mjs deskserver` | 未运行 | 见第 11 节：本轮用等价但更强的 manager harness 覆盖同一链路，未重复跑旧脚本（其 finally 清理不完整，易累积 Host） |
 | 7 | `node tmp/.../run-host.mjs deskserver` | 0 | 15/15 场景通过 |
 | 8 | `node tmp/.../run-host.mjs ucloud`（含 3 次针对剩余场景的复跑） | 0 | 7 通过 / 1 部分 / 7 阻塞（主机网络窗口，系统 SSH 同时失败，见 7.2） |
@@ -105,7 +105,7 @@ harness 全部位于 `tmp/ssh-recovery-20261026-1718-a7f3/`：
 | 13 | 同一 Host 的旧 attach | 通过 | 同 key seq1 → seq2 成功替换（旧通道 ping 失败）；随后 seq1 迟到被拒："这条 SSH 通道已被更新的连接取代"；新通道 ping 正常（未被踢掉）；未在报告写出 attachment key |
 | 14 | 其他桌面占用 | 通过 | 第二个独立 manager（独立 profiles）连接同一 Host：`failed`，文案"远端 Host 已被其他桌面连接占用；不会强制断开对方"；第一方 ping 正常、generation 不变 |
 | 15 | 未知结果不重放 | 通过 | `workspace.file.create`；请求到达远端后 hold 住确认并终止通道；客户端报 `OUTCOME_UNKNOWN`（"SSH 通道已中断；已发送命令结果未知，未自动重发"）；恢复后远端文件**恰好 1 个**；客户端只发过 1 次 command，恢复后的新通道 command 帧为 0 |
-| 16 | IPC 映射 | 通过 | 真实 `registerRemoteIpc` 的 `omp-studio:remote:command` 返回 `{ok:false,error:{code:"OUTCOME_UNKNOWN"}}`；远端副作用仍只有 1 份 |
+| 16 | IPC 映射 | 通过 | 真实 `registerRemoteIpc` 的 `step-studio:remote:command` 返回 `{ok:false,error:{code:"OUTCOME_UNKNOWN"}}`；远端副作用仍只有 1 份 |
 | 17 | 真实 PTY | 通过 | cwd = 远端中文/空格项目；输入输出往返；resize 后仍可用；Ctrl-C 中断后 shell 返回；**控制通道断开期间终端继续可用**；终止 PTY 自己的 ssh（pid 692，父进程校验）后 `onExit` 触发，5 s 内无自动重开 |
 | 18 | 目标隔离 | 通过 | 命令写入只落在远端项目；本机同名目录未生成同名文件；本机哨兵 `sentinel.txt` 内容哈希与 mtime 均未变 |
 | 19 | 资源收尾 | 通过 | 追踪 37 条 ssh 子进程，结束时 `leftoverPids=[]`、`liveControl=0` |
@@ -169,7 +169,7 @@ ucloud 的完整矩阵跑到 `cancel-during-snapshot-sync` 时进入一段主机
 
 | 检查 | 结果 | 证据 |
 |---|---|---|
-| 工作台启动 + 真实 preload 桥 | 通过 | 标题 "OMP Studio — 工作台"；`window.ompStudioRemote` 14 个方法；真实 manager 读出预置连接 |
+| 工作台启动 + 真实 preload 桥 | 通过 | 标题 "OMP Studio — 工作台"；`window.stepStudioRemote` 14 个方法；真实 manager 读出预置连接 |
 | 执行位置菜单 | 通过 | "此计算机 / UI deskserver / Windows · 已断开 / 添加 SSH 连接" |
 | 从 UI 发起连接 | 通过 | manager `state=connected`（generation 1），完成真实 probe/deploy/attach |
 | 远端目录选择（中文+空格） | 通过 | 对话框列出远端真实目录；填入 `…\UI 稳定性 project` 后注册成功；选择器变为 `SSH · UI deskserver` |
@@ -214,7 +214,7 @@ ucloud 的完整矩阵跑到 `cancel-during-snapshot-sync` 时进入一段主机
 
 本机：
 
-- 证据保留在 gitignored `tmp/`：`tmp/ssh-recovery-20261026-1718-a7f3/`（harness、日志、截图、私有 renderer 构建）与 `tmp/ssh-recovery-omp-studio-recovery-20261026-1718-a7f3/`（结果 JSON、时间线、profiles、本地哨兵目录）。
+- 证据保留在 gitignored `tmp/`：`tmp/ssh-recovery-20261026-1718-a7f3/`（harness、日志、截图、私有 renderer 构建）与 `tmp/ssh-recovery-step-studio-recovery-20261026-1718-a7f3/`（结果 JSON、时间线、profiles、本地哨兵目录）。
 - 本轮临时 `TEMP`（`…/tmp/ssh-recovery-20261026-1718-a7f3/temp`，约 650 KB）已删除。
 - Electron 二进制由 `node_modules/electron/install.js` 从本机缓存装入工作树 `node_modules`（依赖目录，不提交）。
 - 结束态核对：按进程表检查，本轮无残留 `ssh.exe`、无残留 Electron 进程、无属于本轮测试目录的 node 进程（`count=0`）。
@@ -223,15 +223,15 @@ ucloud 的完整矩阵跑到 `cancel-during-snapshot-sync` 时进入一段主机
 
 | 主机 | 路径 | 处理 |
 |---|---|---|
-| deskserver | `%TEMP%\omp-studio-recovery-20261026-1718-a7f3*`（含 `-final-desk`、`-main/-main2`、`-s4..-s11`、`-probe/-probe2/-r1..-r3`） | 20 个目录全部删除并复核 |
-| deskserver | `%TEMP%\omp-studio-recovery-ui-deskserver*`（4 个 UI 运行） | 删除并复核 |
-| ucloud | `~/.cache/omp-studio-recovery-20261026-1718-a7f3*`（6 个） | 先以精确 PID + 命令路径核对后 SIGTERM 停掉 5 个残留 Host，再删除并复核 |
-| ucloud | `~/.cache/omp-studio-recovery-ui-*` | 本轮未在该机跑 UI，无目录 |
+| deskserver | `%TEMP%\step-studio-recovery-20261026-1718-a7f3*`（含 `-final-desk`、`-main/-main2`、`-s4..-s11`、`-probe/-probe2/-r1..-r3`） | 20 个目录全部删除并复核 |
+| deskserver | `%TEMP%\step-studio-recovery-ui-deskserver*`（4 个 UI 运行） | 删除并复核 |
+| ucloud | `~/.cache/step-studio-recovery-20261026-1718-a7f3*`（6 个） | 先以精确 PID + 命令路径核对后 SIGTERM 停掉 5 个残留 Host，再删除并复核 |
+| ucloud | `~/.cache/step-studio-recovery-ui-*` | 本轮未在该机跑 UI，无目录 |
 
 **未处理、不属于本轮**：
 
-- deskserver 上 `omp-studio-ssh-test-*`、`omp-studio-terminal-test-*` 若干历史目录（2026-10-25 及更早），未删除。
-- ucloud 上 `omp-studio-ssh-test-1792860425334` 及其 Host 进程（自 10-24 起运行）等 7 个历史目录，未触碰。
+- deskserver 上 `step-studio-ssh-test-*`、`step-studio-terminal-test-*` 若干历史目录（2026-10-25 及更早），未删除。
+- ucloud 上 `step-studio-ssh-test-1792860425334` 及其 Host 进程（自 10-24 起运行）等 7 个历史目录，未触碰。
 
 报告与日志中不含私钥、密码、token、ticket、attachment key 或完整个人 SSH 配置；主机地址在正文以别名或 `<redacted>` 指代。
 

@@ -1,7 +1,7 @@
 import { AppSelect } from "../AppSelect";
 import {useEffect,useRef,useState} from "react";
-import type {CommandInput,StudioClient} from "@omp-studio/client-contract";
-import {IDA_VIEWS,type IdaView,type IdaEdit,type IdaState,type IdaResultMap} from "@omp-studio/studio-protocol";
+import type {CommandInput,StudioClient} from "@step-studio/client-contract";
+import {IDA_VIEWS,type IdaView,type IdaEdit,type IdaState,type IdaResultMap} from "@step-studio/studio-protocol";
 import {usePreviewMode} from "../preview/PreviewContext";
 import {useI18n} from "../i18n";
 import {waitReceipt,hostErrorMessage} from "../hostError";

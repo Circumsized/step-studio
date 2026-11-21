@@ -8,8 +8,8 @@
 
 ```
 Renderer (apps/renderer)
-  → @omp-studio/client (StudioClientImpl + reducer)
-  → transport-desktop / preload `window.ompStudio`
+  → @step-studio/client (StudioClientImpl + reducer)
+  → transport-desktop / preload `window.stepStudio`
   → apps/desktop ipc.ts
   → host-client-api facade.ts
       ├─ Host 自有：session catalog / archive / models.yml / skills 磁盘扫描 / git
@@ -24,14 +24,14 @@ Facade 分发：`packages/host-client-api/src/facade.ts`（`query` / `command` �
 
 | 包 | 职责 | 先读 |
 |---|---|---|
-| `@omp-studio/studio-protocol` | Bridge / Host 帧、命令 kind、校验 | `packages/studio-protocol/src/index.ts` |
-| `@omp-studio/client-contract` | Renderer 可见的 query/command/read model | `packages/client-contract/src/operations.ts` |
-| `@omp-studio/client` | 客户端状态机、对话 reducer、收据选择器 | `packages/client/src/studio-client.ts` |
-| `@omp-studio/host-client-api` | 产品 Facade：query/command → Host 或 Runtime | `packages/host-client-api/src/facade.ts` |
-| `@omp-studio/studio-host` | Runtime 进程、Bridge、ledger、catalog、telemetry | `packages/studio-host/src/host-backend.ts` |
-| `@omp-studio/transport-desktop` | 固定 IPC 通道名与信封解析 | `packages/transport-desktop/src/channels.ts`、`ipc-envelope.ts` |
-| `@omp-studio/runtime-installer` | 签名工件安装 / 回滚 | `packages/runtime-installer/src/index.ts` |
-| `@omp-studio/platform-win32` | 单实例锁、Job Object、私有 endpoint | `packages/platform-win32/src/index.ts` |
+| `@step-studio/studio-protocol` | Bridge / Host 帧、命令 kind、校验 | `packages/studio-protocol/src/index.ts` |
+| `@step-studio/client-contract` | Renderer 可见的 query/command/read model | `packages/client-contract/src/operations.ts` |
+| `@step-studio/client` | 客户端状态机、对话 reducer、收据选择器 | `packages/client/src/studio-client.ts` |
+| `@step-studio/host-client-api` | 产品 Facade：query/command → Host 或 Runtime | `packages/host-client-api/src/facade.ts` |
+| `@step-studio/studio-host` | Runtime 进程、Bridge、ledger、catalog、telemetry | `packages/studio-host/src/host-backend.ts` |
+| `@step-studio/transport-desktop` | 固定 IPC 通道名与信封解析 | `packages/transport-desktop/src/channels.ts`、`ipc-envelope.ts` |
+| `@step-studio/runtime-installer` | 签名工件安装 / 回滚 | `packages/runtime-installer/src/index.ts` |
+| `@step-studio/platform-win32` | 单实例锁、Job Object、私有 endpoint | `packages/platform-win32/src/index.ts` |
 | `apps/desktop` | Electron 壳、Host 组装、Git/终端等本机能力 | `apps/desktop/src/host-composition.ts` |
 | `apps/renderer` | UI | `apps/renderer/src/App.tsx`、`main.tsx` |
 | `omp-patch/overlay` | Studio 自有 Runtime 源码 | `omp-patch/overlay/packages/coding-agent/src/studio/` |
@@ -67,12 +67,12 @@ Facade 分发：`packages/host-client-api/src/facade.ts`（`query` / `command` �
 | 悬停 tip | `apps/renderer/src/TipHost.tsx` | `[data-tip]` 门户气泡；不用原生 `title`；文案短词，未实现加「（暂未实现）」 |
 | 通用单选下拉 | `apps/renderer/src/AppSelect.tsx`、`styles/components.css` | 普通单选统一用 `AppSelect` + `option` / `optgroup`；受控 value/onChange、主题、键盘、超过 10 项自动搜索；`npm run check:selects` 阻止产品源码新增原生 select |
 | 首页 | `apps/renderer/src/HomePage.tsx` | `home.get` / `usage.get` / 历史入口 |
-| 首页身份 / 头像 | `apps/renderer/src/settings/operatorProfile.ts`、`avatarCrop.ts`、`AvatarCropDialog.tsx`、`HomePage.tsx`；桌面 `chrome-profile.ts` | 显示名本地记忆；选图后圆形裁切；头像写入 `%APPDATA%\omp-studio\profile\`（覆盖，无历史）；NSIS 卸载删除 |
+| 首页身份 / 头像 | `apps/renderer/src/settings/operatorProfile.ts`、`avatarCrop.ts`、`AvatarCropDialog.tsx`、`HomePage.tsx`；桌面 `chrome-profile.ts` | 显示名本地记忆；选图后圆形裁切；头像写入 `%APPDATA%\step-studio\profile\`（覆盖，无历史）；NSIS 卸载删除 |
 | 历史 / 项目会话缓存 | `apps/renderer/src/HistoryPage.tsx`、`sidebar/useProjectHistories.ts`、`sidebar/provisionalThread.ts`、`studio-host/src/session-catalog.ts` | `history.list`；侧栏按 `workspaceId` 独立加载 / 分页 / 刷新；只有 title/session/model/thinking 元数据、尚无 `message` 的空白 JSONL 不进入历史；草稿非空或提示词已发送时显示 Renderer 临时行，正式 LLM 标题到达后按 `sessionId` 接管；归档成功的 `sessionId` 会阻止迟到的 Workbench 状态复活临时行；resume / archive / drop / delete（历史页「⋮ → 删除会话」走 `session.delete`，Host 清 transcript/artifacts/遥测/绑定/租约/pin 残留） |
 | 命令面板 | `apps/renderer/src/CommandPalette.tsx`、`commandPaletteCatalog.ts` | 动作目录与路由 |
 | 主题 / 密度 / 上次路由 / 浮窗几何 | `apps/renderer/src/settings/appSettings.ts` | 本地 UI 记忆，不进 Host；BTW 几何在 `LayoutMemory`；侧栏项目展开与 Explorer 目录展开记忆在 `sidebar/expandMemory.ts` |
 | 对话阅读宽度 / 窄窗口预算 | `settings/ConversationWidthSettings.tsx`、`settings/ConversationWidthContext.tsx`、`layout/{useReadingColumn,useWorkbenchLayout,workbenchLayout}.ts`、`conversation/conversationReflow.ts`；使用说明 `docs/conversation-width.md` | AppSettings 全局偏好，标准/宽松/填满/自定义；读取实际 `.convo-wrap` 宽度、正文与输入列共用净宽；左/右/底面板临时首选/有效布局与窄窗退让；离底阅读消息/块锚定，贴底仍由唯一 writer 负责；预览演示值不写真实存储。 |
-| 进入应用提示（尚未完成） | `apps/renderer/src/StartupNotice.tsx`、`settings/startupNotice.ts` | 中文全局弹窗：项目 GitHub、关闭 / 不再提醒；「不再提醒」只写 localStorage，不进 Host；GitHub 卡点开走 `ompStudioChrome.openUrl` |
+| 进入应用提示（尚未完成） | `apps/renderer/src/StartupNotice.tsx`、`settings/startupNotice.ts` | 中文全局弹窗：项目 GitHub、关闭 / 不再提醒；「不再提醒」只写 localStorage，不进 Host；GitHub 卡点开走 `stepStudioChrome.openUrl` |
 | 预览开关 | `apps/renderer/src/preview/mode.ts`、`PreviewContext.tsx` | 显示层开关；`PREVIEW_MODE_SWITCH_ENABLED` |
 | 预览 fixture / 壳 | `apps/renderer/src/preview/fixtures.ts`、`surfaces.tsx`、`btwPreview.ts` | 新读表面必须同时接预览与真实 |
 
@@ -83,7 +83,7 @@ Facade 分发：`packages/host-client-api/src/facade.ts`（`query` / `command` �
 | 通用标注 | `annotations/Annotations.tsx`、`preview/annotationsPreview.ts`；Runtime `services/annotation-service.ts` | `annotations.capture/prepare`；来源版本/选区/编辑/撤销、过期确认；只插入主 Composer；`artifacts.saveText/text.read` 保存重开快照 |
 | 对话窗 | `apps/renderer/src/conversation/ConversationPane.tsx` | 订阅 conversation 事件 |
 | 对话加载 / Store | `conversation/conversationSource.ts`、`conversationStore.ts`、`conversationEngine.ts`、`useConversation.ts` | `conversation.open` 先订阅后打开；目标级 watermark 去重；首屏 / replay / 实时增量统一进入有界 Store；App 只订阅低频 metadata，token 热流只更新 `ConversationPane` |
-| 用户消息 Restore / 新会话 | `conversation/ConversationItemView.tsx`、`UserMessageBody.tsx`、`userMessageThumbs.ts`、`userMessageRestore.ts`、`UserMessageTreeConfirm.tsx`、`conversationEngine.ts`、`composer/serialize.ts` | 已发送用户气泡「恢复」（`undo` 图标）→ `session.tree.navigate`（leaf=该条 parent）；「新会话」（`branch` 图标）→ `session.tree.branch`（新 session 文件，切过去）。确认用应用内模态（归档同风格），不用 `window.confirm`。气泡仍画文件/技能/图片胶囊，配色与 Composer 同类胶囊一致（不刷成气泡白霜）。复制按钮与划选复制走序列化 `@` / `/skill:` / `[图N]`。图缩略图贴在气泡上方，点击预览；公开 transcript 仍剥图。预览字节落本机 IndexedDB（`omp-studio-ui` / `user-message-thumbs`），按 sessionId+itemId 重开会话仍能挂回缩略图，不进 Host。预览本地裁剪，不调 Host。busy 时 overlay 拒绝。`/branch` 提示点气泡，不打开 Changes。 |
+| 用户消息 Restore / 新会话 | `conversation/ConversationItemView.tsx`、`UserMessageBody.tsx`、`userMessageThumbs.ts`、`userMessageRestore.ts`、`UserMessageTreeConfirm.tsx`、`conversationEngine.ts`、`composer/serialize.ts` | 已发送用户气泡「恢复」（`undo` 图标）→ `session.tree.navigate`（leaf=该条 parent）；「新会话」（`branch` 图标）→ `session.tree.branch`（新 session 文件，切过去）。确认用应用内模态（归档同风格），不用 `window.confirm`。气泡仍画文件/技能/图片胶囊，配色与 Composer 同类胶囊一致（不刷成气泡白霜）。复制按钮与划选复制走序列化 `@` / `/skill:` / `[图N]`。图缩略图贴在气泡上方，点击预览；公开 transcript 仍剥图。预览字节落本机 IndexedDB（`step-studio-ui` / `user-message-thumbs`），按 sessionId+itemId 重开会话仍能挂回缩略图，不进 Host。预览本地裁剪，不调 Host。busy 时 overlay 拒绝。`/branch` 提示点气泡，不打开 Changes。 |
 | Client 全局状态 | `packages/client/src/reducer.ts` | 不保存 transcript / live message / tool output；`conversation.changed` 只推进 transport cursor，对话真值由 Renderer 目标级 Store 持有 |
 | 正文 markdown / 流式渲染 | `conversation/markdown.tsx`、`markdownBlocks.ts`、`magicKeywordMarkdown.tsx` | 非流式整篇 `react-markdown`（remark-gfm；production 由有界 lowlight Worker 异步补色，dev/显式回滚用 rehype-highlight）解析；流式扫描结果拆成引用稳定的 `frozen` 前缀与有界 `pending` 尾部，检查点只续扫新增文本和少量上下文，渲染层分别 memo 两段，不再每帧重建全部历史切点。未闭合代码围栏不进入 `react-markdown`，直接复用 `CodeFrame` 的安全 `<pre><code>` 样式，闭合后恢复完整 Markdown，代码框即时显示、语法颜色异步补齐。普通切点只落在空行处且要求下一行确实开启新块；围栏内部、松散列表、缩进续行、setext 下划线都不切。链接引用定义从上一条未完整行增量检测，命中后整段保持同一 Markdown 解析域。mermaid 在流式中降级为 `<pre>`，收尾后经可见性、大小/复杂度预算和串行队列渲染；按完整渲染配置 + 源码缓存 SVG（32 项 / 4MiB） |
 | 快照行复用 / 渲染节流 | `conversation/conversationStore.ts`、`conversationViewModel.ts`、`conversationEngine.ts`、`subagentConversationEngine.ts` | Store 限 2,000 items / 24 MiB，live block 256 KiB、tool output 64 KiB，pending / notice / live message / live tool 均有硬上限；增量按 RAF 合并，流式 chunk 在帧边界压成文本。持久历史前缀只在结构变化时重投影，token 热流只投影有界 transient 尾部；工具事件（`tool.started` / `tool.completed` / `tool.updated`）只标脏所属行而不整窗重投影；Transcript 的 binds / keys 按结构 token 缓存。`rowCache` 在 trim / hydrate / restore 等结构路径按活跃 key 剪枝，不保留被窗口淘汰的正文。主会话和当前可见子代理各持有一个 hot Store，切换即释放 |
@@ -100,7 +100,7 @@ Facade 分发：`packages/host-client-api/src/facade.ts`（`query` / `command` �
 | Agent 测试面板 | `AgentTestsPane.tsx`、`agentTestRuns.ts` | |
 | Chip Composer | `apps/renderer/src/composer/ChipComposer.tsx` | Enter：`core.prompt` / 本地排队；Ctrl+Enter：`core.followUp`（带图）；插入纠偏：`core.steer` |
 | 空输入「继续」播放键 | 发送位 `App.tsx`（stop / continue / send 三臂）、`composer/dispatch.ts`（`composerContinueEnabled`）、`conversation/conversationViewModel.ts`（`tailInterrupted`）、`conversation/conversationStore.ts`（`lastTurnInterrupted`）；overlay `studio/services/session-control-service.ts`（`continueTurn`）、`studio/state-projector.ts`（`lastTurnOutcome`） | 上一回合停在「没有最终汇报」的尾巴上（报错 / 手动中止 / 崩溃补记）且输入框为空时，发送位换成播放图标。命令 `core.continue`：先 `restoreInterruptedTurn()`，否则发**隐藏 synthetic** 的 `manual-continue.md`（不产生用户气泡）。旧 Runtime 无该能力时降级走 `turn.retry`。判定来源是 `OperatorStateSnapshot.lastTurnOutcome`，不是 transcript 字段 |
-| 图片预览 | `composer/ImagePreview.tsx`；桌面 `chrome-image.ts` | 缩略图点击预览；复制/保存走 `ompStudioChrome`，不是 Host |
+| 图片预览 | `composer/ImagePreview.tsx`；桌面 `chrome-image.ts` | 缩略图点击预览；复制/保存走 `stepStudioChrome`，不是 Host |
 | slash 命令菜单 | `composer/commands.ts`、`CommandMenu.tsx` | 解析后走语义 command；typed 名必须在 `operations.ts` / IPC `COMMAND_NAMES`。`/clear` → `session.clearContext` → facade `#commandP4` → overlay `clearContext`；`/drop` 补当前 `threadId` 后走 Host `session.drop` |
 | @ 提及 | `composer/mentions.ts` | `workspace.fileTree`、`agents.definitions.get`、查询非空时 `skills.get` |
 | 模型 / 模式选择 | `ComposerModelPicker.tsx`、`ComposerModePicker.tsx` | `session.model.set`、`session.thinking.set`、plan/vibe |
@@ -190,13 +190,13 @@ Git **不走 Runtime Bridge**。桌面主进程实现，Facade 转调。
 | 标题栏 overlay | 壳 | `titlebar-overlay.ts` |
 | 应用图标 | 侧栏 / 关于 `AppIcon`；`public/icon.png`、`favicon.ico` | Renderer 自带图标资源；桌面运行时在 Windows 设置 `AppUserModelId`（`app-icon.ts` `resolveAppUserModelId`；`npm run preview` 经 `OMP_APP_USER_MODEL_ID` 用独立 `.preview` ID 与`OMP Studio (Preview).lnk`，不得与安装版共用——开始菜单里同 ID 的第二个快捷方式会让任务栏/通知变成该快捷方式的图标）并把 `resources/icon.ico` 注入窗口（任务栏/窗口身份）；安装包由 `packaging/electron-builder.yml` 将同一 ICO 写入 EXE，并创建带图标的桌面与开始菜单快捷方式 |
 | 系统通知 | — | `chrome-notify.ts` |
-| 系统托盘 / 关闭到托盘 | —（纯 Main 行为，无 Renderer 面，不进 preload/client-contract） | `tray.ts`（Electron-free，Main 注入 Tray/Menu/nativeImage：菜单文案 zh/en、左键打开、首隐气泡与 `%APPDATA%\omp-studio\tray-hint-shown` 标记、退出确认框文案）+ `main.ts`（close 事件拦截为 hide，托盘不可用时保持关窗即退出；`DesktopWindow.show()`）+ `composition.ts`（`requestQuit` 确认门：`host-composition.ts` `isBusy()` 以 residents 流式/压缩为准，回退当前会话 snapshot；`isQuitting` 注入窗口工厂放行真实退出） |
-| 外部 https 链接 | 启动提示 GitHub 卡；`ompStudioChrome.openUrl` | `chrome-open-url.ts` → `shell.openExternal`（系统默认浏览器，不是 Electron 窗）；只接受 https |
-| 操作者头像文件 | 首页弹窗 | `chrome-profile.ts` → `%APPDATA%\omp-studio\profile\`；升级从安装目录 `userdata\profile` 迁入；卸载 `customUnInstall` 删除 |
+| 系统托盘 / 关闭到托盘 | —（纯 Main 行为，无 Renderer 面，不进 preload/client-contract） | `tray.ts`（Electron-free，Main 注入 Tray/Menu/nativeImage：菜单文案 zh/en、左键打开、首隐气泡与 `%APPDATA%\step-studio\tray-hint-shown` 标记、退出确认框文案）+ `main.ts`（close 事件拦截为 hide，托盘不可用时保持关窗即退出；`DesktopWindow.show()`）+ `composition.ts`（`requestQuit` 确认门：`host-composition.ts` `isBusy()` 以 residents 流式/压缩为准，回退当前会话 snapshot；`isQuitting` 注入窗口工厂放行真实退出） |
+| 外部 https 链接 | 启动提示 GitHub 卡；`stepStudioChrome.openUrl` | `chrome-open-url.ts` → `shell.openExternal`（系统默认浏览器，不是 Electron 窗）；只接受 https |
+| 操作者头像文件 | 首页弹窗 | `chrome-profile.ts` → `%APPDATA%\step-studio\profile\`；升级从安装目录 `userdata\profile` 迁入；卸载 `customUnInstall` 删除 |
 | 应用更新（GitHub Release） | AppUpdateDialog、settings/appUpdate、settings/updates、settings/UpdateAutomationSettings（常规页自动检查/下载）、settings/DesktopUpdateRecovery（高级页恢复）；预览 PREVIEW_APP_UPDATE / PREVIEW_DESKTOP_RECOVERY / PREVIEW_UPDATE_PREFS | Main update-coordinator / unified-updates-ipc 管理后台准备、持久化事务、统一重启；update-discovery 验签按组件/通道/架构发现；differential-artifact + electron-update-adapter 分块下载/全量回退及静默 NSIS；共享 v2 清单和 ZIP 在 runtime-installer。旧 chrome-updates 保留本地导入与诊断维护；新打包应用禁用旧在线 startApp/startRuntime。 |
 | Plan 另存为对话框 | `App.tsx` `pickPlanSaveTarget` / `savePlanAndQuit`；`deck/PlanCard.tsx` 按钮 | `workspace-shell-shared.ts`、`workspace-shell-ipc.ts`、`plan-save-path.ts`（原生另存为，默认 `<工作区>/PLAN.md`，回传工作区相对路径；越界拒绝）→ Bridge `mode.plan.review.saveAndQuit` |
 | 设置页 | `SettingsPage.tsx`、`settings/tabs.tsx` | 本地设置 + 少量 Host query |
-| 背景（图片 / 视频 / 动图） | `background/BackgroundSettingsPane.tsx`、`AppBackgroundLayer.tsx`、`BackgroundProvider.tsx`、`backgroundLibrary.ts`；预览 `preview/backgroundPreview.ts` | 纯 Renderer 本地：偏好 `omp.background`、文件 IndexedDB `omp-studio-backgrounds`；`[data-backdrop]` 让结构壳、卡片和控件按层次透出（菜单 / 弹窗保留高不透明度与背景模糊）；`ompStudioChrome.setTheme` 仅额外带标题栏 tint。不进 Host / client-contract |
+| 背景（图片 / 视频 / 动图） | `background/BackgroundSettingsPane.tsx`、`AppBackgroundLayer.tsx`、`BackgroundProvider.tsx`、`backgroundLibrary.ts`；预览 `preview/backgroundPreview.ts` | 纯 Renderer 本地：偏好 `omp.background`、文件 IndexedDB `step-studio-backgrounds`；`[data-backdrop]` 让结构壳、卡片和控件按层次透出（菜单 / 弹窗保留高不透明度与背景模糊）；`stepStudioChrome.setTheme` 仅额外带标题栏 tint。不进 Host / client-contract |
 | 字体与字号 | `settings/FontSettings.tsx`、`settings/typography.ts`、`styles/typography.css`；`terminalTheme.ts` | 常规页三组独立字体与字号；本地设置、系统字体搜索／手填、预览示例隔离；xterm 原实例更新及虚拟行高重测；使用说明 `docs/fonts.md` |
 | 预测输入 | `composer/useWordPrediction.ts`、`settings/PredictionSettingsPane.tsx`；desktop `prediction.ts` | 原生 WordCompletionProvider；默认本地 n-gram，模型下载和外部历史显式选择；私有通道不进入 Bridge 事件 |
 | 标题图标与短码 | `history/useSessionTitles.ts`、`history/SessionTitleMark.tsx` | `session.titles.inspect`；原生当前/保存标题元数据；保留稳定会话身份与现有原生重新生成流程 |
@@ -215,7 +215,7 @@ Host 传输通道只有：`bootstrap` / `query` / `command` / `subscribe` / `eve
 
 | 主题 | 文件 | 说明 |
 |---|---|---|
-| 数据 / 日志 / Runtime / 更新目录 | `apps/desktop/src/platform/desktop-paths.ts` | Windows `%APPDATA%` / `%LOCALAPPDATA%` 不变；macOS 全在 `~/Library/Application Support/omp-studio`；打包资源 win32 取 exe 目录，darwin 取 `process.resourcesPath` |
+| 数据 / 日志 / Runtime / 更新目录 | `apps/desktop/src/platform/desktop-paths.ts` | Windows `%APPDATA%` / `%LOCALAPPDATA%` 不变；macOS 全在 `~/Library/Application Support/step-studio`；打包资源 win32 取 exe 目录，darwin 取 `process.resourcesPath` |
 | 登录 shell 环境 | `platform/login-env.ts` | macOS 从访达启动只有 launchd 的精简 PATH；Host 创建前从登录 shell 取环境写入 `process.env`，补常见工具目录与 UTF-8 `LANG`；结果记 host 日志 `desktop.login_env` |
 | Command Line Tools 垫片 | `platform/developer-tools.ts`、`git-process.ts` | 解析到 `/usr/bin/git` 且 CLT 缺失时不执行垫片（它会弹系统安装框），直接报 `CAPABILITY_UNAVAILABLE` |
 | 进程树终止 | `platform/process-tree.ts`；`studio-host/src/posix-process-group.ts` | Windows `taskkill /t /f`；POSIX 以独立进程组启动并 `kill(-pgid)`，已回收的组长不再发信号 |
@@ -224,7 +224,7 @@ Host 传输通道只有：`bootstrap` / `query` / `command` / `subscribe` / `eve
 | Runtime 平台表 | `runtime-installer/src/runtime-platform.ts`；`scripts/target-platform.mjs` | 入口 `omp.exe` / `omp`、更新平台 allowlist、PE / Mach-O 架构校验；两张表由测试钉齐 |
 | mac 构建预检 | `scripts/mac-toolchain.mjs` | Node arm64 且未转译、CLT、Bun ≥ 1.4.2、Rust host `aarch64-apple-darwin` |
 | 窗口外观 | `platform/window-chrome.ts`、`titlebar-overlay.ts`；renderer `App.css` `.app-titlebar`、`TipHost.tsx` | Windows 右上 caption overlay（可随主题换色）；macOS `hidden` + 红绿灯 `trafficLightPosition`，overlay 不换色；标题栏两侧由 `env(titlebar-area-x/width)` 让位，TipHost 按同一留白翻转气泡 |
-| 原生菜单栏 | `platform/app-menu.ts`、`app-menu-shared.ts`；renderer `App.tsx` `runMenuCommand` | 仅 macOS；Edit 全用 role；自定义项经 `omp-studio:desktop:menu-command` 发 allowlist 命令 ID；这些组合键归菜单独占，renderer keydown 在 macOS 桌面跳过（`nativeMenuOwnsShortcuts`）；打包版无 Reload / DevTools |
+| 原生菜单栏 | `platform/app-menu.ts`、`app-menu-shared.ts`；renderer `App.tsx` `runMenuCommand` | 仅 macOS；Edit 全用 role；自定义项经 `step-studio:desktop:menu-command` 发 allowlist 命令 ID；这些组合键归菜单独占，renderer keydown 在 macOS 桌面跳过（`nativeMenuOwnsShortcuts`）；打包版无 Reload / DevTools |
 | 生命周期 | `composition.ts`、`platform/app-lifecycle.ts`、`platform/app-nap.ts` | macOS 关窗隐藏到 Dock，`activate` 重开，⌘Q 走 `requestQuit`；关机 / 注销有界关停且不拦截；忙时才持 `prevent-app-suspension`；不在「应用程序」时提示移动；relaunch 去掉 `-psn_*` |
 | 托盘 | `tray.ts`、`app-icon.ts` `resolveTrayIconPath`；`apps/desktop/resources-darwin/trayTemplate*.png`（`scripts/generate-tray-template.mjs` 生成） | macOS 用菜单栏模板图，首项「打开 OMP Studio」；模板图不在 Windows 的 `resources/` 内 |
 | 终端 shell | `terminal-pty.ts` | macOS 账户 shell → `$SHELL` → `/bin/zsh`，login 启动（`-l`，管道 `-il`）；剔除 `ELECTRON_*`，设 `TERM_PROGRAM`；进程组终止；无工作区时 cwd 为家目录 |
@@ -238,7 +238,7 @@ Host 传输通道只有：`bootstrap` / `query` / `command` / `subscribe` / `eve
 | Runtime 副本去 quarantine | `apps/desktop/src/platform/quarantine.ts`；`runtime-installer` `prepareStaging` | macOS 从包内播种 Runtime 时，在安装器私有暂存副本上清除 `com.apple.quarantine`，随后照常 Ed25519 验签；签名 bundle 本身不动 |
 | Renderer 平台 | `apps/renderer/src/platform.ts`、`keyboard/shortcuts.ts`、`platformCopy.ts` | preload 冻结 `platform`，Web UI 回退 `navigator`；根元素 `data-platform`；⌘ / Ctrl 判定与标签（Windows 标签逐字不变）；「资源管理器 / 访达」文案；macOS 保留系统浮动滚动条 |
 
-macOS host 日志：`~/Library/Application Support/omp-studio/logs/host-YYYY-MM-DD.log`。
+macOS host 日志：`~/Library/Application Support/step-studio/logs/host-YYYY-MM-DD.log`。
 
 ## Host 内核（改协议行为时）
 

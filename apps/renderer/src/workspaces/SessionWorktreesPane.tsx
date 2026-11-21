@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { CommandInput, StudioClient, WorkspaceId } from "@omp-studio/client-contract";
-import type { SessionWorktreeResultMap, SessionWorktreeRow, WorktreeRemovalPreview } from "@omp-studio/studio-protocol";
+import type { CommandInput, StudioClient, WorkspaceId } from "@step-studio/client-contract";
+import type { SessionWorktreeResultMap, SessionWorktreeRow, WorktreeRemovalPreview } from "@step-studio/studio-protocol";
 import type { FeatureSettingsProps } from "../settings/useFeatureSettings";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { PREVIEW_SESSION_WORKTREES } from "../preview/sessionWorktreesPreview";

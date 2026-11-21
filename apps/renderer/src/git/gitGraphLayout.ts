@@ -8,7 +8,7 @@
  * Licensed under the MIT License.
  */
 
-import type { GitLogCommitRecord, GitLogListReadModel, GitLogRef } from "@omp-studio/client-contract";
+import type { GitLogCommitRecord, GitLogListReadModel, GitLogRef } from "@step-studio/client-contract";
 
 export const SWIMLANE_HEIGHT = 22;
 export const SWIMLANE_WIDTH = 11;

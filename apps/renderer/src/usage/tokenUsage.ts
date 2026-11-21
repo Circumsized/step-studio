@@ -1,4 +1,4 @@
-import type { TokenUsageReadModel } from "@omp-studio/client-contract";
+import type { TokenUsageReadModel } from "@step-studio/client-contract";
 
 export const DAY_MS = 86_400_000;
 export const USAGE_POLL_MS = 30_000;

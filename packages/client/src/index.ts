@@ -1,5 +1,5 @@
 /**
- * @omp-studio/client
+ * @step-studio/client
  *
  * Platform-neutral product client: reducer, StudioClientImpl and the
  * in-process memory transport. No Node or Electron imports anywhere in

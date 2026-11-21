@@ -1,4 +1,4 @@
-import type { PerformanceCounters } from "@omp-studio/studio-protocol";
+import type { PerformanceCounters } from "@step-studio/studio-protocol";
 type Kind = "engines" | "stores";
 const resources: Record<Kind, Set<() => PerformanceCounters>> = { engines: new Set(), stores: new Set() };
 export function registerRendererResource(kind: Kind, read: () => PerformanceCounters): () => void {

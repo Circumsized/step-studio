@@ -11,7 +11,7 @@
  * accept the shared `ContractFixtureApi` shape.
  */
 
-import { createDesktopTransport } from "@omp-studio/transport-desktop";
+import { createDesktopTransport } from "@step-studio/transport-desktop";
 
 import { runTransportContract } from "../src/index.js";
 

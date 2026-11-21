@@ -8,11 +8,11 @@ import type {
   PublicAuthorityIdentity,
   RuntimeInstallState,
   ThreadId,
-} from "@omp-studio/client-contract";
-import type { OperatorStateSnapshot, RuntimeEpoch, RuntimeId, SessionId, StateVersion } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { OperatorStateSnapshot, RuntimeEpoch, RuntimeId, SessionId, StateVersion } from "@step-studio/studio-protocol";
 import { StudioHostClientFacade, createDefaultHostDiagnosticsFactory } from "../src/index.js";
 import type { HostSemanticCommandService } from "../src/services.js";
-import type { HostBackend } from "@omp-studio/studio-host";
+import type { HostBackend } from "@step-studio/studio-host";
 
 const snapshot: OperatorStateSnapshot = {
   runtimeId: "runtime-1" as RuntimeId,

@@ -1,5 +1,5 @@
 /**
- * The `ompStudioTerminal` global for the Tauri shell (M1.2c).
+ * The `stepStudioTerminal` global for the Tauri shell (M1.2c).
  *
  * Mirrors the shape in `apps/renderer/src/vite-env.d.ts:285-298` exactly, because
  * `terminalSessions.tsx` and `TerminalPane.tsx` consume it structurally.
@@ -20,7 +20,7 @@
  *
  * `create` accepts and ignores `workspaceId`: mapping a workspace id to a
  * directory needs the Host's workspace registry. The terminal starts in the
- * shell's own working directory instead — a real gap against omp-studio, not a
+ * shell's own working directory instead — a real gap against step-studio, not a
  * simplification to be proud of.
  */
 
@@ -28,8 +28,8 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen as tauriListen } from "@tauri-apps/api/event";
 
 /** Must stay byte-identical to the Rust constants in `terminal.rs`. */
-export const TERMINAL_DATA_CHANNEL = "omp-studio:terminal:data";
-export const TERMINAL_EXIT_CHANNEL = "omp-studio:terminal:exit";
+export const TERMINAL_DATA_CHANNEL = "step-studio:terminal:data";
+export const TERMINAL_EXIT_CHANNEL = "step-studio:terminal:exit";
 
 /** Tauri delivers `Event<T>`; the bridge's listener wants the bare payload. */
 interface TauriEventLike<T> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { OperatorCommandManifest, OperatorCommandManifestEntry } from "@omp-studio/studio-protocol";
+import type { OperatorCommandManifest, OperatorCommandManifestEntry } from "@step-studio/studio-protocol";
 import {
   composerSlashExecute,
   mergeSlashCatalogWithManifest,

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MODEL_CONFIG_THINKING_EFFORTS, MODEL_THINKING_MODES, MODEL_PARAMETER_FIELDS, mergeModelParameters, type StudioClient, type ModelAdaptationInput, type ModelThinkingConfig, type ModelParameterField } from "@omp-studio/client-contract";
+import { MODEL_CONFIG_THINKING_EFFORTS, MODEL_THINKING_MODES, MODEL_PARAMETER_FIELDS, mergeModelParameters, type StudioClient, type ModelAdaptationInput, type ModelThinkingConfig, type ModelParameterField } from "@step-studio/client-contract";
 import { AppSelect } from "../AppSelect";
 import { useI18n } from "../i18n";
 import { previewModelAdaptation } from "../preview/modelAdaptationPreview";

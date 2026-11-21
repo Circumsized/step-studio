@@ -1,4 +1,4 @@
-//! The `ompStudioTerminal` bridge: a real local shell per terminal (M1.2c).
+//! The `stepStudioTerminal` bridge: a real local shell per terminal (M1.2c).
 //!
 //! AGENTS.md is explicit that the bottom terminal must not be faked — "Terminal
 //! 两种模式都用本机 Shell" — so this is a real PTY, not a line buffer.
@@ -11,7 +11,7 @@
 //! `workspaceId` is accepted and ignored: mapping a workspace id to a directory
 //! needs the Host's workspace registry, which is not here yet. The terminal
 //! starts in the shell's own working directory instead. That is a real gap
-//! against omp-studio, recorded rather than papered over.
+//! against step-studio, recorded rather than papered over.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -26,8 +26,8 @@ use tauri::Emitter;
 /// Data flowing out of a terminal. Two channels rather than one tagged channel,
 /// because the renderer subscribes to them separately and never needs to
 /// discriminate.
-pub const TERMINAL_DATA_CHANNEL: &str = "omp-studio:terminal:data";
-pub const TERMINAL_EXIT_CHANNEL: &str = "omp-studio:terminal:exit";
+pub const TERMINAL_DATA_CHANNEL: &str = "step-studio:terminal:data";
+pub const TERMINAL_EXIT_CHANNEL: &str = "step-studio:terminal:exit";
 
 #[derive(Debug, Serialize)]
 pub struct TerminalError {

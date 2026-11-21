@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { canonicalJson, type IdempotencyKey, type StudioOperation, type StudioReceipt } from "@omp-studio/studio-protocol";
+import { canonicalJson, type IdempotencyKey, type StudioOperation, type StudioReceipt } from "@step-studio/studio-protocol";
 
 interface RegistryEntry {
   /**

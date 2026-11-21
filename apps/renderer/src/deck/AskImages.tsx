@@ -1,5 +1,5 @@
 import {useEffect,useRef,useState} from "react";
-import type {AskImage} from "@omp-studio/studio-protocol";
+import type {AskImage} from "@step-studio/studio-protocol";
 import {fileToPromptImage,imagePreviewUrl} from "../composer/ingest";
 
 export async function askImage(file:File):Promise<AskImage>{

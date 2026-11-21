@@ -22,7 +22,7 @@ import type {
   QueryName,
   SubscriptionScope,
   Unsubscribe,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 /** One host-side subscription record, kept in arrival order. */
 export interface FixtureSubscription {

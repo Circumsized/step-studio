@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/the-snowpear/omp-studio/actions/workflows/ci.yml"><img src="https://github.com/the-snowpear/omp-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/the-snowpear/step-studio/actions/workflows/ci.yml"><img src="https://github.com/the-snowpear/step-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.17-informational.svg" alt="0.1.17"></a>
   <a href="docs/getting-started.md"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4.svg" alt="Windows | macOS"></a>
@@ -34,7 +34,7 @@ OMP Studio is a desktop shell for [oh-my-pi](https://github.com/can1357/oh-my-pi
   <img src="docs/images/workbench.png" alt="OMP Studio workbench: new conversation welcome, activity heatmap, and composer" width="920">
 </p>
 
-Version 0.1.10 targets OMP 18.10.4, adding session transfer, worktrees, storage compression and model controls. See the [release notes](docs/releases/v0.1.10.md) and [migration report](docs/migrations/omp-18.10.4.md). Windows x64 / ARM64 and macOS Apple Silicon downloads are available from [GitHub Releases](https://github.com/the-snowpear/omp-studio/releases). The Mac application is ad hoc signed and not notarized.
+Version 0.1.10 targets OMP 18.10.4, adding session transfer, worktrees, storage compression and model controls. See the [release notes](docs/releases/v0.1.10.md) and [migration report](docs/migrations/omp-18.10.4.md). Windows x64 / ARM64 and macOS Apple Silicon downloads are available from [GitHub Releases](https://github.com/the-snowpear/step-studio/releases). The Mac application is ad hoc signed and not notarized.
 
 ## Why this workbench
 
@@ -87,9 +87,9 @@ The right-hand Git panel stages, diffs, and commits next to the conversation. Fe
 </p>
 
 > [!TIP]
-> **Installation & Getting Started:** Windows users can download the latest installer directly from [GitHub Releases](https://github.com/the-snowpear/omp-studio/releases), or run from source following the instructions below. Please file any bugs or suggestions as [Issues](https://github.com/the-snowpear/omp-studio/issues).
+> **Installation & Getting Started:** Windows users can download the latest installer directly from [GitHub Releases](https://github.com/the-snowpear/step-studio/releases), or run from source following the instructions below. Please file any bugs or suggestions as [Issues](https://github.com/the-snowpear/step-studio/issues).
 >
-> **macOS (Apple Silicon, macOS 13+):** when a release ships `OMP-Studio-<version>-macos-arm64.dmg`, open it and drag OMP Studio into Applications. It is an ad hoc signed, not yet notarized preview: macOS blocks the first launch, so choose "Open Anyway" in System Settings › Privacy & Security, or run `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`. You can also run from source, see [docs/getting-started.md](docs/getting-started.md).
+> **macOS (Apple Silicon, macOS 13+):** when a release ships `Step-Studio-<version>-macos-arm64.dmg`, open it and drag OMP Studio into Applications. It is an ad hoc signed, not yet notarized preview: macOS blocks the first launch, so choose "Open Anyway" in System Settings › Privacy & Security, or run `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`. You can also run from source, see [docs/getting-started.md](docs/getting-started.md).
 
 ## What it does
 
@@ -104,8 +104,8 @@ The right-hand Git panel stages, diffs, and commits next to the conversation. Fe
 Node.js 22+ is required. Full steps: [docs/getting-started.md](docs/getting-started.md).
 
 ```powershell
-git clone --recurse-submodules https://github.com/the-snowpear/omp-studio.git
-cd omp-studio
+git clone --recurse-submodules https://github.com/the-snowpear/step-studio.git
+cd step-studio
 npm install
 cd apps/desktop-tauri
 npm run tauri:dev

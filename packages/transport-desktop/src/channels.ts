@@ -26,12 +26,12 @@ export const DESKTOP_IPC_CHANNELS: Readonly<{
   /** Renderer -> Main: close the client session. */
   readonly close: string;
 }> = Object.freeze({
-  bootstrap: "omp-studio:desktop:bootstrap",
-  query: "omp-studio:desktop:query",
-  command: "omp-studio:desktop:command",
-  subscribe: "omp-studio:desktop:subscribe",
-  event: "omp-studio:desktop:event",
-  close: "omp-studio:desktop:close",
+  bootstrap: "step-studio:desktop:bootstrap",
+  query: "step-studio:desktop:query",
+  command: "step-studio:desktop:command",
+  subscribe: "step-studio:desktop:subscribe",
+  event: "step-studio:desktop:event",
+  close: "step-studio:desktop:close",
 });
 
 /** Union of every P1 Desktop IPC channel name. */

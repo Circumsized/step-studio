@@ -5,7 +5,7 @@ import {
   utf8ByteLength,
   type ConversationRuntimeEvent,
   type StudioEventEnvelope,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { ReplayTextBuffer } from "./replay-text-buffer.js";
 import { ConversationCoalescer, type ConversationCoalescerOptions } from "./conversation-coalescer.js";
 

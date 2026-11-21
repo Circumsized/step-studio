@@ -1,5 +1,5 @@
 {
-  "name": "@omp-studio/host-client-api",
+  "name": "@step-studio/host-client-api",
   "version": "0.1.17",
   "private": true,
   "description": "Presentation-neutral Host semantic facade for the OMP Studio product client (P1)",
@@ -46,9 +46,9 @@
     "test:built": "node --test \"dist/test/*.test.js\""
   },
   "dependencies": {
-    "@omp-studio/client-contract": "0.1.17",
-    "@omp-studio/studio-host": "0.1.17",
-    "@omp-studio/studio-protocol": "0.1.17",
+    "@step-studio/client-contract": "0.1.17",
+    "@step-studio/studio-host": "0.1.17",
+    "@step-studio/studio-protocol": "0.1.17",
     "yaml": "^2.9.0"
   }
 }

@@ -7,7 +7,7 @@ import type {
   ConversationResetBoundaryItem,
   JsonValue,
   OpaqueCursor,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type { ComposerDoc } from "../composer/types";
 import type { ConversationIdentity } from "./conversationHost";
 import type { UserMessageThumb, UserThumbMap } from "./userMessageThumbs";

@@ -1,4 +1,4 @@
-import type { SessionHistoryEntry } from "@omp-studio/client-contract";
+import type { SessionHistoryEntry } from "@step-studio/client-contract";
 import { SHORTCUTS, formatShortcut, shortcutSearchText } from "./keyboard/shortcuts";
 import type { CapTab } from "./CapabilitiesPage";
 import type { PageRoute } from "./HomePage";

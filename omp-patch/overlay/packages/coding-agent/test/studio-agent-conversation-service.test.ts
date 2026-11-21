@@ -16,7 +16,7 @@ function userMessage(text: string) {
 
 describe("StudioAgentConversationService", () => {
 	test("reads a live child session through the shared ConversationItem projection", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-agent-convo-live-");
+		using tempDir = TempDir.createSync("@step-studio-agent-convo-live-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		manager.appendMessage(userMessage("audit the lockfile"));
 		const registry = new AgentRegistry();

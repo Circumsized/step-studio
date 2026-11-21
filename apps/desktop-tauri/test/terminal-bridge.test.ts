@@ -1,5 +1,5 @@
 /**
- * The `ompStudioTerminal` bridge: fan-out semantics and command-name drift.
+ * The `stepStudioTerminal` bridge: fan-out semantics and command-name drift.
  *
  * The fan-out is the part worth pinning. Tauri's `listen` returns a promise, so
  * a per-subscription registration would leave a window where the returned
@@ -49,14 +49,14 @@ describe("the terminal bridge registers one listener per channel, up front", () 
     // Both channels are registered once, at construction, before any
     // subscriber exists — otherwise an event between the first subscribe and the
     // registration resolving would be dropped.
-    assert.deepEqual(fake.registered, ["omp-studio:terminal:data", "omp-studio:terminal:exit"]);
-    fake.fire("omp-studio:terminal:data", { id: "t1", data: "hi" });
+    assert.deepEqual(fake.registered, ["step-studio:terminal:data", "step-studio:terminal:exit"]);
+    fake.fire("step-studio:terminal:data", { id: "t1", data: "hi" });
     assert.deepEqual(seen, ["a:hi", "b:hi"], "both subscribers see the event");
 
     // Identity-exact removal: taking one back must not disturb the other.
     offFirst();
     seen.length = 0;
-    fake.fire("omp-studio:terminal:data", { id: "t1", data: "again" });
+    fake.fire("step-studio:terminal:data", { id: "t1", data: "again" });
     assert.deepEqual(seen, ["b:again"], "only the removed listener stopped");
     offSecond();
   });
@@ -66,8 +66,8 @@ describe("the terminal bridge registers one listener per channel, up front", () 
     const bridge = createTauriTerminalBridge(fake.listen as never);
     const exits: string[] = [];
     bridge.onExit(event => exits.push(event.id));
-    assert.deepEqual(fake.registered, ["omp-studio:terminal:data", "omp-studio:terminal:exit"]);
-    fake.fire("omp-studio:terminal:exit", { id: "t9" });
+    assert.deepEqual(fake.registered, ["step-studio:terminal:data", "step-studio:terminal:exit"]);
+    fake.fire("step-studio:terminal:exit", { id: "t9" });
     assert.deepEqual(exits, ["t9"]);
   });
 });

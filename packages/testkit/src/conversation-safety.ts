@@ -6,7 +6,7 @@
  * success fixtures.
  */
 
-import { conversationRedactKey } from "@omp-studio/studio-protocol";
+import { conversationRedactKey } from "@step-studio/studio-protocol";
 
 /** Substrings that must never appear on a public conversation payload. */
 export const CONVERSATION_FORBIDDEN_SUBSTRINGS = [

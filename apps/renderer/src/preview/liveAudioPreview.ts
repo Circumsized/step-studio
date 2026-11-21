@@ -1,4 +1,4 @@
-import type { LiveAudioState } from "@omp-studio/studio-protocol";
+import type { LiveAudioState } from "@step-studio/studio-protocol";
 export const PREVIEW_LIVE_AUDIO: LiveAudioState = {
   available: true, attached: false, voice: "sol", phase: "off", muted: false, inputLevel: 0, outputLevel: 0,
   transcripts: [

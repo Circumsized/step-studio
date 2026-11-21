@@ -146,14 +146,14 @@ function sessionControlRuntime(): { runtime: StudioHostRuntime; session: Record<
 }
 
 async function bridgeFixture(): Promise<{ endpoint: string; tokenFile: string; token: string }> {
-	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-studio-runtime-bridge-"));
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "step-studio-runtime-bridge-"));
 	const token = crypto.randomBytes(32).toString("base64url");
 	const tokenFile = path.join(directory, "bridge.token");
 	await fs.writeFile(tokenFile, token, { encoding: "utf8", mode: 0o600 });
 	return {
 		endpoint:
 			process.platform === "win32"
-				? `\\\\.\\pipe\\omp-studio-runtime-${crypto.randomUUID()}`
+				? `\\\\.\\pipe\\step-studio-runtime-${crypto.randomUUID()}`
 				: path.join(directory, "bridge.sock"),
 		tokenFile,
 		token,

@@ -9,7 +9,7 @@ import type {
   SessionId,
   StateVersion,
   StudioEventEnvelope,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import { StudioBridgeClient } from "../src/bridge-client.js";
 import { CommandLedger } from "../src/command-ledger.js";

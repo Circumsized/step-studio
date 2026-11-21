@@ -1,6 +1,6 @@
 import { AppSelect } from "../AppSelect";
 import { useEffect, useState } from "react";
-import type { FeatureSettingValue, PoolAccountOption } from "@omp-studio/studio-protocol";
+import type { FeatureSettingValue, PoolAccountOption } from "@step-studio/studio-protocol";
 import { useFeatureSettings, type FeatureSettingsProps } from "../settings/useFeatureSettings";
 import { PREVIEW_POOL_ACCOUNTS } from "../preview/featureSettingsPreview";
 import { createPreviewAgentDefinitions } from "../preview/subagentsPreview";

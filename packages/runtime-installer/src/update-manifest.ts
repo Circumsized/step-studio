@@ -32,7 +32,7 @@ export function canonicalUpdateJson(value: unknown): string {
   return JSON.stringify(value);
 }
 export function updateSigningBytes(manifest: UpdateManifest): Buffer {
-  return Buffer.from(`omp-studio-update-v2\n${canonicalUpdateJson(manifest)}`, "utf8");
+  return Buffer.from(`step-studio-update-v2\n${canonicalUpdateJson(manifest)}`, "utf8");
 }
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid update object");

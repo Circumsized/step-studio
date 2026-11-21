@@ -1,7 +1,7 @@
 import { invokeUpgrade, useUpgradeAvailable } from "../runtimeUpgrade";
 import { useI18n } from "../i18n";
 import { PREVIEW_BTW_TOPICS, PREVIEW_BTW_TURNS } from "../preview/btwPreview";
-import type { BtwTopicSummary, BtwHistoryTurn } from "@omp-studio/client-contract";
+import type { BtwTopicSummary, BtwHistoryTurn } from "@step-studio/client-contract";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   BtwAskOutcome,
@@ -9,7 +9,7 @@ import type {
   BtwSnapshot,
   CommandName,
   StudioClient,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { emptySnapshot, type ComposerSnapshot } from "../composer/types";
 import { snapshotFromText } from "../composer/serialize";
@@ -56,7 +56,7 @@ export interface BtwSessionApi {
   readonly pending: boolean;
   readonly error: string | undefined;
   readonly notice: string | undefined;
-  ask(question: string, newTopic?: boolean, images?: import("@omp-studio/client-contract").PromptImageInput[], command?: { name: string; arguments: string }): Promise<boolean>;
+  ask(question: string, newTopic?: boolean, images?: import("@step-studio/client-contract").PromptImageInput[], command?: { name: string; arguments: string }): Promise<boolean>;
   abort(): Promise<void>;
   branch(): Promise<void>;
   copy(): Promise<void>;
@@ -197,7 +197,7 @@ export function useBtwSession(input: BtwSessionInput): BtwSessionApi {
   );
 
   const ask = useCallback(
-    async (text: string, forceNewTopic = false, images?: import("@omp-studio/client-contract").PromptImageInput[], command?: { name: string; arguments: string }): Promise<boolean> => {
+    async (text: string, forceNewTopic = false, images?: import("@step-studio/client-contract").PromptImageInput[], command?: { name: string; arguments: string }): Promise<boolean> => {
       const trimmed = text.trim();
       if (trimmed.length === 0) {
         setError("先写下要问的问题");

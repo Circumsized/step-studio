@@ -82,7 +82,7 @@ test("POSIX install restores execute bits before activation and on same-version 
 });
 
 test("WP-003 installs two versions, activates, and rolls back atomically", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-"));
   const installer = runtimeInstaller(join(temporary, "installed"));
   await installer.install(await artifact(temporary, "v1"));
   await installer.install(await artifact(temporary, "v2"));
@@ -182,14 +182,14 @@ test("prune preserves broken current, previous and externally referenced version
 });
 
 test("WP-003 rejects a checksum mismatch", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-bad-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-bad-"));
   const source = await artifact(temporary, "bad");
   await writeFile(join(source, "omp.exe"), "tampered");
   await assert.rejects(() => runtimeInstaller(join(temporary, "installed")).install(source), /Checksum mismatch/u);
 });
 
 test("SEC-006 rejects unsigned, metadata-tampered, and untrusted Runtime artifacts", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-signature-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-signature-"));
   const unsigned = await artifact(temporary, "unsigned");
   await writeFile(join(unsigned, "runtime-signature.json"), "{}\n");
   await assert.rejects(() => runtimeInstaller(join(temporary, "installed-a")).install(unsigned), /signature/u);
@@ -211,7 +211,7 @@ test("SEC-006 rejects unsigned, metadata-tampered, and untrusted Runtime artifac
 });
 
 test("RT-007 failed activation preserves the current Runtime", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-activate-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-activate-"));
   const installer = runtimeInstaller(join(temporary, "installed"));
   await installer.install(await artifact(temporary, "v1"));
   await installer.activate("v1", { selfCheck: passingSelfCheck });
@@ -220,7 +220,7 @@ test("RT-007 failed activation preserves the current Runtime", async () => {
 });
 
 test("WP-062 currentManifest reports the active installation read-only", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-currentmanifest-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-currentmanifest-"));
   const installer = runtimeInstaller(join(temporary, "installed"));
   assert.equal(await installer.currentManifest(), undefined);
   await installer.install(await artifact(temporary, "v1"));
@@ -239,7 +239,7 @@ test("WP-062 currentManifest reports the active installation read-only", async (
 // symptom of an edited manifest is the Runtime Resolver reporting an opaque
 // "managed runtime command manifest hash drift".
 test("SEC-006 currentManifest rejects an installed manifest edited after install", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-posttamper-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-posttamper-"));
   const installer = runtimeInstaller(join(temporary, "installed"));
   await installer.install(await artifact(temporary, "v1"));
   await installer.activate("v1", { selfCheck: passingSelfCheck });
@@ -251,7 +251,7 @@ test("SEC-006 currentManifest rejects an installed manifest edited after install
 });
 
 test("WP-003 activation self-check runs on the installed entrypoint before current.json is switched", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-selfcheck-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-selfcheck-"));
   const installer = runtimeInstaller(join(temporary, "installed"));
   await installer.install(await artifact(temporary, "v1"));
   const checked: string[] = [];
@@ -264,7 +264,7 @@ test("WP-003 activation self-check runs on the installed entrypoint before curre
 });
 
 test("WP-003 failed activation self-check preserves current and quarantines the candidate", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-quarantine-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-quarantine-"));
   const installer = runtimeInstaller(join(temporary, "installed"));
   await installer.install(await artifact(temporary, "v1"));
   await installer.activate("v1", { selfCheck: passingSelfCheck });
@@ -290,7 +290,7 @@ test("WP-003 failed activation self-check preserves current and quarantines the 
 });
 
 test("WP-003 self-check failure never quarantines a Runtime referenced by current.json", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-active-selfcheck-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-active-selfcheck-"));
   const installer = runtimeInstaller(join(temporary, "installed"));
   await installer.install(await artifact(temporary, "v1"));
   await installer.activate("v1", { selfCheck: passingSelfCheck });
@@ -312,7 +312,7 @@ test("WP-003 self-check failure never quarantines a Runtime referenced by curren
 });
 
 test("WP-003 requires checksums for the manifest and entrypoint", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-coverage-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-coverage-"));
   const source = await artifact(temporary, "missing-manifest-checksum");
   const digest = createHash("sha256").update("omp-missing-manifest-checksum").digest("hex");
   const manifest = await readFile(join(source, "runtime-manifest.json"), "utf8");
@@ -326,7 +326,7 @@ test("WP-003 requires checksums for the manifest and entrypoint", async () => {
 });
 
 test("SEC-005 rejects a symlinked Runtime entrypoint", async (context) => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-symlink-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-symlink-"));
   const outside = join(temporary, "outside.exe");
   const source = join(temporary, "artifact-symlink");
   await mkdir(source);
@@ -370,7 +370,7 @@ test("SEC-005 rejects a symlinked Runtime entrypoint", async (context) => {
 });
 
 test("WP-064 uninstall protects active and externally referenced Runtime versions", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-uninstall-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-uninstall-"));
   const referenced = new Set(["bound"]);
   const installer = runtimeInstaller(join(temporary, "installed"), {
     isRuntimeReferenced: (version) => referenced.has(version),
@@ -386,7 +386,7 @@ test("WP-064 uninstall protects active and externally referenced Runtime version
 });
 
 test("WP-064 pruning keeps at least two stable versions and every referenced version", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-prune-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-prune-"));
   const referenced = new Set(["canary-bound"]);
   const installer = runtimeInstaller(join(temporary, "installed"), {
     isRuntimeReferenced: (version) => referenced.has(version),
@@ -406,7 +406,7 @@ test("WP-064 pruning keeps at least two stable versions and every referenced ver
 });
 
 test("prepareStaging runs on the private staged copy before it is verified and published", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-prepare-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-prepare-"));
   const root = join(temporary, "installed");
   const seen: { directory: string; published: boolean }[] = [];
   const installer = runtimeInstaller(root, {
@@ -424,7 +424,7 @@ test("prepareStaging runs on the private staged copy before it is verified and p
 });
 
 test("a staging fix-up that changes bytes fails verification and publishes nothing", async () => {
-  const temporary = await mkdtemp(join(tmpdir(), "omp-studio-installer-prepare-tamper-"));
+  const temporary = await mkdtemp(join(tmpdir(), "step-studio-installer-prepare-tamper-"));
   const root = join(temporary, "installed");
   const installer = runtimeInstaller(root, {
     prepareStaging: async (directory) => { await writeFile(join(directory, "omp.exe"), "changed"); },

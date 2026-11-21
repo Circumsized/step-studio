@@ -29,8 +29,8 @@ import type {
   StudioClient,
   SubscriptionScope,
   Unsubscribe,
-} from "@omp-studio/client-contract";
-import { CLIENT_CONTRACT_VERSION } from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
+import { CLIENT_CONTRACT_VERSION } from "@step-studio/client-contract";
 
 import { createBrowserClockAndIds, type ClientClockAndIds } from "./clock.js";
 import { CLIENT_CLOSED_ERROR, toClientError } from "./errors.js";

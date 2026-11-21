@@ -1,5 +1,5 @@
 import { migrateModelRoleConfig, MODEL_ROLE_PRIORITIES } from "./model-role-migration.js";
-import type { WebSearchRouting } from "@omp-studio/client-contract";
+import type { WebSearchRouting } from "@step-studio/client-contract";
 
 /** Released v18.8.0 priority.json; kept separate from credential display order. */
 export const WEB_PRIORITY_1880 = MODEL_ROLE_PRIORITIES.web;

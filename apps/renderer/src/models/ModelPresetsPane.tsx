@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CommandInput } from "@omp-studio/client-contract";
-import type { ModelPresetResult, ModelPresetRow, SessionOptionsResultMap } from "@omp-studio/studio-protocol";
+import type { CommandInput } from "@step-studio/client-contract";
+import type { ModelPresetResult, ModelPresetRow, SessionOptionsResultMap } from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";

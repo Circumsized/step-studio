@@ -2,7 +2,7 @@ import type {
   ArtifactRecord,
   MediaDetail,
   MediaModelChoice,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 export const PREVIEW_MEDIA_MODELS: MediaModelChoice[] = [
   {
     selector: "demo/image",

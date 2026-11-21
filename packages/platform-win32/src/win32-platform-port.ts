@@ -3,7 +3,7 @@ import {
   type PlatformPort,
   type PrivateEndpoint,
   type ResourceHandle,
-} from "@omp-studio/platform";
+} from "@step-studio/platform";
 import { Win32RuntimeContainment } from "./win32-runtime-containment.js";
 import {
   assertNonEmptyString,

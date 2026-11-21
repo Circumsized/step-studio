@@ -41,7 +41,7 @@ use crate::chrome::{ChromeError, ChromeResult};
 
 /// The Tauri channel observation events travel on. Kept byte-identical to the
 /// Electron preload's so the renderer's subscription is the same on both shells.
-pub const BROWSER_EVENT_CHANNEL: &str = "omp-studio:desktop:browser-event";
+pub const BROWSER_EVENT_CHANNEL: &str = "step-studio:desktop:browser-event";
 
 /// One private line may not exceed this. A frame is ~2.1 MB of base64, so the
 /// buffer has to hold one whole line or the frame is lost mid-parse.

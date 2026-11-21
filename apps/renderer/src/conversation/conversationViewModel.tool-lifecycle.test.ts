@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ConversationMessageItem, SessionId } from "@omp-studio/client-contract";
+import type { ConversationMessageItem, SessionId } from "@step-studio/client-contract";
 import { buildPersistedTimelineRow, emptyConversationState, type ConversationState } from "./conversationViewModel";
 
 const sessionId = "session" as SessionId;

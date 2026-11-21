@@ -8,7 +8,7 @@
 import { spawn } from "node:child_process";
 import { performance } from "node:perf_hooks";
 
-import type { McpTransport } from "@omp-studio/client-contract";
+import type { McpTransport } from "@step-studio/client-contract";
 
 import { redactText, sanitizeDisplayText } from "./read-models.js";
 
@@ -130,7 +130,7 @@ async function probeStdio(spec: McpConnectSpec, timeoutMs: number, cwd?: string)
       await session.request("initialize", {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: {},
-        clientInfo: { name: "omp-studio", version: "1.0.0" },
+        clientInfo: { name: "step-studio", version: "1.0.0" },
       });
       session.notify("notifications/initialized", {});
       return await listToolsFromResult(
@@ -182,7 +182,7 @@ async function probeHttp(spec: McpConnectSpec, timeoutMs: number): Promise<strin
   const init = await httpRpc(url, spec.headers, 1, "initialize", {
     protocolVersion: PROTOCOL_VERSION,
     capabilities: {},
-    clientInfo: { name: "omp-studio", version: "1.0.0" },
+    clientInfo: { name: "step-studio", version: "1.0.0" },
   }, timeoutMs);
   if (init.error) throw rpcError(init);
   await httpRpc(url, spec.headers, 2, "notifications/initialized", {}, timeoutMs, true);

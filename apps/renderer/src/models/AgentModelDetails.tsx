@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type {
   ClientBootstrap,
   StudioClient,
-} from "@omp-studio/client-contract";
-import type { AgentModelInspection } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { AgentModelInspection } from "@step-studio/studio-protocol";
 import { useI18n } from "../i18n";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { previewAgentModel } from "../preview/agentModelPreview";

@@ -6,10 +6,10 @@ import {
   type ModelAdaptationCandidate,
   type ModelCatalogStatus, type ModelCatalogRefreshResult, type ModelParameterValues,
   type ModelParameterSources, type ModelParameterOrigin,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import { BUILTIN_MODEL_CATALOG } from "./model-catalog.generated.js";
 
-export const MODEL_CATALOG_URL = "https://raw.githubusercontent.com/the-snowpear/omp-studio/main/catalog/model-catalog-v1.json";
+export const MODEL_CATALOG_URL = "https://raw.githubusercontent.com/the-snowpear/step-studio/main/catalog/model-catalog-v1.json";
 
 export function normalizeModelName(name: string): string {
   return name.normalize("NFKC").toLowerCase().trim().replace(/[\s._]+/g, "-").replace(/-+/g, "-");

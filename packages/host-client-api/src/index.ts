@@ -1,5 +1,5 @@
 /**
- * @omp-studio/host-client-api
+ * @step-studio/host-client-api
  *
  * P1 presentation-neutral Host facade for the product client
  * (FRONTEND_INTEGRATION.md §13 P1). `StudioHostClientFacade` implements the

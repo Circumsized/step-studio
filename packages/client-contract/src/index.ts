@@ -1,5 +1,5 @@
 /**
- * @omp-studio/client-contract
+ * @step-studio/client-contract
  *
  * Authoritative P0 product client contract (FRONTEND_INTEGRATION.md §§8, 11,
  * 13 P0). Transport-neutral: the same `StudioClient` surface is implemented
@@ -14,7 +14,7 @@
 import type {
   CapabilityManifest,
   OperatorStateSnapshot,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import type { OpaqueCursor } from "./conversation.js";
 import type {
@@ -53,7 +53,7 @@ import type {
 
 /** Version of this client contract; bumped on incompatible contract changes. */
 export const CLIENT_CONTRACT_VERSION = 2 as const;
-export type { ArtifactKind, ArtifactRecord, ArtifactListInput, ArtifactPage, ArtifactStorageState } from "@omp-studio/studio-protocol";
+export type { ArtifactKind, ArtifactRecord, ArtifactListInput, ArtifactPage, ArtifactStorageState } from "@step-studio/studio-protocol";
 
 export { MODEL_KINDS, BUILTIN_MODEL_ROLES, parseModelKind, modelAcceptsRole, type ModelKind } from "./model-kinds.js";
 
@@ -144,12 +144,12 @@ export interface StudioClient {
 
 // Session thinking selectors are protocol facts; re-exported so transport
 // adapters can validate them without depending on studio-protocol directly.
-export { SESSION_THINKING_LEVELS, SESSION_THINKING_SELECTORS } from "@omp-studio/studio-protocol";
+export { SESSION_THINKING_LEVELS, SESSION_THINKING_SELECTORS } from "@step-studio/studio-protocol";
 export type {
   SessionModelState,
   SessionThinkingLevel,
   SessionThinkingSelector,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 // Runtime settings are a closed public whitelist; re-export the protocol
 // facts so transports and Host adapters cannot fall back to arbitrary keys.
@@ -159,7 +159,7 @@ export {
   STUDIO_RUNTIME_SETTING_KEYS,
   STUDIO_RUNTIME_UNEXPECTED_STOP_MODELS,
   STUDIO_RUNTIME_UNEXPECTED_STOP_MODES,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 export type {
   StudioCompactionSpeculation,
   StudioPlanSaveAndQuitResult,
@@ -175,11 +175,11 @@ export type {
   StudioRuntimeSettingsActivation,
   StudioRuntimeUnexpectedStopMode,
   StudioRuntimeUnexpectedStopModel,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 // BTW snapshot facts are protocol-owned; re-exported so surfaces and transport
 // adapters can type the side-channel without depending on studio-protocol.
-export type { BtwError, BtwErrorCode, BtwSnapshot, BtwStatus } from "@omp-studio/studio-protocol";
+export type { BtwError, BtwErrorCode, BtwSnapshot, BtwStatus } from "@step-studio/studio-protocol";
 
 export * from "./ids.js";
 export * from "./read-models.js";
@@ -191,6 +191,6 @@ export * from "./provider-yaml-draft.js";
 export * from "./conversation.js";
 export * from "./git.js";
 
-export type { ContextViewIndex, ContextViewResultMap, ContextViewOperation, ContextCategoryId, ContextEntrySummary } from "@omp-studio/studio-protocol";
-export type { UpgradeOperation, UpgradeResultMap, BtwTopicSummary, BtwHistoryTurn, ForeignSessionSummary, ForeignSource, RuntimeAuthProvider, ModelMentionInfo } from "@omp-studio/studio-protocol";
+export type { ContextViewIndex, ContextViewResultMap, ContextViewOperation, ContextCategoryId, ContextEntrySummary } from "@step-studio/studio-protocol";
+export type { UpgradeOperation, UpgradeResultMap, BtwTopicSummary, BtwHistoryTurn, ForeignSessionSummary, ForeignSource, RuntimeAuthProvider, ModelMentionInfo } from "@step-studio/studio-protocol";
 export * from "./model-adaptation.js";

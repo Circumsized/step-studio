@@ -7,7 +7,7 @@ OMP Studio is in public preview (`0.1.0`). Only the latest `main` commit and the
 ## What this project trusts
 
 - The **Renderer never receives** bridge tokens, process handles, or native OMP session paths.
-- Runtime artifacts are **Ed25519-signed**. The repository does not contain production signing private keys. Local keys live under the Host profile (`%APPDATA%\omp-studio\keys` on Windows) and are generated with `npm run omp:keys`.
+- Runtime artifacts are **Ed25519-signed**. The repository does not contain production signing private keys. Local keys live under the Host profile (`%APPDATA%\step-studio\keys` on Windows) and are generated with `npm run omp:keys`.
 - Unknown mutations **fail closed**. `accepted` is not success; only a terminal receipt commits an outcome.
 - A lost Runtime fences the old epoch. Unresolved accepted work becomes `outcome_unknown`.
 - PTY / terminal output is **not** a semantic control channel.
@@ -16,7 +16,7 @@ OMP Studio is in public preview (`0.1.0`). Only the latest `main` commit and the
 
 **Do not open a public issue** for a security vulnerability.
 
-1. Open a [private GitHub security advisory](https://github.com/the-snowpear/omp-studio/security/advisories/new), or
+1. Open a [private GitHub security advisory](https://github.com/the-snowpear/step-studio/security/advisories/new), or
 2. Contact the maintainer through GitHub (@the-snowpear) with a brief description and a request for a private channel.
 
 Please include:

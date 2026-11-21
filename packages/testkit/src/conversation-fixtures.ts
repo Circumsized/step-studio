@@ -15,7 +15,7 @@ import type {
   RuntimeEpoch,
   SessionId,
   StateVersion,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   CommandId,
   ConversationRuntimeEvent,
@@ -24,8 +24,8 @@ import type {
   InteractionId,
   RemoteInteractionRequest,
   StudioEventEnvelope,
-} from "@omp-studio/studio-protocol";
-import { parseConversationRuntimeEvent, parseConversationTranscriptPage } from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
+import { parseConversationRuntimeEvent, parseConversationTranscriptPage } from "@step-studio/studio-protocol";
 
 import { assertConversationPublicSafe } from "./conversation-safety.js";
 
@@ -116,7 +116,7 @@ const assistantThinkingToolMessage = {
       type: "toolResult" as const,
       toolCallId: CONVERSATION_FIXTURE_IDS.toolCallId,
       toolName: "Read",
-      output: '{ "name": "omp-studio" }',
+      output: '{ "name": "step-studio" }',
       isError: false,
     },
     { type: "text" as const, text: "This is a Studio workspace." },
@@ -247,7 +247,7 @@ export const conversationLiveSequence: readonly ConversationRuntimeEvent[] = [
       type: "toolResult",
       toolCallId: CONVERSATION_FIXTURE_IDS.toolCallId,
       toolName: "Read",
-      output: '{ "name": "omp-studio" }',
+      output: '{ "name": "step-studio" }',
       isError: false,
     },
     completedAt: CONVERSATION_FIXTURE_T2,

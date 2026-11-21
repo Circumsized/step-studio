@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ArtifactRecord } from "@omp-studio/studio-protocol";
+import type { ArtifactRecord } from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { normalizeAudio, uploadMediaBlob } from "./audio";

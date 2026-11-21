@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import type { GitCommitChangesReadModel, GitCommitDiffReadModel, GitLogListReadModel, WorkspaceId } from "@omp-studio/client-contract";
+import type { GitCommitChangesReadModel, GitCommitDiffReadModel, GitLogListReadModel, WorkspaceId } from "@step-studio/client-contract";
 import { useI18n } from "../i18n";
 import { Icon } from "../icons";
 import { FileRowMenu, type FileMenuAction, type FileMenuController, type FileMenuTarget } from "../menus";

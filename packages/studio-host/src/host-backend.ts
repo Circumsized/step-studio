@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { RuntimeInstaller, type ActivateOptions, type RuntimeInstallerOptions } from "@omp-studio/runtime-installer";
-import type { RuntimePreference, SessionBinding } from "@omp-studio/studio-protocol";
+import { RuntimeInstaller, type ActivateOptions, type RuntimeInstallerOptions } from "@step-studio/runtime-installer";
+import type { RuntimePreference, SessionBinding } from "@step-studio/studio-protocol";
 import { resolveRuntime, type RuntimeResolution, type RuntimeResolverEnvironment } from "./runtime-resolver.js";
 import { ThreadBindingStore } from "./thread-binding-store.js";
 

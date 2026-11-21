@@ -4,8 +4,8 @@
  * then operator.invoke, then existing UI. Skills stay out of this list.
  */
 
-import type { CommandName, ThreadId } from "@omp-studio/client-contract";
-import type { CommandSource, OperatorCommandManifest, OperatorCommandManifestEntry } from "@omp-studio/studio-protocol";
+import type { CommandName, ThreadId } from "@step-studio/client-contract";
+import type { CommandSource, OperatorCommandManifest, OperatorCommandManifestEntry } from "@step-studio/studio-protocol";
 
 import { snapshotFromDoc, snapshotIsEmpty } from "./serialize";
 import type { ComposerDoc, ComposerSnapshot } from "./types";

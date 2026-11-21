@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Win32PrivateEndpoint, type Win32EndpointProviders } from "../src/index.js";
 
-const PROFILE = "C:\\Users\\operator\\AppData\\Local\\omp-studio\\profiles\\default";
+const PROFILE = "C:\\Users\\operator\\AppData\\Local\\step-studio\\profiles\\default";
 const CURRENT_USER_SID = "S-1-5-21-3623811015-3361044348-30300820-1001";
 /** 32 hex characters with 16 distinct symbols = exactly 128 bits of entropy. */
 const FRESH_AUTHORITY = "0f9a7e3c5b1d8a2e6c4f9b0d7e3a5c18";

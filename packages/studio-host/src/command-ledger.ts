@@ -6,7 +6,7 @@ import type {
   StateVersion,
   StudioRequest,
   StudioReceipt,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import type { CommandLedgerStore } from "./command-ledger-store.js";
 
 type LedgerStatus = CommandLedgerEntry["status"];

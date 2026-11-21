@@ -1,5 +1,5 @@
 /**
- * @omp-studio/testkit
+ * @step-studio/testkit
  *
  * Shared semantic transport contract fixtures and suite (P0). Adapter
  * packages (desktop, web) build a `ClientTransport` from a

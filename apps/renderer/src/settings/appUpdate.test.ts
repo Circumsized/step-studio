@@ -11,7 +11,7 @@ afterEach(() => { __resetUpdatesForTests(); vi.unstubAllGlobals(); });
 it("respects auto-check preferences and uses only the signed index for manual checks", async () => {
   const checkUpdates = vi.fn().mockResolvedValue(update);
   const oldCheck = vi.fn();
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     getUpdatePrefs: async () => ({ ...prefs, autoCheck: false }), checkUpdates, checkAppUpdate: oldCheck,
   });
   await checkForAppUpdates({ silent: true });
@@ -22,7 +22,7 @@ it("respects auto-check preferences and uses only the signed index for manual ch
 });
 
 it("reflects checks made by diagnostics and keeps skipped versions hidden on progress", async () => {
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     checkUpdates: async () => update,
     setUpdatePrefs: async (patch: object) => ({ ...prefs, ...patch }),
   });
@@ -37,7 +37,7 @@ it.each(["hot", "full"])("downloads %s updates using opaque jobs and waits for e
   let listener!: (event: UpdateProgressEvent) => void;
   const applyUpdate = vi.fn().mockResolvedValue({ ok: true });
   const legacyDownload = vi.fn();
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     checkUpdates: async () => ({ ...update, app: { ...update.app, plan } }),
     subscribeUpdateProgress: (fn: typeof listener) => { listener = fn; return vi.fn(); },
     startApp: async () => {
@@ -59,7 +59,7 @@ it("keeps deferred application retryable and reports its reason", async () => {
   __resetAppUpdateForTests({ readyToApply: true });
   const prepareUpdates = vi.fn();
   const applyUpdate = vi.fn().mockResolvedValueOnce({ ok: true, deferred: true, message: "Sessions are running" }).mockResolvedValueOnce({ ok: true });
-  vi.stubGlobal("ompStudioChrome", { applyUpdate, prepareUpdates });
+  vi.stubGlobal("stepStudioChrome", { applyUpdate, prepareUpdates });
   await expect(applyAppUpdate()).resolves.toBe(false);
   expect(getAppUpdateState()).toMatchObject({ readyToApply: true, downloading: false, applying: false, applyNotice: "Sessions are running", downloadError: null, applyError: null });
   await expect(applyAppUpdate()).resolves.toBe(true);
@@ -71,7 +71,7 @@ it("keeps deferred application retryable and reports its reason", async () => {
 it("reports application failures separately while keeping the verified update retryable", async () => {
   __resetAppUpdateForTests({ readyToApply: true });
   let rejectApply!: (reason: Error) => void;
-  vi.stubGlobal("ompStudioChrome", { applyUpdate: () => new Promise((_resolve, reject) => { rejectApply = reject; }) });
+  vi.stubGlobal("stepStudioChrome", { applyUpdate: () => new Promise((_resolve, reject) => { rejectApply = reject; }) });
   const result = applyAppUpdate();
   expect(getAppUpdateState()).toMatchObject({ applying: true, downloading: false });
   rejectApply(new Error("Installer could not start"));
@@ -81,7 +81,7 @@ it("reports application failures separately while keeping the verified update re
 
 it("keeps the waiting notice across snapshots for the same prepared target", async () => {
   let version = "0.1.6";
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     getUpdatePrefs: async () => prefs, checkUpdates: vi.fn(),
     getUpdateSnapshot: async () => ({ schema: 2, checking: false, app: { component: "app", currentVersion: "0.1.5", version, phase: "ready" }, runtime: { component: "runtime", phase: "idle" } }),
     applyUpdate: async () => ({ ok: true, deferred: true, message: "Review the pending interaction" }),
@@ -98,7 +98,7 @@ it("keeps the waiting notice across snapshots for the same prepared target", asy
 it.each([
   ["check", "checkError"], ["prepare", "downloadError"], ["apply", "applyError"], ["recovery", "applyError"], [undefined, "checkError"],
 ] as const)("classifies %s snapshot errors without treating every failure as a download failure", async (errorStage, field) => {
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     getUpdatePrefs: async () => prefs, checkUpdates: vi.fn(),
     getUpdateSnapshot: async () => ({ schema: 2, checking: false, errorStage, error: "Failure detail", app: { component: "app", currentVersion: "0.1.5", version: "0.1.6", phase: "ready" }, runtime: { component: "runtime", phase: "idle" } }),
   });
@@ -109,7 +109,7 @@ it.each([
 });
 
 it("labels cancellation failures separately from download failures", async () => {
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     getUpdatePrefs: async () => prefs, checkUpdates: vi.fn(),
     getUpdateSnapshot: async () => ({ schema: 2, checking: false, app: { component: "app", currentVersion: "0.1.5", version: "0.1.6", phase: "downloading" }, runtime: { component: "runtime", phase: "idle" } }),
     cancelUpdate: async () => { throw new Error("Cancellation unavailable"); },
@@ -129,7 +129,7 @@ it.each(["check", "prepare"] as const)("keeps a %s failure inside preparation in
     runtime: { component: "runtime", currentVersion: "18.0.0-studio.1", version: "18.0.0-studio.2", phase: "ready" },
   });
   __resetAppUpdateForTests({ updateInfo: { available: true, currentVersion: "0.1.5", version: "0.1.6" } });
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     getUpdateSnapshot: async () => snapshot(),
     prepareUpdates: async () => { failed = true; throw new Error(failure); },
   });
@@ -143,7 +143,7 @@ it.each(["check", "prepare"] as const)("keeps a %s failure inside preparation in
 
 it("prepares desktop rollback from the unified snapshot without installing until requested", async () => {
   const applyUpdate = vi.fn().mockResolvedValue({ ok: true });
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     rollbackUpdate: vi.fn().mockResolvedValue({ ok: true }), applyUpdate,
     getUpdateSnapshot: async () => ({ schema: 2, checking: false, rollbackAppVersion: "0.1.4", rollbackAppPending: true, app: { component: "app", currentVersion: "0.1.5", version: "0.1.4", phase: "ready" }, runtime: { component: "runtime", phase: "idle" } }),
   });
@@ -157,7 +157,7 @@ it("prepares desktop rollback from the unified snapshot without installing until
 it("shows a Runtime-only compatibility blocker without preparing a download", async () => {
   const prepareUpdates = vi.fn();
   const blocker = "Runtime 至少需要桌面 0.1.11，请先更新桌面";
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     getUpdatePrefs: async () => prefs, checkUpdates: vi.fn(), prepareUpdates,
     getUpdateSnapshot: async () => ({ schema: 2, checking: false, app: { component: "app", currentVersion: "0.1.10", phase: "idle" }, runtime: { component: "runtime", currentVersion: "18.10.4-studio.8", version: "18.12.6-studio.1", phase: "idle", blockedReason: blocker } }),
   });
@@ -171,7 +171,7 @@ it("shows a Runtime-only compatibility blocker without preparing a download", as
 it("allows the desktop update to prepare alongside a currently blocked Runtime", async () => {
   const snapshot = { schema: 2, checking: false, app: { component: "app", currentVersion: "0.1.10", version: "0.1.11", phase: "idle" }, runtime: { component: "runtime", version: "18.12.6-studio.1", phase: "idle", blockedReason: "请先更新桌面" } };
   const prepareUpdates = vi.fn(async () => snapshot);
-  vi.stubGlobal("ompStudioChrome", { getUpdatePrefs: async () => prefs, checkUpdates: vi.fn(), getUpdateSnapshot: async () => snapshot, prepareUpdates });
+  vi.stubGlobal("stepStudioChrome", { getUpdatePrefs: async () => prefs, checkUpdates: vi.fn(), getUpdateSnapshot: async () => snapshot, prepareUpdates });
   await checkForAppUpdates({ silent: true });
   expect(getAppUpdateState().updateInfo).toMatchObject({ component: "app", blockedReason: undefined });
   await downloadAndInstallAppUpdate();
@@ -180,7 +180,7 @@ it("allows the desktop update to prepare alongside a currently blocked Runtime",
 
 it("does not save a Runtime-only version as a skipped desktop version", async () => {
   const setUpdatePrefs = vi.fn();
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     setUpdatePrefs, checkUpdates: vi.fn(), getUpdatePrefs: async () => prefs,
     getUpdateSnapshot: async () => ({ schema: 2, checking: false, app: { component: "app", currentVersion: "0.1.5", phase: "idle" }, runtime: { component: "runtime", currentVersion: "18.0.0-studio.1", version: "18.0.0-studio.2", phase: "idle" } }),
   });

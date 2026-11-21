@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { AgentDefinitionRecord, StudioClient } from "@omp-studio/client-contract";
+import type { AgentDefinitionRecord, StudioClient } from "@step-studio/client-contract";
 
 import { SubagentsPanel } from "./SubagentsPanel";
 import { createPreviewAgentDefinitions } from "./preview/subagentsPreview";

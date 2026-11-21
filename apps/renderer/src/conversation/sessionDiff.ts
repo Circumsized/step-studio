@@ -1,4 +1,4 @@
-import type { JsonValue } from "@omp-studio/client-contract";
+import type { JsonValue } from "@step-studio/client-contract";
 
 import type { ChangesDiffHunk, ChangesDiffLine } from "./ChangesPanel";
 import type { AssistantSegment, ToolView } from "./conversationViewModel";

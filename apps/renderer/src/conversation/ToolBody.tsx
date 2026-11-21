@@ -2,7 +2,7 @@ import { useI18n } from "../i18n";
 import { RasterPreview, TerminalGraphicView } from "../TerminalGraphicView";
 import { TerminalGraphicsDecoder } from "../terminalGraphics";
 import { createContext, memo, useContext, useMemo, type ComponentProps, type MouseEvent } from "react";
-import type { JsonValue } from "@omp-studio/client-contract";
+import type { JsonValue } from "@step-studio/client-contract";
 import { Icon } from "../icons";
 import { bashDisplay } from "./bashDisplay";
 import { ChunkedRows, ChunkedText } from "./textChunks";
@@ -19,7 +19,7 @@ import {
 import { ToolCardScroll } from "./useToolCardFollowScroll";
 import { CompletionRing, JobTile, type JobTileData } from "./JobWidget";
 import { MarkdownText } from "./markdown";
-import type { JobWidgetView } from "@omp-studio/studio-protocol";
+import type { JobWidgetView } from "@step-studio/studio-protocol";
 import { shellSurface } from "../chrome";
 
 const ToolCardLive = createContext(false);

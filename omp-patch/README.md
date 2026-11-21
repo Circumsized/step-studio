@@ -81,7 +81,7 @@ Overlay breakage from an upstream bump shows up as type errors, not merge confli
 
 ## Design constraints
 
-The root `@omp-studio/studio-protocol` package is the canonical contract. Because the pinned vendor is an independently installable Bun workspace and cannot import the root private package, the overlay mirrors only the minimal frame/hello wire subset; root fixtures and bidirectional tests are the compatibility authority.
+The root `@step-studio/studio-protocol` package is the canonical contract. Because the pinned vendor is an independently installable Bun workspace and cannot import the root private package, the overlay mirrors only the minimal frame/hello wire subset; root fixtures and bidirectional tests are the compatibility authority.
 
 The fork must not introduce a second `AgentSession`, RPC/TUI hot switching, Slash-command automation, or PTY semantic parsing.
 

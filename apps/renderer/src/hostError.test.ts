@@ -7,7 +7,7 @@ import type {
   StudioClient,
   SubscriptionScope,
   Unsubscribe,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import { waitReceipt } from "./hostError";
 

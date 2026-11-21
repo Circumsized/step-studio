@@ -1,7 +1,7 @@
 import { AppSelect } from "../AppSelect";
 import { useEffect, useRef, useState } from "react";
-import type { AvailableModelRecord } from "@omp-studio/client-contract";
-import type { CompactionPreview } from "@omp-studio/studio-protocol";
+import type { AvailableModelRecord } from "@step-studio/client-contract";
+import type { CompactionPreview } from "@step-studio/studio-protocol";
 import { useFeatureSettings, type FeatureSettingsProps } from "../settings/useFeatureSettings";
 import { useI18n } from "../i18n";
 import { hostErrorMessage } from "../hostError";

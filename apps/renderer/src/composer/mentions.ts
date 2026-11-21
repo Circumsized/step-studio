@@ -7,7 +7,7 @@ import type {
   StudioClient,
   WorkspaceFileTreeReadModel,
   WorkspaceId,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import type { MentionCandidate } from "./types";
 

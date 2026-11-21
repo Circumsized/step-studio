@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
-import type { StudioClient } from "@omp-studio/client-contract";
-import type { OmpStudioDesktopApi } from "@omp-studio/transport-desktop";
+import type { StudioClient } from "@step-studio/client-contract";
+import type { OmpStudioDesktopApi } from "@step-studio/transport-desktop";
 
 declare global {
   /**
@@ -19,8 +19,8 @@ declare global {
    * `OMP_STUDIO_CLIENT` is absent but this is present, the entry wraps it
    * in a desktop transport + `StudioClientImpl` itself.
    */
-  var ompStudio: OmpStudioDesktopApi | undefined;
-  var ompStudioRemote: import("@omp-studio/platform").RemoteApi | undefined;
+  var stepStudio: OmpStudioDesktopApi | undefined;
+  var stepStudioRemote: import("@step-studio/platform").RemoteApi | undefined;
 
   /**
    * Window-chrome helpers (not the Host transport). Theme sync talks to the
@@ -43,40 +43,40 @@ declare global {
     | { readonly status: "cancelled" }
     | { readonly status: "failed"; readonly message: string };
 
-  type StudioServiceDefinition = { id: string; revision: number; workspaceId: string; updatedAt: string; spec: import("@omp-studio/studio-protocol").StudioServiceSpec };
-  type StudioServiceDefinitionsInput = { workspaceId: string; id?: string; revision?: number; spec?: import("@omp-studio/studio-protocol").StudioServiceSpec };
+  type StudioServiceDefinition = { id: string; revision: number; workspaceId: string; updatedAt: string; spec: import("@step-studio/studio-protocol").StudioServiceSpec };
+  type StudioServiceDefinitionsInput = { workspaceId: string; id?: string; revision?: number; spec?: import("@step-studio/studio-protocol").StudioServiceSpec };
   type StudioServiceDefinitionResult = { ok: true; definitions: StudioServiceDefinition[] } | { ok: false; message: string };
-  type StudioArtifactFileResult = { ok: true; cancelled: boolean; artifact?: import("@omp-studio/studio-protocol").ArtifactRecord; storage?: import("@omp-studio/studio-protocol").ArtifactStorageState } | { ok: false; message: string };
+  type StudioArtifactFileResult = { ok: true; cancelled: boolean; artifact?: import("@step-studio/studio-protocol").ArtifactRecord; storage?: import("@step-studio/studio-protocol").ArtifactStorageState } | { ok: false; message: string };
 
-  var ompStudioChrome:
+  var stepStudioChrome:
     | {
         revealSkillshareToken?(input: { secretId: string; sessionId: string }): Promise<{ ok: boolean; token?: string; name?: string; message?: string }>;
         attachLiveAudio?(input: { audioId: string; sessionId: string }): Promise<{ ok: boolean; message?: string }>;
-        attachPrediction?(input: import("@omp-studio/studio-protocol").PredictionChannel): Promise<{ok:boolean;message?:string}>;
-        predictionInput?(input:{channelId:string;input:Exclude<import("@omp-studio/studio-protocol").PredictionInput,{kind:"import"}>}):Promise<{ok:boolean;message?:string}>;
+        attachPrediction?(input: import("@step-studio/studio-protocol").PredictionChannel): Promise<{ok:boolean;message?:string}>;
+        predictionInput?(input:{channelId:string;input:Exclude<import("@step-studio/studio-protocol").PredictionInput,{kind:"import"}>}):Promise<{ok:boolean;message?:string}>;
         detachPrediction?(input:{channelId:string}):Promise<{ok:boolean;message?:string}>;
         importPredictionHistory?(input:{channelId:string}):Promise<{ok:boolean;cancelled?:boolean;message?:string;count?:number;truncated?:boolean}>;
-        onPrediction?(listener:(event:import("@omp-studio/studio-protocol").PredictionEvent)=>void):()=>void;
+        onPrediction?(listener:(event:import("@step-studio/studio-protocol").PredictionEvent)=>void):()=>void;
         attachBrowserObservation?(input: { observationId: string; sessionId: string; tabId: string }): Promise<{ ok: boolean; message?: string }>;
         readComputerCapture?(input: { captureId: string; sessionId: string; targetId: string }): Promise<{ ok: true; data: ArrayBuffer; width: number; height: number } | { ok: false; message: string }>;
-        controlBrowserObservation?(input: { observationId: string; input: import("@omp-studio/studio-protocol").BrowserObservationInput }): Promise<{ ok: boolean; message?: string }>;
+        controlBrowserObservation?(input: { observationId: string; input: import("@step-studio/studio-protocol").BrowserObservationInput }): Promise<{ ok: boolean; message?: string }>;
         detachBrowserObservation?(input: { observationId: string }): Promise<{ ok: boolean; message?: string }>;
-        onBrowserObservation?(listener: (event: import("@omp-studio/studio-protocol").BrowserObservationEvent) => void): () => void;
+        onBrowserObservation?(listener: (event: import("@step-studio/studio-protocol").BrowserObservationEvent) => void): () => void;
         appendLiveAudio?(input: { audioId: string; sequence: number; bytes: ArrayBuffer }): Promise<{ ok: boolean; message?: string }>;
         detachLiveAudio?(input: { audioId: string }): Promise<{ ok: boolean; message?: string }>;
         beginMediaUpload?(input: { kind: "audio" | "image" | "video"; name: string; mimeType: string; workspaceId?: string; sessionId?: string }): Promise<{ ok: boolean; uploadId?: string; message?: string }>;
         appendMediaUpload?(input: { uploadId: string; sequence: number; bytes: ArrayBuffer }): Promise<{ ok: boolean; message?: string }>;
-        finishMediaUpload?(input: { uploadId: string }): Promise<{ ok: boolean; artifact?: import("@omp-studio/studio-protocol").ArtifactRecord; message?: string }>;
+        finishMediaUpload?(input: { uploadId: string }): Promise<{ ok: boolean; artifact?: import("@step-studio/studio-protocol").ArtifactRecord; message?: string }>;
         abortMediaUpload?(input: { uploadId: string }): Promise<{ ok: boolean; message?: string }>;
         listServiceDefinitions?(input: StudioServiceDefinitionsInput): Promise<StudioServiceDefinitionResult>;
         saveServiceDefinition?(input: StudioServiceDefinitionsInput): Promise<StudioServiceDefinitionResult>;
         removeServiceDefinition?(input: StudioServiceDefinitionsInput): Promise<StudioServiceDefinitionResult>;
         chooseArtifactDirectory?(): Promise<StudioArtifactFileResult>;
-        importArtifact?(input: { kind: import("@omp-studio/studio-protocol").ArtifactKind; sessionId?: string; workspaceId?: string }): Promise<StudioArtifactFileResult>;
+        importArtifact?(input: { kind: import("@step-studio/studio-protocol").ArtifactKind; sessionId?: string; workspaceId?: string }): Promise<StudioArtifactFileResult>;
         exportArtifact?(input: { artifactId: string }): Promise<StudioArtifactFileResult>;
         /** Initial workbench health; absent on older installed main/preload versions. */
         reportPayloadHealth?(status: "ready" | "failed"): Promise<boolean>;
-        reportPerformanceSample?(sample: import("@omp-studio/studio-protocol").MemorySample): Promise<boolean>;
+        reportPerformanceSample?(sample: import("@step-studio/studio-protocol").MemorySample): Promise<boolean>;
         setConversationViewState?(state: { runtimeEpoch: number; visibleSessionIds: readonly string[]; blockedSessionIds?: readonly string[] }): Promise<boolean>;
         setTheme(theme: "light" | "dark", tint?: { color: string; symbolColor: string }): Promise<void>;
         /** Fixed by the preload; read it through `src/platform.ts`. Absent on older installs. */
@@ -99,7 +99,7 @@ declare global {
           | { readonly ok: false; readonly cancelled: true }
           | { readonly ok: false; readonly message: string }
         >;
-        /** 把处理后的头像写入 `%APPDATA%\omp-studio\profile\`，不回传路径。 */
+        /** 把处理后的头像写入 `%APPDATA%\step-studio\profile\`，不回传路径。 */
         saveAvatar(input: { mime: "image/jpeg" | "image/webp" | "image/png"; bytes: Uint8Array }): Promise<
           { readonly ok: true } | { readonly ok: false; readonly message: string }
         >;
@@ -178,9 +178,9 @@ declare global {
           | { readonly ok: false; readonly message: string }
         >;
         /** 检查更新索引（应用热更新/全量更新与 Runtime 更新）。 */
-        getUpdateSnapshot?(): Promise<import("@omp-studio/runtime-installer").UnifiedUpdateSnapshot | null>;
-        prepareUpdates?(target: "all" | "app" | "runtime"): Promise<import("@omp-studio/runtime-installer").UnifiedUpdateSnapshot>;
-        subscribeUpdates?(listener: (snapshot: import("@omp-studio/runtime-installer").UnifiedUpdateSnapshot) => void): () => void;
+        getUpdateSnapshot?(): Promise<import("@step-studio/runtime-installer").UnifiedUpdateSnapshot | null>;
+        prepareUpdates?(target: "all" | "app" | "runtime"): Promise<import("@step-studio/runtime-installer").UnifiedUpdateSnapshot>;
+        subscribeUpdates?(listener: (snapshot: import("@step-studio/runtime-installer").UnifiedUpdateSnapshot) => void): () => void;
         checkUpdates(): Promise<{
           readonly checkedAt: string;
           readonly app: {
@@ -280,9 +280,9 @@ declare global {
 
   /**
    * Desktop-chrome local shell (not Host / Studio Bridge). Present only
-   * when the Electron preload exposed `ompStudioTerminal`.
+   * when the Electron preload exposed `stepStudioTerminal`.
    */
-  var ompStudioTerminal:
+  var stepStudioTerminal:
     | {
         create(size?: { cols?: number; rows?: number; targetId?: string; workspaceId?: string }): Promise<{ id: string; name: string; cwd: string }>;
         write(id: string, data: string): Promise<void>;

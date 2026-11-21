@@ -18,7 +18,7 @@ import { WebRoleChain } from "./WebRoleChain";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import type { ModelWebSearchSetInput, StudioClient, WebSearchConfigReadModel, WebSearchProviderRecord } from "@omp-studio/client-contract";
+import type { ModelWebSearchSetInput, StudioClient, WebSearchConfigReadModel, WebSearchProviderRecord } from "@step-studio/client-contract";
 import { Brand, hasBrand } from "../brands";
 import { Icon } from "../icons";
 import { useI18n } from "../i18n";
@@ -145,7 +145,7 @@ interface WebSearchPanelProps {
   readonly client: StudioClient;
   readonly preview: boolean;
   readonly webSearch: WebSearchConfigReadModel;
-  readonly models?: readonly import("@omp-studio/client-contract").AvailableModelRecord[];
+  readonly models?: readonly import("@step-studio/client-contract").AvailableModelRecord[];
   /** Real mode: whether in-app OAuth login is available on this Host. */
   readonly loginAvailable: boolean;
   /** Real mode: re-query the read model after a successful write. */

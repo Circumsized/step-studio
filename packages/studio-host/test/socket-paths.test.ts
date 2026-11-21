@@ -48,7 +48,7 @@ test("the socket byte budget counts UTF-8 bytes, not characters", () => {
 });
 
 test("a POSIX Bridge socket moves to the short directory while the token stays private", async () => {
-  const privateDirectory = await mkdtemp(join(tmpdir(), "omp-studio-bridge-short-"));
+  const privateDirectory = await mkdtemp(join(tmpdir(), "step-studio-bridge-short-"));
   const socketDirectory = await mkdtemp(join(tmpdir(), "omp-s-"));
   const bootstrap = await createBridgeBootstrap(privateDirectory, "darwin", undefined, { socketDirectory });
   assert.ok(bootstrap.endpoint.startsWith(socketDirectory));
@@ -58,17 +58,17 @@ test("a POSIX Bridge socket moves to the short directory while the token stays p
 });
 
 test("an over-long POSIX Bridge path fails with a clear error instead of EINVAL", async () => {
-  const deep = join(await mkdtemp(join(tmpdir(), "omp-studio-bridge-long-")), "x".repeat(96));
+  const deep = join(await mkdtemp(join(tmpdir(), "step-studio-bridge-long-")), "x".repeat(96));
   await assert.rejects(() => createBridgeBootstrap(deep, "darwin"), /Unix socket path is \d+ bytes/u);
 });
 
 test("Windows Bridge bootstrap ignores the socket directory and keeps its named pipe", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "omp-studio-bridge-pipe-"));
+  const directory = await mkdtemp(join(tmpdir(), "step-studio-bridge-pipe-"));
   const bootstrap = await createBridgeBootstrap(directory, "win32", {
     secureDirectory: async () => {},
     createSecureTokenFile: async (path, token) => writeFile(path, token, { encoding: "utf8", flag: "wx" }),
   }, { socketDirectory: join(directory, "unused") });
-  assert.match(bootstrap.endpoint, /^\\\\\.\\pipe\\omp-studio-[a-f0-9]{36}$/u);
+  assert.match(bootstrap.endpoint, /^\\\\\.\\pipe\\step-studio-[a-f0-9]{36}$/u);
 });
 
 test("private socket directories need a POSIX uid", { skip: process.platform === "win32" ? false : "Windows-only guard" }, async () => {

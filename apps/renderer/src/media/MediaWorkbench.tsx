@@ -5,7 +5,7 @@ import {
   WorkspaceTabs,
 } from "../workspaces/Workspace";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CommandInput, StudioClient } from "@omp-studio/client-contract";
+import type { CommandInput, StudioClient } from "@step-studio/client-contract";
 import {
   mediaInputArtifacts,
   validateMediaRequest,
@@ -16,7 +16,7 @@ import {
   type MediaModelChoice,
   type MediaRequest,
   type MediaResultMap,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { useI18n } from "../i18n";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { hostErrorMessage, waitReceipt } from "../hostError";

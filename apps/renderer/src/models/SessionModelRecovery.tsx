@@ -4,11 +4,11 @@ import type {
   ClientBootstrap,
   StudioClient,
   ThreadId,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   OperatorStateSnapshot,
   SessionRestoreInspection,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { useI18n } from "../i18n";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { hostErrorMessage, waitReceipt } from "../hostError";

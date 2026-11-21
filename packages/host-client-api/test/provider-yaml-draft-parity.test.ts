@@ -8,7 +8,7 @@ import {
   type ModelOverridePatch,
   type ModelProviderUpsertInput,
   type ProviderYamlDraft,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import { toYamlProvider } from "../src/omp-models-adapter.js";
 import type { YamlValue } from "../src/models-yml.js";

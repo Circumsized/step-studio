@@ -1,7 +1,7 @@
 import { AppSelect } from "../AppSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ClientBootstrap, CommandInput, StudioClient } from "@omp-studio/client-contract";
-import type { ComputerObservationResultMap, StudioComputerStatus } from "@omp-studio/studio-protocol";
+import type { ClientBootstrap, CommandInput, StudioClient } from "@step-studio/client-contract";
+import type { ComputerObservationResultMap, StudioComputerStatus } from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { Icon } from "../icons";

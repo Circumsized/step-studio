@@ -348,10 +348,10 @@ vendor StateProjector 的 `response()` 设置 `messagesCursor`。应由 transcri
 ## 8. 验收命令
 
 ```bash
-npm run typecheck -w @omp-studio/studio-protocol
-npm test -w @omp-studio/studio-protocol
-npm run typecheck -w @omp-studio/studio-host
-npm test -w @omp-studio/studio-host
+npm run typecheck -w @step-studio/studio-protocol
+npm test -w @step-studio/studio-protocol
+npm run typecheck -w @step-studio/studio-host
+npm test -w @step-studio/studio-host
 npm run omp:verify:patches
 ```
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ClientInteraction, InteractionResponseValue, StudioClient } from "@omp-studio/client-contract";
+import type { ClientInteraction, InteractionResponseValue, StudioClient } from "@step-studio/client-contract";
 import { InteractionDeck } from "../InteractionDeck";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { useI18n } from "../i18n";

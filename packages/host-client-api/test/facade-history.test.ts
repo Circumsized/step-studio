@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { PublicAuthorityIdentity, RuntimeInstallState } from "@omp-studio/client-contract";
+import type { PublicAuthorityIdentity, RuntimeInstallState } from "@step-studio/client-contract";
 import { StudioHostClientFacade, createDefaultHostDiagnosticsFactory } from "../src/index.js";
-import type { HostBackend } from "@omp-studio/studio-host";
+import type { HostBackend } from "@step-studio/studio-host";
 
 test("history.list stably puts pinned sessions first before applying the limit", async () => {
   const facade = new StudioHostClientFacade({

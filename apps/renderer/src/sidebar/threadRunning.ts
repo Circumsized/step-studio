@@ -1,4 +1,4 @@
-import type { ResidentsReadModel, ResidentSessionRow } from "@omp-studio/client-contract";
+import type { ResidentsReadModel, ResidentSessionRow } from "@step-studio/client-contract";
 
 export type ResidentRows = ReadonlyArray<ResidentSessionRow> | ResidentsReadModel | null | undefined;
 

@@ -1,7 +1,7 @@
 /**
  * Capture the running shell on Xvfb, one page at a time, as PNG.
  *
- * M4.1 asks for a six-page pixel-parity sign-off against omp-studio. The only
+ * M4.1 asks for a six-page pixel-parity sign-off against step-studio. The only
  * thing standing between a human and that judgement was the file format: the
  * references are PNG, `xwd` is the only capture tool here, and there was no
  * ImageMagick to bridge them. `xwd2png.py` closes that gap; this script drives

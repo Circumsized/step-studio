@@ -103,7 +103,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  (globalThis as { ompStudioChrome?: unknown }).ompStudioChrome = undefined;
+  (globalThis as { stepStudioChrome?: unknown }).stepStudioChrome = undefined;
 });
 
 describe("AppBackgroundLayer", () => {
@@ -206,7 +206,7 @@ describe("AppBackgroundLayer", () => {
 
   it("sends a caption tint only when the whole app is covered", async () => {
     const setTheme = vi.fn(async () => undefined);
-    (globalThis as { ompStudioChrome?: unknown }).ompStudioChrome = { setTheme };
+    (globalThis as { stepStudioChrome?: unknown }).stepStudioChrome = { setTheme };
     renderLayer({ settings: settings({ scope: "app" }) });
     await waitFor(() => expect(setTheme).toHaveBeenCalled());
     const [theme, tint] = setTheme.mock.calls[0] as unknown as [string, { color: string; symbolColor: string } | undefined];

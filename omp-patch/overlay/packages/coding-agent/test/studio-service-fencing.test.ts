@@ -9,7 +9,7 @@ import { projectService } from "../src/studio/services/workbench-service";
 
 describe("Studio service instance fencing", () => {
 	it("serializes a restart and stale stop without stopping the new process", async () => {
-		using temp = TempDir.createSync("@omp-studio-fence-");
+		using temp = TempDir.createSync("@step-studio-fence-");
 		const projectDir = join(temp.path(), "project");
 		const runtimeDir = join(temp.path(), "runtime");
 		await mkdir(projectDir);

@@ -1,5 +1,5 @@
-import type { ClientInteraction, ResidentSessionRow } from "@omp-studio/client-contract";
-import type { PlanState } from "@omp-studio/studio-protocol";
+import type { ClientInteraction, ResidentSessionRow } from "@step-studio/client-contract";
+import type { PlanState } from "@step-studio/studio-protocol";
 import { residentForSession, type ResidentRows } from "./threadRunning";
 
 /** Sidebar capsule when a thread is blocked on the operator. */

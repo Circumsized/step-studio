@@ -1,5 +1,5 @@
 /**
- * @omp-studio/transport-desktop
+ * @step-studio/transport-desktop
  *
  * Renderer-side Desktop transport adapter plus the Desktop IPC contract:
  * the fixed channel constants and envelope parsing for Electron Main.

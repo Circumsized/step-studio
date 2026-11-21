@@ -21,7 +21,7 @@ export type UserThumbStore = {
   dropSession(sessionId: string): Promise<void>;
 };
 
-const DB_NAME = "omp-studio-ui";
+const DB_NAME = "step-studio-ui";
 const STORE_NAME = "user-message-thumbs";
 /**
  * v2 起存的是降采样后的缩略图（`toThumbnail`），v1 存的是原图 base64。

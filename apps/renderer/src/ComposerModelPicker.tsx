@@ -21,9 +21,9 @@ import type {
   ModelRoleRecord,
   SessionThinkingSelector,
   StudioClient,
-} from "@omp-studio/client-contract";
-import { SESSION_THINKING_SELECTORS, clampRoleThinking, roleThinkingControl } from "@omp-studio/client-contract";
-import type { OperatorStateSnapshot } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import { SESSION_THINKING_SELECTORS, clampRoleThinking, roleThinkingControl } from "@step-studio/client-contract";
+import type { OperatorStateSnapshot } from "@step-studio/studio-protocol";
 
 import { Icon } from "./icons";
 import { useI18n } from "./i18n";

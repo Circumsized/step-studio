@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import type {
   PredictionChannel,
   PredictionInput,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { waitReceipt } from "../hostError";
 import { insertPlainText } from "./editorDom";

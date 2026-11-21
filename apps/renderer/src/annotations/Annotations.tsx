@@ -9,14 +9,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import {
   validateAnnotationBundle,
   type AnnotationBundle,
   type AnnotationCapture,
   type AnnotationNote,
   type AnnotationSource,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";

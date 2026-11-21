@@ -3,7 +3,7 @@
  * Display-only; stories follow Step bundled agents plus one user custom.
  */
 
-import type { AgentDefinitionRecord, AgentDefinitionsReadModel } from "@omp-studio/client-contract";
+import type { AgentDefinitionRecord, AgentDefinitionsReadModel } from "@step-studio/client-contract";
 
 export const AGENT_BUILTIN_TOOLS = [
   "read",

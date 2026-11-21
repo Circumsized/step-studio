@@ -4,8 +4,8 @@ import type {
   ConversationRuntimeEvent,
   RuntimeEpoch,
   SessionId,
-} from "@omp-studio/studio-protocol";
-import type { JsonValue } from "@omp-studio/client-contract";
+} from "@step-studio/studio-protocol";
+import type { JsonValue } from "@step-studio/client-contract";
 import type { TimelineRow } from "../conversation/conversationViewModel";
 import { NATIVE_TOOL_GALLERY } from "./nativeToolGallery";
 

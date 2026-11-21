@@ -1,4 +1,4 @@
-# @omp-studio/runtime-installer
+# @step-studio/runtime-installer
 
 Ed25519-signed, checksum-verified, versioned installation of managed OMP
 Studio Runtimes with atomic activation, a pre-activation self-check, rollback,
@@ -14,13 +14,13 @@ channel metadata, and reference-safe retention.
 - the built entrypoint binary (`omp.exe`);
 
 - `runtime-manifest.json` — `RuntimeInstallationManifest` fields from
-  `@omp-studio/studio-protocol`: `runtimeVersion`, `upstreamVersion`,
+  `@step-studio/studio-protocol`: `runtimeVersion`, `upstreamVersion`,
   `upstreamCommit`, `patchsetVersion`, `studioProtocol`, `profile`,
   `capabilityHash`, `commandManifestHash`, `platform`, `entrypoint`.
   The `channel` field is either `stable` or `canary`.
   `platform` is `<os>-<arch>` (for example `win32-x64`); the contract has no
   separate `arch` field. The managed Runtime CLI is always `omp.exe`;
-  `omp-studio.exe` is rejected because it is reserved for the desktop app.
+  `step-studio.exe` is rejected because it is reserved for the desktop app.
 - `checksums.json` — `sha256` digests covering every artifact file
   (`omp.exe` and `runtime-manifest.json`).
 - `runtime-signature.json` — Ed25519 signature over the exact manifest bytes,
@@ -83,8 +83,8 @@ the two newest stable versions and all referenced versions.
 ## Commands
 
 ```bash
-npm run typecheck -w @omp-studio/runtime-installer
-npm test -w @omp-studio/runtime-installer
+npm run typecheck -w @step-studio/runtime-installer
+npm test -w @step-studio/runtime-installer
 npm run omp:test:metadata        # light metadata tests for scripts/runtime-artifact.mjs
 npm run omp:build:host           # build omp.exe + smoke + generate artifact metadata
 npm run omp:e2e:install          # opt-in real E2E (install + activate + real self-check)

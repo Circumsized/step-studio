@@ -17,7 +17,7 @@ import type {
   ConversationRuntimeEvent,
   OperatorStateSnapshot,
   SessionTelemetrySnapshot,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import type {
   AuthorityEpoch,

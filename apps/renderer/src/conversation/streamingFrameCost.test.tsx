@@ -1,7 +1,7 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { Profiler, useSyncExternalStore } from "react";
-import type { ConversationMessageItem, ConversationRuntimeEvent, SessionId } from "@omp-studio/client-contract";
+import type { ConversationMessageItem, ConversationRuntimeEvent, SessionId } from "@step-studio/client-contract";
 import { ConversationStore } from "./conversationStore";
 import { ConvoTranscript } from "./ConvoTranscript";
 

@@ -9,7 +9,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); __resetAppUpdateForTests(); 
 it("shows the verified target and requires a separate restart after preparation", async () => {
   const rollbackUpdate = vi.fn().mockResolvedValue({ ok: true });
   const applyUpdate = vi.fn().mockResolvedValue({ ok: true, deferred: true, message: "Finish active sessions" });
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     rollbackUpdate, applyUpdate,
     getUpdateSnapshot: async () => ({ schema: 2, checking: false, rollbackAppVersion: "0.1.4", rollbackAppPending: true, app: { component: "app", currentVersion: "0.1.5", version: "0.1.4", phase: "ready" }, runtime: { component: "runtime", phase: "idle" } }),
   });
@@ -27,7 +27,7 @@ it("shows the verified target and requires a separate restart after preparation"
 });
 
 it("keeps recovery unavailable without a verified previous version and reports preparation errors", async () => {
-  vi.stubGlobal("ompStudioChrome", { rollbackUpdate: vi.fn().mockResolvedValue({ ok: false, message: "Download failed" }), getUpdateSnapshot: vi.fn() });
+  vi.stubGlobal("stepStudioChrome", { rollbackUpdate: vi.fn().mockResolvedValue({ ok: false, message: "Download failed" }), getUpdateSnapshot: vi.fn() });
   render(<DesktopUpdateRecovery preview={false} />);
   expect((screen.getByRole("button", { name: "准备上一版本" }) as HTMLButtonElement).disabled).toBe(true);
   act(() => __resetAppUpdateForTests({ rollbackVersion: "0.1.4" }));
@@ -37,7 +37,7 @@ it("keeps recovery unavailable without a verified previous version and reports p
 
 it("simulates both preview steps without calling desktop APIs", () => {
   const rollbackUpdate = vi.fn(), applyUpdate = vi.fn();
-  vi.stubGlobal("ompStudioChrome", { rollbackUpdate, applyUpdate });
+  vi.stubGlobal("stepStudioChrome", { rollbackUpdate, applyUpdate });
   render(<DesktopUpdateRecovery preview />);
   fireEvent.click(screen.getByRole("button", { name: "准备上一版本" }));
   fireEvent.click(screen.getByRole("button", { name: "重启恢复" }));
@@ -47,7 +47,7 @@ it("simulates both preview steps without calling desktop APIs", () => {
 
 it("shows restart progress while applying a prepared recovery", async () => {
   let finishApply!: (result: { ok: boolean; deferred: boolean; message: string }) => void;
-  vi.stubGlobal("ompStudioChrome", {
+  vi.stubGlobal("stepStudioChrome", {
     rollbackUpdate: vi.fn(),
     applyUpdate: () => new Promise(resolve => { finishApply = resolve; }),
   });

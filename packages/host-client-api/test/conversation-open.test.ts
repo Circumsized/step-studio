@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { PublicAuthorityIdentity, RuntimeInstallState, SessionId } from "@omp-studio/client-contract";
-import type { HostBackend, StudioRuntimeSessionController } from "@omp-studio/studio-host";
-import type { ConversationOpenResult, RuntimeEpoch } from "@omp-studio/studio-protocol";
+import type { PublicAuthorityIdentity, RuntimeInstallState, SessionId } from "@step-studio/client-contract";
+import type { HostBackend, StudioRuntimeSessionController } from "@step-studio/studio-host";
+import type { ConversationOpenResult, RuntimeEpoch } from "@step-studio/studio-protocol";
 
 import { createDefaultHostDiagnosticsFactory, StudioHostClientFacade } from "../src/index.js";
 

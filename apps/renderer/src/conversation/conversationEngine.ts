@@ -1,6 +1,6 @@
-import type { ClientEvent, ConversationItem, ConversationRuntimeEvent } from "@omp-studio/client-contract";
-import { CONVERSATION_LIMITS, utf8ByteLength } from "@omp-studio/client-contract";
-import type { ConversationTarget } from "@omp-studio/studio-protocol";
+import type { ClientEvent, ConversationItem, ConversationRuntimeEvent } from "@step-studio/client-contract";
+import { CONVERSATION_LIMITS, utf8ByteLength } from "@step-studio/client-contract";
+import type { ConversationTarget } from "@step-studio/studio-protocol";
 import { PREVIEW_CONVO_IDENTITY, PREVIEW_CONVO_LIVE, previewConversationItems } from "../preview/conversationFixtures";
 import { asClientError, identityKey, isStaleCursorError, type ConversationClient, type ConversationIdentity } from "./conversationHost";
 import { createConversationSource } from "./conversationSource";

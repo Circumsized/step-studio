@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
-import type { ClientBootstrap, ClientEvent } from "@omp-studio/client-contract";
-import type { RemoteApi } from "@omp-studio/platform";
+import type { ClientBootstrap, ClientEvent } from "@step-studio/client-contract";
+import type { RemoteApi } from "@step-studio/platform";
 import { createRemoteTransport, type RemoteTransportState } from "./remoteTransport";
 
 it("ignores old-generation events and query results after reconnect", async () => {

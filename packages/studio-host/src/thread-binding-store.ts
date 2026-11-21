@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { SessionBinding, ThreadId } from "@omp-studio/studio-protocol";
+import type { SessionBinding, ThreadId } from "@step-studio/studio-protocol";
 
 export interface StoredThreadBinding {
   binding: SessionBinding;

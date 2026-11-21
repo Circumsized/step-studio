@@ -24,7 +24,7 @@ use step_studio_bridge::BridgeSession;
 
 /// The channel `transport-desktop` subscribes to. Must stay byte-identical to
 /// `DESKTOP_IPC_CHANNELS.event` in `packages/transport-desktop/src/channels.ts`.
-pub const EVENT_CHANNEL: &str = "omp-studio:desktop:event";
+pub const EVENT_CHANNEL: &str = "step-studio:desktop:event";
 
 /// Operation kinds the adapter accepts verbatim as `{kind, ...input}`, with the
 /// grade the adapter reports for each (`packages/runtime-stepcode/src/main.ts:29-84`).

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import type { RemoteConnectionProfile } from "@omp-studio/platform";
+import type { RemoteConnectionProfile } from "@step-studio/platform";
 import { Icon } from "../icons";
 import "./ssh.css";
 

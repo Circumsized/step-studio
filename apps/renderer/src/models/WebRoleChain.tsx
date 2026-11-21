@@ -1,6 +1,6 @@
 import { AppSelect } from "../AppSelect";
 import { useEffect, useState } from "react";
-import { modelAcceptsRole, type AvailableModelRecord, type StudioClient, type WebSearchRouting } from "@omp-studio/client-contract";
+import { modelAcceptsRole, type AvailableModelRecord, type StudioClient, type WebSearchRouting } from "@step-studio/client-contract";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 

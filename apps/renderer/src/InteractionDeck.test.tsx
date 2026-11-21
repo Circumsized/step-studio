@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { ClientInteraction, InteractionId, SessionId } from "@omp-studio/client-contract";
+import type { ClientInteraction, InteractionId, SessionId } from "@step-studio/client-contract";
 import { InteractionDeck, InteractionPrompt } from "./InteractionDeck";
 
 afterEach(cleanup);

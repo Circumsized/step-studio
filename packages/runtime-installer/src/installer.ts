@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { access, chmod, lstat, mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
 import { basename, join } from "node:path";
-import type { RuntimeInstallationManifest } from "@omp-studio/studio-protocol";
+import type { RuntimeInstallationManifest } from "@step-studio/studio-protocol";
 import { parseRuntimeInstallationManifest } from "./manifest.js";
 import { createSmokeTestRunner } from "./self-check.js";
 import type { SelfCheckRunner } from "./self-check.js";

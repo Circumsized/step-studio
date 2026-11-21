@@ -1,6 +1,6 @@
 import {act,cleanup,renderHook,waitFor} from "@testing-library/react";
 import {afterEach,expect,it,vi} from "vitest";
-import type {BtwSnapshot, StudioClient} from "@omp-studio/client-contract";
+import type {BtwSnapshot, StudioClient} from "@step-studio/client-contract";
 import {invokeUpgrade} from "./runtimeUpgrade";
 import {loadMentions} from "./composer/mentions";
 import {useBtwSession} from "./btw/useBtwSession";

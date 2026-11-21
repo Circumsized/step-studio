@@ -97,7 +97,7 @@ describe("StudioSessionTranscriptService", () => {
 		}
 	});
 	test("notes and native compaction payloads stay persisted but outside the public transcript", () => {
-		using tempDir = TempDir.createSync("@omp-studio-native-payload-");
+		using tempDir = TempDir.createSync("@step-studio-native-payload-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const userId = manager.appendMessage(userMessage("retain this request"));
 		manager.appendCustomEntry("experimental_context_notes", { version: 1, text: "private-notebook-content" });
@@ -114,7 +114,7 @@ describe("StudioSessionTranscriptService", () => {
 		expect(JSON.stringify(manager.getBranch())).toBe(before);
 	});
 	test("empty branch returns no items and a usable head cursor", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-empty-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-empty-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const service = serviceFor(manager);
 		const page = service.read();
@@ -128,7 +128,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("maps user and assistant multi-block messages with stable SessionEntry ids", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-blocks-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-blocks-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const userId = manager.appendMessage(userMessage("hello\nworld"));
 		const assistantId = manager.appendMessage(
@@ -160,7 +160,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("omits developer/synthetic/agent-steer rows; keeps user-attributed steers on the public page", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-harness-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-harness-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const userId = manager.appendMessage(userMessage("hello"));
 		manager.appendMessage({
@@ -210,7 +210,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("maps successful and failed tool results without leaking providerPayload", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-tools-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-tools-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		manager.appendMessage(userMessage("read it"));
 		manager.appendMessage(
@@ -257,7 +257,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("maps compaction and reset, and ignores branch_summary", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-markers-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-markers-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const userId = manager.appendMessage(userMessage("before"));
 		const compactId = manager.appendCompaction("long summary", "short", userId, 12, {
@@ -284,7 +284,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("latest and older pages have no duplicates, gaps, or order inversions", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-pages-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-pages-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const ids = ["one", "two", "three", "four", "five"].map(text => manager.appendMessage(userMessage(text)));
 		const service = serviceFor(manager);
@@ -303,7 +303,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("sibling branches do not leak into the active transcript", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-sibling-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-sibling-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const rootId = manager.appendMessage(userMessage("root"));
 		const siblingId = manager.appendMessage(userMessage("sibling"));
@@ -317,7 +317,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("old cursors become stale after a branch change and tampering is invalid", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-stale-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-stale-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const rootId = manager.appendMessage(userMessage("root"));
 		manager.appendMessage(userMessage("leaf-a"));
@@ -344,7 +344,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("redacts secret keys and shortens home paths", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-redact-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-redact-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const homeFile = `${os.homedir()}${os.homedir().includes("\\") ? "\\" : "/"}secret-file.json`;
 		manager.appendMessage(
@@ -376,7 +376,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("huge tool results are truncated and stay within the page byte budget", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-huge-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-huge-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const huge = "x".repeat(CONVERSATION_LIMITS.JSON_VALUE_MAX_BYTES + 4096);
 		manager.appendMessage(toolResult("call-huge", "Bash", huge, false));
@@ -393,7 +393,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("page byte fitting preserves assistant and tool shells before truncating payloads", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-page-fit-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-page-fit-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const payload = "x".repeat(20 * 1024);
 		const expectedIds = [manager.appendMessage(userMessage("run tools"))];
@@ -430,7 +430,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("illegal custom entries do not crash the reader", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-custom-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-custom-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const circular: Record<string, unknown> = {};
 		circular.self = circular;
@@ -456,7 +456,7 @@ describe("StudioSessionTranscriptService", () => {
 	});
 
 	test("head cursor comes from the service and only changes after persist", () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-head-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-head-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const transcript = serviceFor(manager);
 		const runtime = {

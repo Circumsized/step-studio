@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { BtwSnapshot, BtwStatus } from "@omp-studio/client-contract";
+import type { BtwSnapshot, BtwStatus } from "@step-studio/client-contract";
 import { Icon } from "../icons";
 import { formatElapsed } from "../conversation/activityStatus";
 

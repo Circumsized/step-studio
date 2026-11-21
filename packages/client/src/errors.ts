@@ -3,7 +3,7 @@
  * Only the safe public `ClientError` shape ever crosses these boundaries.
  */
 
-import type { ClientError } from "@omp-studio/client-contract";
+import type { ClientError } from "@step-studio/client-contract";
 
 /** Thrown by any client/transport call made after close. */
 export const CLIENT_CLOSED_ERROR: ClientError = Object.freeze({

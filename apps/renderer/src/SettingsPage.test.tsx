@@ -75,7 +75,7 @@ describe("SettingsPage · 自动更新", () => {
       prefs = { ...prefs, ...patch };
       return prefs;
     });
-    vi.stubGlobal("ompStudioChrome", { getUpdatePrefs: vi.fn(async () => prefs), setUpdatePrefs });
+    vi.stubGlobal("stepStudioChrome", { getUpdatePrefs: vi.fn(async () => prefs), setUpdatePrefs });
     const view = renderSettings();
     const toggle = screen.getByRole("switch", { name: "自动下载更新" });
     await waitFor(() => expect(toggle.hasAttribute("disabled")).toBe(false));
@@ -95,7 +95,7 @@ describe("SettingsPage · 自动更新", () => {
 
   it("预览开关只改演示状态，不读取或写入桌面偏好", () => {
     const getUpdatePrefs = vi.fn(), setUpdatePrefs = vi.fn();
-    vi.stubGlobal("ompStudioChrome", { getUpdatePrefs, setUpdatePrefs });
+    vi.stubGlobal("stepStudioChrome", { getUpdatePrefs, setUpdatePrefs });
     renderSettings({ preview: true });
     const toggle = screen.getByRole("switch", { name: "自动下载更新" });
     expect(toggle.getAttribute("aria-checked")).toBe("true");
@@ -106,7 +106,7 @@ describe("SettingsPage · 自动更新", () => {
   });
 
   it("没有桌面桥时禁用自动更新开关", () => {
-    vi.stubGlobal("ompStudioChrome", undefined);
+    vi.stubGlobal("stepStudioChrome", undefined);
     renderSettings();
     expect(screen.getByRole("switch", { name: "自动下载更新" }).hasAttribute("disabled")).toBe(true);
   });

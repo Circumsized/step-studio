@@ -1,5 +1,5 @@
 /**
- * The `ompStudioChrome` global for the Tauri shell (M1.2c).
+ * The `stepStudioChrome` global for the Tauri shell (M1.2c).
  *
  * Same shape and same reason for existing as the Electron preload's
  * `apps/desktop/src/chrome-api.ts`: a narrow, named surface of shell
@@ -34,22 +34,22 @@ import { listen as tauriListen } from "@tauri-apps/api/event";
  * The channel the Rust menu emits on. Kept in step with
  * `src-tauri/src/menu.rs`; a drift there is a menu that appears to do nothing.
  */
-const MENU_COMMAND_EVENT = "omp-studio:chrome:menu-command";
+const MENU_COMMAND_EVENT = "step-studio:chrome:menu-command";
 
 /**
  * The channel browser-observation events arrive on. Byte-identical to the
  * Electron preload's (`browser-observation-shared.ts`), so the renderer's
  * subscription is the same on both shells.
  */
-const BROWSER_EVENT_CHANNEL = "omp-studio:desktop:browser-event";
+const BROWSER_EVENT_CHANNEL = "step-studio:desktop:browser-event";
 
 /**
  * The channel prediction events arrive on. Byte-identical to the Electron
  * preload's (`prediction-shared.ts`).
  */
-const PREDICTION_EVENT_CHANNEL = "omp-studio:desktop:prediction-event";
+const PREDICTION_EVENT_CHANNEL = "step-studio:desktop:prediction-event";
 
-/** Mirrors `ArtifactRecord` from `@omp-studio/studio-protocol`. */
+/** Mirrors `ArtifactRecord` from `@step-studio/studio-protocol`. */
 export interface ArtifactRecord {
   readonly artifactId: string;
   readonly kind: string;
@@ -88,7 +88,7 @@ export interface PredictionControl {
     | { readonly kind: "ping" };
 }
 
-/** Mirrors `PredictionEvent` from `@omp-studio/studio-protocol`. */
+/** Mirrors `PredictionEvent` from `@step-studio/studio-protocol`. */
 export type PredictionEvent =
   | { readonly kind: "closed"; readonly channelId: string }
   | { readonly kind: "error"; readonly channelId: string; readonly message: string }
@@ -144,7 +144,7 @@ export interface BrowserObservationControl {
   readonly input: BrowserObservationInput;
 }
 
-/** Mirrors `BrowserObservationInput` from `@omp-studio/studio-protocol`. */
+/** Mirrors `BrowserObservationInput` from `@step-studio/studio-protocol`. */
 export type BrowserObservationInput =
   | { readonly kind: "ping" }
   | { readonly kind: "take" }
@@ -156,7 +156,7 @@ export type BrowserObservationInput =
   | { readonly kind: "key"; readonly sequence: number; readonly key: string; readonly code: string; readonly modifiers: number }
   | { readonly kind: "text"; readonly sequence: number; readonly text: string };
 
-/** Mirrors `BrowserObservationEvent` from `@omp-studio/studio-protocol`. */
+/** Mirrors `BrowserObservationEvent` from `@step-studio/studio-protocol`. */
 export type BrowserObservationEvent =
   | { readonly kind: "state"; readonly observationId: string; readonly tabId: string; readonly title: string; readonly url: string; readonly frozen: boolean; readonly busy: boolean; readonly control: "agent" | "waiting" | "human" | "other-window" }
   | { readonly kind: "frame"; readonly observationId: string; readonly tabId: string; readonly sequence: number; readonly data: string; readonly width: number; readonly height: number; readonly timestamp: number }

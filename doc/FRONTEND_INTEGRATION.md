@@ -18,7 +18,7 @@
 
 当前阶段优先完成 Windows：
 
-- Windows 桌面应用 `omp-studio.exe`；
+- Windows 桌面应用 `step-studio.exe`；
 - 由用户显式启用的本机 WebUI；
 - 共用一套 Renderer、状态模型和语义 API；
 - macOS 暂不开发、不进入当前发布门，但代码不得形成只能重写才能迁移的 Windows 耦合。
@@ -100,7 +100,7 @@
 - Desktop：Electron；
 - Desktop 通信：窄类型 preload API + Electron IPC；
 - Web 通信：loopback HTTP + WebSocket；
-- 协议类型：直接复用 `@omp-studio/studio-protocol`；
+- 协议类型：直接复用 `@step-studio/studio-protocol`；
 - 测试：Node test 保留，新增 Vitest/React Testing Library 和 Playwright E2E；
 - 包管理：沿用 npm workspaces。
 
@@ -113,7 +113,7 @@ Shared Renderer
   React pages / components / view state
               |
               v
-  @omp-studio/client (semantic client interface)
+  @step-studio/client (semantic client interface)
               |
        +------+------+
        |             |
@@ -642,7 +642,7 @@ lint/typecheck
 - 必须使用发布 Ed25519 私钥重新生成 Runtime artifact；
 - 私钥不得进入仓库、Renderer、日志或安装包；
 - 刚构建的 `omp.exe` 必须通过 manifest、snapshot 和 graceful shutdown probe；
-- `omp-studio.exe` 与 `omp.exe` 保持不同产物身份；
+- `step-studio.exe` 与 `omp.exe` 保持不同产物身份；
 - 测试 Runtime 不得被打包或标记 Full Parity。
 
 ## 16. macOS Readiness Checklist
@@ -744,5 +744,5 @@ Enter 发送带 IME 组合防护：组合输入中的 Enter 不触发发送；�
 
 ### 19.6 验证与验收
 
-- 命令：`npm run typecheck -w @omp-studio/renderer`、`npm run build -w @omp-studio/renderer`（完整门为根目录 `npm run check`）。
+- 命令：`npm run typecheck -w @step-studio/renderer`、`npm run build -w @step-studio/renderer`（完整门为根目录 `npm run check`）。
 - 验收：workbench 路由可见完整 ver1 chrome 且 composer 可输入；unsupported surface 为诚实禁用壳；本文档记录迁移与暂缓范围。

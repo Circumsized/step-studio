@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { ConversationOpenResult, RuntimeEpoch, SessionId } from "@omp-studio/studio-protocol";
+import type { ConversationOpenResult, RuntimeEpoch, SessionId } from "@step-studio/studio-protocol";
 import type { ConversationClient } from "./conversationHost";
 import { activeConversationEngineCount, createConversationEngine } from "./conversationEngine";
 

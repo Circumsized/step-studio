@@ -1,7 +1,7 @@
 import { AppSelect } from "../AppSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CommandInput, StudioClient } from "@omp-studio/client-contract";
-import { LIVE_AUDIO_VOICES, type LiveAudioResultMap, type LiveAudioState } from "@omp-studio/studio-protocol";
+import type { CommandInput, StudioClient } from "@step-studio/client-contract";
+import { LIVE_AUDIO_VOICES, type LiveAudioResultMap, type LiveAudioState } from "@step-studio/studio-protocol";
 import { WorkspaceStatus } from "../workspaces/Workspace";
 import { useI18n } from "../i18n";
 import { usePreviewMode } from "../preview/PreviewContext";

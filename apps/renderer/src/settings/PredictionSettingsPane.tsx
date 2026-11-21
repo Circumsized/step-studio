@@ -1,12 +1,12 @@
 import { AppSelect } from "../AppSelect";
 import { useEffect, useRef, useState } from "react";
-import type { StudioClient, CommandInput } from "@omp-studio/client-contract";
+import type { StudioClient, CommandInput } from "@step-studio/client-contract";
 import type {
   PredictionSettings,
   PredictionMethod,
   PredictionResultMap,
   PredictionChannel,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { waitReceipt, hostErrorMessage } from "../hostError";

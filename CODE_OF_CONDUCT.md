@@ -55,7 +55,7 @@ an individual is officially representing the community in public spaces.
 ## Enforcement
 
 Report incidents to the maintainers via a
-[private GitHub security advisory](https://github.com/the-snowpear/omp-studio/security/advisories/new)
+[private GitHub security advisory](https://github.com/the-snowpear/step-studio/security/advisories/new)
 or by contacting [@the-snowpear](https://github.com/the-snowpear). All complaints
 will be reviewed and investigated promptly and fairly.
 

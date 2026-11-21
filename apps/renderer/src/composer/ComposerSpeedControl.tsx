@@ -1,10 +1,10 @@
 import { AppSelect } from "../AppSelect";
 import { useEffect, useRef, useState } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import type {
   SessionSpeedState,
   StudioSpeed,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { useI18n } from "../i18n";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { PREVIEW_SPEED } from "../preview/sessionOptionsPreview";

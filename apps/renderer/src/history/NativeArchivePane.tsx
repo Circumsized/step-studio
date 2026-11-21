@@ -4,13 +4,13 @@ import type {
   ClientBootstrap,
   StudioClient,
   CommandInput,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   ArchiveResultMap,
   NativeArchiveSession,
   NativeArchiveText,
   NativeArchiveDetail,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { useI18n } from "../i18n";
 import { usePreviewMode } from "../preview/PreviewContext";
 import {

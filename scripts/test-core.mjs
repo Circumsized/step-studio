@@ -6,4 +6,4 @@ import { npmInvocation, run } from "./omp-tooling.mjs";
 
 run(process.execPath, ["--test", ...CORE_NODE_SUITES]);
 const npm = npmInvocation();
-run(npm.command, [...npm.prefix, "run", "test", "-w", "@omp-studio/renderer", "--", ...CORE_RENDERER_SUITES]);
+run(npm.command, [...npm.prefix, "run", "test", "-w", "@step-studio/renderer", "--", ...CORE_RENDERER_SUITES]);

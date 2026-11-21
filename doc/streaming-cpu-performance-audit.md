@@ -39,7 +39,7 @@
 ## 3. 四大性能瓶颈与代码根因排查
 
 ### 瓶颈一：`ReactMarkdown` 语法树全量重编译风暴（占 60%~70% 算力）
-- **文件入口**：[`apps/renderer/src/conversation/markdown.tsx`](file:///d:/Project/omp-studio/apps/renderer/src/conversation/markdown.tsx#L103-L154)、[`markdownBlocks.ts`](file:///d:/Project/omp-studio/apps/renderer/src/conversation/markdownBlocks.ts)
+- **文件入口**：[`apps/renderer/src/conversation/markdown.tsx`](file:///d:/Project/step-studio/apps/renderer/src/conversation/markdown.tsx#L103-L154)、[`markdownBlocks.ts`](file:///d:/Project/step-studio/apps/renderer/src/conversation/markdownBlocks.ts)
 - **机制与问题**：
   1. 系统虽然实现了 `scanStreamingMarkdown`，将已经通过检查点的历史行沉淀为不可变的 `frozen` / `pending` 块；
   2. 但对于**当前正在输出的尾部未闭合段落（`parts.tail`）**：
@@ -55,7 +55,7 @@
   6. **在流式过程中，这一整套编译器流水线每秒钟在 JS 主线程上被完整执行 60 ~ 144 次**！若当前尾部段落包含数百到数千字符，单次解析就需消耗 2~5ms，直接将 JS 单线程 CPU 打满。
 
 ### 瓶颈二：高刷新率屏幕（120Hz / 144Hz / 240Hz）带来的渲染倍增效应
-- **文件入口**：[`apps/renderer/src/conversation/conversationStore.ts`](file:///d:/Project/omp-studio/apps/renderer/src/conversation/conversationStore.ts#L429-L432)
+- **文件入口**：[`apps/renderer/src/conversation/conversationStore.ts`](file:///d:/Project/step-studio/apps/renderer/src/conversation/conversationStore.ts#L429-L432)
 - **机制与问题**：
   1. `ConversationStore.queuePublish()` 使用标准的 `requestAnimationFrame`（RAF）来节流事件发布。
   2. 在普通 60Hz 屏幕上，RAF 每秒触发 60 次；
@@ -64,9 +64,9 @@
 
 ### 瓶颈三：强制同步布局（Forced Synchronous Layout / Reflow）与样式失效
 - **文件入口**：
-  - [`apps/renderer/src/conversation/ConversationMinimap.tsx`](file:///d:/Project/omp-studio/apps/renderer/src/conversation/ConversationMinimap.tsx#L667-L670)
-  - [`apps/renderer/src/conversation/useConversationScroll.ts`](file:///d:/Project/omp-studio/apps/renderer/src/conversation/useConversationScroll.ts#L110-L117)
-  - [`apps/renderer/src/conversation/ConversationVirtualList.tsx`](file:///d:/Project/omp-studio/apps/renderer/src/conversation/ConversationVirtualList.tsx#L68-L81)
+  - [`apps/renderer/src/conversation/ConversationMinimap.tsx`](file:///d:/Project/step-studio/apps/renderer/src/conversation/ConversationMinimap.tsx#L667-L670)
+  - [`apps/renderer/src/conversation/useConversationScroll.ts`](file:///d:/Project/step-studio/apps/renderer/src/conversation/useConversationScroll.ts#L110-L117)
+  - [`apps/renderer/src/conversation/ConversationVirtualList.tsx`](file:///d:/Project/step-studio/apps/renderer/src/conversation/ConversationVirtualList.tsx#L68-L81)
 - **机制与问题**：
   1. 流式每一帧都会产生新的 `rows` 数组引用，触发 `ConversationMinimap` 中的 `useLayoutEffect`。
   2. `syncAll()` $\to$ `syncViewport()` 会从 DOM 读取 `scroller.scrollHeight`、`scroller.clientHeight`、`scroller.scrollTop`。
@@ -74,7 +74,7 @@
   4. 浏览器在执行 React DOM 提交（写入新节点）后，如果立即被读取几何属性（`scrollHeight` / `getBoundingClientRect`），**浏览器无法延迟批量排版，被迫立即触发同步重排（Forced Reflow / RecalcStyle）**。每一帧都发生读写交替，极大地浪费了渲染管线的 CPU。
 
 ### 瓶颈四：Desktop 主进程与 IPC 层的逐 Token 深层类型校验
-- **文件入口**：[`apps/desktop/src/ipc.ts`](file:///d:/Project/omp-studio/apps/desktop/src/ipc.ts#L148)、[`packages/transport-desktop/src/validate-outbound.ts`](file:///d:/Project/omp-studio/packages/transport-desktop/src/validate-outbound.ts#L1353-L1373)
+- **文件入口**：[`apps/desktop/src/ipc.ts`](file:///d:/Project/step-studio/apps/desktop/src/ipc.ts#L148)、[`packages/transport-desktop/src/validate-outbound.ts`](file:///d:/Project/step-studio/packages/transport-desktop/src/validate-outbound.ts#L1353-L1373)
 - **机制与问题**：
   1. 每一个流式事件（`conversation.message.delta`）从 Host 通过 Electron IPC 发往渲染进程前，主进程都会执行 `assertClientEvent(event)`。
   2. 校验器会逐层递归检查各属性并调用 `parseConversationRuntimeEvent(value.update)`。
@@ -115,7 +115,7 @@
 
 ### 方案 4：IPC Delta 事件快速校验通道（Fast-path）
 - **实现方式**：
-  1. 在 `@omp-studio/transport-desktop` 的 `assertClientEvent` 中，对于 `conversation.message.delta` 单独设立 Fast-path；
+  1. 在 `@step-studio/transport-desktop` 的 `assertClientEvent` 中，对于 `conversation.message.delta` 单独设立 Fast-path；
   2. 仅验证顶层基础字段，跳过深层递归 Schema 解析。
 
 ---

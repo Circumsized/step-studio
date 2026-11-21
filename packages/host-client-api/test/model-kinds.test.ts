@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { modelAcceptsRole } from "@omp-studio/client-contract";
+import { modelAcceptsRole } from "@step-studio/client-contract";
 import { availableFromCacheModel, availableFromCatalogEntry, catalogEntryFromAvailable, toYamlProvider } from "../src/omp-models-adapter.js";
 
 test("cached non-chat models keep kind and grounding across model-page projections", () => {

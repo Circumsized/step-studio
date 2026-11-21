@@ -18,9 +18,9 @@
 4. 先跑相关基线：
 
 ```bash
-npm run typecheck -w @omp-studio/desktop
-npm test -w @omp-studio/desktop
-npm test -w @omp-studio/studio-host
+npm run typecheck -w @step-studio/desktop
+npm test -w @step-studio/desktop
+npm test -w @step-studio/studio-host
 ```
 
 若基线已有失败，记录在备份 README 或执行报告中，不得通过删除断言掩盖。
@@ -141,12 +141,12 @@ composition 创建闭包中的 `publicationListeners` 与 `DesktopHostCompositio
 ## 8. 验收命令
 
 ```bash
-npm run typecheck -w @omp-studio/studio-host
-npm test -w @omp-studio/studio-host
-npm run typecheck -w @omp-studio/desktop
-npm test -w @omp-studio/desktop
-npm run build -w @omp-studio/client-contract
-npm run typecheck -w @omp-studio/renderer
+npm run typecheck -w @step-studio/studio-host
+npm test -w @step-studio/studio-host
+npm run typecheck -w @step-studio/desktop
+npm test -w @step-studio/desktop
+npm run build -w @step-studio/client-contract
+npm run typecheck -w @step-studio/renderer
 ```
 
 ## 9. 完成条件

@@ -2,10 +2,10 @@ import { execFileSync } from "node:child_process";
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { releaseKeys } from "./build-update-assets-v2.mjs";
-import { verifyUpdateManifest } from "@omp-studio/runtime-installer";
+import { verifyUpdateManifest } from "@step-studio/runtime-installer";
 import { MAC_TARGET_PLATFORM, legacyIndexName, releaseTargetsDarwin } from "./release-assets.mjs";
 
-const root = resolve("."), repo = process.env.GITHUB_REPOSITORY ?? "the-snowpear/omp-studio";
+const root = resolve("."), repo = process.env.GITHUB_REPOSITORY ?? "the-snowpear/step-studio";
 const darwin = releaseTargetsDarwin();
 const arch = process.env.OMP_TARGET_ARCH ?? "x64", platform = darwin ? MAC_TARGET_PLATFORM : `win32-${arch}`;
 const dest = join(process.env.RUNNER_TEMP ?? join(root, "outputs"), `update-history-${darwin ? platform : arch}`);

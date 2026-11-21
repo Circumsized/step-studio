@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { StudioClient, ModelMentionInfo } from "@omp-studio/client-contract";
+import type { StudioClient, ModelMentionInfo } from "@step-studio/client-contract";
 import { invokeUpgrade } from "./runtimeUpgrade";
 import { useI18n } from "./i18n";
 import { PREVIEW_MODEL_MENTIONS } from "./preview/runtimeUpgradeFixtures";

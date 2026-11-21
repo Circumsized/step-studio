@@ -35,7 +35,7 @@ use crate::chrome::{ChromeError, ChromeResult};
 
 /// The Tauri channel prediction events travel on, byte-identical to the Electron
 /// preload's.
-pub const PREDICTION_EVENT_CHANNEL: &str = "omp-studio:desktop:prediction-event";
+pub const PREDICTION_EVENT_CHANNEL: &str = "step-studio:desktop:prediction-event";
 
 /// A descriptor is a handful of fields.
 const DESCRIPTOR_MAX_BYTES: u64 = 4096;

@@ -13,8 +13,8 @@ import type {
   McpServerRecord,
   McpTestResult,
   StudioClient,
-} from "@omp-studio/client-contract";
-import type { OperatorCommandManifest } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { OperatorCommandManifest } from "@step-studio/studio-protocol";
 import { Icon } from "./icons";
 import { ToastHost } from "./ToastHost";
 import { tabPaneClass, tabPaneRole, useOverlappingTabs } from "./pageTransition";

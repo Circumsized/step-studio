@@ -168,11 +168,11 @@ Runtime title在现有 ClientInteraction里无字段。两种合法选择：
 ## 10. 验收命令
 
 ```bash
-npm test -w @omp-studio/studio-host
-npm test -w @omp-studio/host-client-api
-npm test -w @omp-studio/client
-npm test -w @omp-studio/desktop
-npm test -w @omp-studio/renderer
+npm test -w @step-studio/studio-host
+npm test -w @step-studio/host-client-api
+npm test -w @step-studio/client
+npm test -w @step-studio/desktop
+npm test -w @step-studio/renderer
 npm run omp:verify:patches
 ```
 

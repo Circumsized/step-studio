@@ -13,7 +13,7 @@ This repository implements the pre-frontend backend foundation described by the 
 - `packages/runtime-installer`: Ed25519 artifact verification, checksum verification, stable/canary channels, versioned installation, atomic activation, rollback, uninstall protection, and reference-aware retention.
 - `omp-patch`: pinned upstream identity plus the Studio fork covering `studio-host`, session-origin classification, authenticated Bridge transport, snapshot recovery, Runtime arbitration, shared session controls, loop/tree/fork modes, Remote InteractionPort Ask re-answer, Plan-role model transitions, remote agent/job operations, graceful shutdown, a fail-closed Live control plane, canonical command-manifest conformance, conversation/transcript projection, and session telemetry. See `omp-patch/README.md` for the overlay/seam split and the capability history.
 
-The Windows artifacts keep separate names: `omp.exe` is the patched CLI/Runtime, while `omp-studio.exe` remains reserved for the future desktop application. No renderer, desktop shell, or GUI Pause Bar is integrated by this phase.
+The Windows artifacts keep separate names: `omp.exe` is the patched CLI/Runtime, while `step-studio.exe` remains reserved for the future desktop application. No renderer, desktop shell, or GUI Pause Bar is integrated by this phase.
 
 WP-013 is implemented on the Host side: generic request/receipt correlation, Runtime command-id rebinding, fsync-backed ledger recovery, terminal-receipt-tail reconciliation, Host `commitSeq` publications, automatic `outcome_unknown` fencing after disconnect/process exit, and a concrete Node child-process port with containment, readiness, and graceful-shutdown gates.
 

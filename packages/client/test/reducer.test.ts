@@ -1,5 +1,5 @@
 /**
- * Contract tests for the @omp-studio/client reducer and client surface
+ * Contract tests for the @step-studio/client reducer and client surface
  * (FRONTEND_INTEGRATION.md §8.3 invariants).
  *
  * Cursor discipline in these tests: bootstrap always establishes cursor
@@ -34,8 +34,8 @@ import type {
   ThreadId,
   WorkspaceId,
   ResidentsReadModel,
-} from "@omp-studio/client-contract";
-import type { CommandId, OperatorStateSnapshot } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { CommandId, OperatorStateSnapshot } from "@step-studio/studio-protocol";
 
 import { MemoryClientTransport } from "../src/memory-transport.js";
 import {

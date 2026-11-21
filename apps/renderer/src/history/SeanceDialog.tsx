@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { StudioClient } from "@omp-studio/client-contract";
-import type { SeanceResult } from "@omp-studio/studio-protocol";
+import type { StudioClient } from "@step-studio/client-contract";
+import type { SeanceResult } from "@step-studio/studio-protocol";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { useI18n } from "../i18n";
 import "./seance.css";

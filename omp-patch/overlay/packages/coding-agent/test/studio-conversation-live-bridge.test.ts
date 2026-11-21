@@ -147,7 +147,7 @@ function operatorRuntime(
 
 describe("conversation live projector Bridge wiring", () => {
 	test("started messageId equals completed item.itemId and later transcript itemId", () => {
-		using tempDir = TempDir.createSync("@omp-studio-live-id-");
+		using tempDir = TempDir.createSync("@step-studio-live-id-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const bus = new SessionEventBus();
 		const live = bindProjector(manager, bus);
@@ -185,7 +185,7 @@ describe("conversation live projector Bridge wiring", () => {
 	});
 
 	test("toolResult persist does not steal a reserved assistant message id", () => {
-		using tempDir = TempDir.createSync("@omp-studio-live-tool-id-");
+		using tempDir = TempDir.createSync("@step-studio-live-tool-id-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const reserved = manager.reserveMessageId("assistant");
 		const toolId = manager.appendMessage(toolResult("call-1", "Read", "ok"));
@@ -195,7 +195,7 @@ describe("conversation live projector Bridge wiring", () => {
 	});
 
 	test("compaction completed itemId matches persist-before-end SessionEntry and transcript itemId", () => {
-		using tempDir = TempDir.createSync("@omp-studio-live-compact-before-");
+		using tempDir = TempDir.createSync("@step-studio-live-compact-before-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const bus = new SessionEventBus();
 		const live = bindProjector(manager, bus);
@@ -238,7 +238,7 @@ describe("conversation live projector Bridge wiring", () => {
 	});
 
 	test("compaction completed itemId matches persist-after-end SessionEntry and transcript itemId", () => {
-		using tempDir = TempDir.createSync("@omp-studio-live-compact-after-");
+		using tempDir = TempDir.createSync("@step-studio-live-compact-after-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const bus = new SessionEventBus();
 		const live = bindProjector(manager, bus);
@@ -279,7 +279,7 @@ describe("conversation live projector Bridge wiring", () => {
 	});
 
 	test("aborted compaction does not forge an item or steal later persist ids", () => {
-		using tempDir = TempDir.createSync("@omp-studio-live-compact-abort-");
+		using tempDir = TempDir.createSync("@step-studio-live-compact-abort-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const bus = new SessionEventBus();
 		const live = bindProjector(manager, bus);
@@ -321,7 +321,7 @@ describe("conversation live projector Bridge wiring", () => {
 
 	test("pure message.delta increments eventSeq but not stateVersion", () => {
 		expect(CONVERSATION_MESSAGE_DELTA_INCREMENTS_STATE_VERSION).toBe(false);
-		using tempDir = TempDir.createSync("@omp-studio-live-delta-sv-");
+		using tempDir = TempDir.createSync("@step-studio-live-delta-sv-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const bus = new SessionEventBus();
 		const live = bindProjector(manager, bus);
@@ -370,7 +370,7 @@ describe("conversation live projector Bridge wiring", () => {
 	});
 
 	test("rebind drops events from the previous session subscription", () => {
-		using tempDir = TempDir.createSync("@omp-studio-live-rebind-");
+		using tempDir = TempDir.createSync("@step-studio-live-rebind-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const first = new SessionEventBus();
 		const second = new SessionEventBus();
@@ -401,7 +401,7 @@ describe("conversation live projector Bridge wiring", () => {
 	});
 
 	test("a throwing envelope listener does not block later conversation events", () => {
-		using tempDir = TempDir.createSync("@omp-studio-live-throw-");
+		using tempDir = TempDir.createSync("@step-studio-live-throw-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const bus = new SessionEventBus();
 		const live = bindProjector(manager, bus);
@@ -477,14 +477,14 @@ afterEach(async () => {
 });
 
 async function bridgeFixture(): Promise<{ endpoint: string; tokenFile: string; token: string }> {
-	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "omp-studio-live-bridge-"));
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "step-studio-live-bridge-"));
 	const token = crypto.randomBytes(32).toString("base64url");
 	const tokenFile = path.join(directory, "bridge.token");
 	await fs.writeFile(tokenFile, token, { encoding: "utf8", mode: 0o600 });
 	return {
 		endpoint:
 			process.platform === "win32"
-				? `\\\\.\\pipe\\omp-studio-live-${crypto.randomUUID()}`
+				? `\\\\.\\pipe\\step-studio-live-${crypto.randomUUID()}`
 				: path.join(directory, "bridge.sock"),
 		tokenFile,
 		token,
@@ -573,7 +573,7 @@ async function exchangeSnapshot(socket: net.Socket, requestId: string, runtimeEp
 
 describe("conversation events enter Studio Bridge", () => {
 	test("authenticated socket receives conversation.* envelopes from the live projector", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-live-socket-");
+		using tempDir = TempDir.createSync("@step-studio-live-socket-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const bus = new SessionEventBus();
 		const conversation = bindProjector(manager, bus, 7);
@@ -672,7 +672,7 @@ describe("conversation events enter Studio Bridge", () => {
 
 describe("StateProjector child conversation isolation", () => {
 	test("child events share eventSeq but do not bump main stateVersion or emit state.changed", () => {
-		using tempDir = TempDir.createSync("@omp-studio-child-state-");
+		using tempDir = TempDir.createSync("@step-studio-child-state-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const listeners: Array<(event: ConversationRuntimeEvent) => void> = [];
 		const conversation = {

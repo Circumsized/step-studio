@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 
-import { DESKTOP_IPC_CHANNELS } from "@omp-studio/transport-desktop";
+import { DESKTOP_IPC_CHANNELS } from "@step-studio/transport-desktop";
 
 import { DESKTOP_COMMAND_PREFIX } from "../src/tauri-sender.js";
 import { createTauriDesktopSender, type TauriInvokeLike } from "../src/tauri-sender.js";

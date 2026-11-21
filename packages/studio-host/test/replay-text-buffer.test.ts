@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { truncateUtf8 } from "@omp-studio/studio-protocol";
+import { truncateUtf8 } from "@step-studio/studio-protocol";
 import { ReplayTextBuffer } from "../src/replay-text-buffer.js";
 
 test("incremental byte counts match exact UTF-8 / JSON across surrogate boundaries and compaction", () => {

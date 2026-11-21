@@ -10,13 +10,13 @@
  */
 
 import { createHash } from "node:crypto";
-import { CLIENT_CONTRACT_VERSION } from "@omp-studio/client-contract";
-import { STUDIO_PROTOCOL_VERSION } from "@omp-studio/studio-protocol";
+import { CLIENT_CONTRACT_VERSION } from "@step-studio/client-contract";
+import { STUDIO_PROTOCOL_VERSION } from "@step-studio/studio-protocol";
 import {
   assertSafeVersion,
   createTrustedKeyVerifier,
   parseRuntimeSignatureManifest,
-} from "@omp-studio/runtime-installer";
+} from "@step-studio/runtime-installer";
 import { compareSemver, parseSemver } from "./semver.js";
 import { compareRuntimeVersions } from "./version-compare.js";
 

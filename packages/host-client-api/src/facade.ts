@@ -1,6 +1,6 @@
-import type { ContextViewOperation } from "@omp-studio/studio-protocol";
-import { validateArtifactTextInput, validateArtifactIdInput, isWorkbenchOperationKind, isUpgradeOperationKind } from "@omp-studio/studio-protocol";
-import { isEvaluationOperationKind } from "@omp-studio/studio-protocol";
+import type { ContextViewOperation } from "@step-studio/studio-protocol";
+import { validateArtifactTextInput, validateArtifactIdInput, isWorkbenchOperationKind, isUpgradeOperationKind } from "@step-studio/studio-protocol";
+import { isEvaluationOperationKind } from "@step-studio/studio-protocol";
 /**
  * StudioHostClientFacade — the P1 presentation-neutral product API.
  *
@@ -97,8 +97,8 @@ import type {
   GitHubExecuteInput,
   GitOperationResult,
   GitHubOperationResult,
-} from "@omp-studio/client-contract";
-import { CLIENT_CONTRACT_VERSION } from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
+import { CLIENT_CONTRACT_VERSION } from "@step-studio/client-contract";
 import type {
   AgentTranscriptPage,
   CapabilityManifest,
@@ -111,8 +111,8 @@ import type {
   SessionTelemetryReadResult,
   SessionTelemetrySnapshot,
   StudioAgentSnapshot,
-} from "@omp-studio/studio-protocol";
-import type { StudioOperation } from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
+import type { StudioOperation } from "@step-studio/studio-protocol";
 import {
   canonicalJson,
   parseConversationOpenResult,
@@ -121,8 +121,8 @@ import {
   parseFoundationStudioRequest,
   parseSessionTelemetryReadResult,
   parseSessionTelemetrySnapshot,
-} from "@omp-studio/studio-protocol";
-import type { HostBackend, RuntimePublication, StudioBtwForward, StudioConversationForward, StudioInteractionForward, StudioTelemetryForward } from "@omp-studio/studio-host";
+} from "@step-studio/studio-protocol";
+import type { HostBackend, RuntimePublication, StudioBtwForward, StudioConversationForward, StudioInteractionForward, StudioTelemetryForward } from "@step-studio/studio-host";
 
 import {
   HostEventBus,
@@ -910,7 +910,7 @@ export class StudioHostClientFacade implements ClientTransport {
       case "models.adaptation.resolve": {
         const service = this.#options.models;
         if (!service?.resolveAdaptation) throw clientError("CAPABILITY_UNAVAILABLE", "Model adaptation is unavailable");
-        const result = await service.resolveAdaptation(request.input as import("@omp-studio/client-contract").ModelAdaptationInput);
+        const result = await service.resolveAdaptation(request.input as import("@step-studio/client-contract").ModelAdaptationInput);
         return { ok: true, queryName: request.queryName, result } as ClientQueryResponse;
       }
       case "models.get": {
@@ -933,7 +933,7 @@ export class StudioHostClientFacade implements ClientTransport {
         const service = this.#options.artifacts;
         if (!service) throw clientError("CAPABILITY_UNAVAILABLE", "The artifact library is not available on this Host");
         const result = request.queryName === "artifacts.list"
-          ? await service.list(request.input as import("@omp-studio/client-contract").ArtifactListInput)
+          ? await service.list(request.input as import("@step-studio/client-contract").ArtifactListInput)
           : await service.state();
         return { ok: true, queryName: request.queryName, result } as ClientQueryResponse;
       }
@@ -2857,7 +2857,7 @@ export class StudioHostClientFacade implements ClientTransport {
     service: HostModelsService,
   ): Promise<void> {
     try {
-      let result: ConfigWriteResult | ModelProviderTestResult | ModelDiscoveryResult | import("@omp-studio/client-contract").ModelCatalogRefreshResult;
+      let result: ConfigWriteResult | ModelProviderTestResult | ModelDiscoveryResult | import("@step-studio/client-contract").ModelCatalogRefreshResult;
       switch (request.commandName) {
         case "models.provider.upsert":
           result = await service.upsertProvider(request.input as never);
@@ -3499,4 +3499,4 @@ export class StudioHostClientFacade implements ClientTransport {
     this.#bus.emit({ kind: "command.receipt", receipt });
   }
 }
-import { validatePredictionQuery } from "@omp-studio/studio-protocol";
+import { validatePredictionQuery } from "@step-studio/studio-protocol";

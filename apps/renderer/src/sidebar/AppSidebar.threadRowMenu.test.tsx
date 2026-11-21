@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
-import type { EnvironmentId, HistoryEntryId, SessionHistoryEntry, SessionId, ThreadId, WorkspaceId } from "@omp-studio/client-contract";
+import type { EnvironmentId, HistoryEntryId, SessionHistoryEntry, SessionId, ThreadId, WorkspaceId } from "@step-studio/client-contract";
 import { AppSidebar } from "../App";
 import { I18nProvider } from "../i18n";
 import { PreviewModeProvider } from "../preview/PreviewContext";
@@ -39,7 +39,7 @@ function baseState() {
       workspaces: {
         workspaces: [{
           workspaceId,
-          name: "omp-studio",
+          name: "step-studio",
           lastOpenedAt: "2026-08-25T00:00:00.000Z",
           active: true,
         }],

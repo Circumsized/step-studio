@@ -8,16 +8,16 @@
  * When this module is loaded directly by Vite (the auto-bootstrap entry),
  * the hosting page injects that client on `globalThis.OMP_STUDIO_CLIENT`
  * before the bundle runs. If it is absent but the desktop preload bridge
- * (`globalThis.ompStudio`) is present, the entry constructs the client
- * itself: `createDesktopTransport(ompStudio)` → `StudioClientImpl`. If
+ * (`globalThis.stepStudio`) is present, the entry constructs the client
+ * itself: `createDesktopTransport(stepStudio)` → `StudioClientImpl`. If
  * neither exists we render an explicit unavailable state instead of
  * failing.
  */
 
 import { createRoot } from "react-dom/client";
-import type { StudioClient } from "@omp-studio/client-contract";
-import { StudioClientImpl } from "@omp-studio/client";
-import { createDesktopTransport } from "@omp-studio/transport-desktop";
+import type { StudioClient } from "@step-studio/client-contract";
+import { StudioClientImpl } from "@step-studio/client";
+import { createDesktopTransport } from "@step-studio/transport-desktop";
 import { App, Unavailable } from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { getAppSettings } from "./settings/appSettings";
@@ -72,7 +72,7 @@ const host = document.getElementById("root");
 if (host !== null) {
   let client: StudioClient | undefined = globalThis.OMP_STUDIO_CLIENT;
   if (client === undefined) {
-    const bridge = globalThis.ompStudio;
+    const bridge = globalThis.stepStudio;
     if (bridge !== undefined) {
       client = new StudioClientImpl(createDesktopTransport(bridge));
     }

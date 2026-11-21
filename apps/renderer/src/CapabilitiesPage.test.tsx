@@ -6,7 +6,7 @@ import type {
   McpServerRecord,
   SkillRecord,
   StudioClient,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type { StudioSlashCommand } from "./composer/commands";
 import { CapabilitiesPage } from "./CapabilitiesPage";
 import { PreviewModeProvider } from "./preview/PreviewContext";

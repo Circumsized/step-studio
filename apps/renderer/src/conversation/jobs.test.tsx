@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ConversationRuntimeEvent, SessionId } from "@omp-studio/client-contract";
-import type { JobWidgetView } from "@omp-studio/studio-protocol";
+import type { ConversationRuntimeEvent, SessionId } from "@step-studio/client-contract";
+import type { JobWidgetView } from "@step-studio/studio-protocol";
 import { agentJobTree, buildJobTree } from "./jobTree";
 import { JobWidget } from "./JobWidget";
 import { ToolBody } from "./ToolBody";

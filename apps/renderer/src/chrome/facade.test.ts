@@ -4,7 +4,7 @@
  * silently is not there.
  *
  * The bug this module exists to prevent is not hypothetical. The renderer used
- * to ask `globalThis.ompStudioChrome` for a method and branch on whether it came
+ * to ask `globalThis.stepStudioChrome` for a method and branch on whether it came
  * back, so a missing member took the whole component with it — which is why
  * deleting Electron cascaded into 55,092 lines rather than swapping a facade.
  */
@@ -18,12 +18,12 @@ import { shellCapabilities, shellDegradedReason, shellSurface, type ChromeCapabi
 
 /**
  * The one structural rule of this module: outside `chrome/`, nothing reads
- * `ompStudioChrome` directly.
+ * `stepStudioChrome` directly.
  *
  * It is asserted by reading the tree rather than by review because it has already
  * been broken twice in ways that looked fine. The first refactor counted 86 reads
- * of `globalThis.ompStudioChrome` and cleared them — and left four behind that
- * spelled it `window.ompStudioChrome`, which a grep for the `globalThis` form
+ * of `globalThis.stepStudioChrome` and cleared them — and left four behind that
+ * spelled it `window.stepStudioChrome`, which a grep for the `globalThis` form
  * reported as zero. A rule that is only checked by the search that found the last
  * violation is not checked.
  */
@@ -46,7 +46,7 @@ describe("nothing outside chrome/ reads the surface directly", () => {
         const text = readFileSync(path, "utf8");
         // Comments and strings that merely mention the name are not reads either,
         // so only a member access or a property lookup counts.
-        if (/\.ompStudioChrome\b|\(globalThis as[^)]*ompStudioChrome/.test(text)) {
+        if (/\.stepStudioChrome\b|\(globalThis as[^)]*stepStudioChrome/.test(text)) {
           offenders.push(relative(root, path));
         }
       }
@@ -130,14 +130,14 @@ const ALL_CAPABILITIES: ReadonlyArray<keyof ChromeCapabilities> = [
   "window",
 ];
 
-const original = globalThis.ompStudioChrome;
+const original = globalThis.stepStudioChrome;
 
 afterEach(() => {
   if (original === undefined) {
     // The property is declared with `var`, so deleting is the only way back.
-    delete (globalThis as { ompStudioChrome?: unknown }).ompStudioChrome;
+    delete (globalThis as { stepStudioChrome?: unknown }).stepStudioChrome;
   } else {
-    globalThis.ompStudioChrome = original;
+    globalThis.stepStudioChrome = original;
   }
 });
 
@@ -147,12 +147,12 @@ function surfaceWith(...names: ReadonlyArray<string>): void {
   for (const name of names) {
     stub[name] = () => Promise.resolve();
   }
-  (globalThis as { ompStudioChrome?: unknown }).ompStudioChrome = stub;
+  (globalThis as { stepStudioChrome?: unknown }).stepStudioChrome = stub;
 }
 
 describe("shellCapabilities", () => {
   it("reports nothing when there is no shell", () => {
-    delete (globalThis as { ompStudioChrome?: unknown }).ompStudioChrome;
+    delete (globalThis as { stepStudioChrome?: unknown }).stepStudioChrome;
     const bits = shellCapabilities();
     for (const capability of ALL_CAPABILITIES) {
       expect(bits[capability], `${capability} must be false with no shell`).toBe(false);

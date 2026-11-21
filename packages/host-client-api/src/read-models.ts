@@ -19,12 +19,12 @@ import type {
   HistoryEntryId,
   PublicAuthorityIdentity,
   ThreadId,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   CapabilityManifest,
   OperatorCommandManifest,
   RuntimeInstallationManifest,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 /** Deterministic sha256 hex of a stable payload (used for neutral manifest hashes). */
 function sha256Hex(value: string): string {

@@ -15,7 +15,7 @@ import {
   type StudioHelloResponse,
   type StudioEventEnvelope,
   type StudioSnapshotResponse,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import type {
   CommandId,
   EnvironmentId,
@@ -30,7 +30,7 @@ import type {
   StudioRequest,
   ThreadId,
   WorkspaceId,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import {
   CommandArbiter,
   CommandLedger,
@@ -139,8 +139,8 @@ async function listenForHello(
 }> {
   const endpoint =
     process.platform === "win32"
-      ? `\\\\.\\pipe\\omp-studio-test-${randomUUID()}`
-      : join(await mkdtemp(join(tmpdir(), "omp-studio-transport-")), "bridge.sock");
+      ? `\\\\.\\pipe\\step-studio-test-${randomUUID()}`
+      : join(await mkdtemp(join(tmpdir(), "step-studio-transport-")), "bridge.sock");
   const sockets = new Set<Socket>();
   let connection = 0;
   const server: Server = createServer((socket) => {
@@ -772,7 +772,7 @@ test("PR-008 closes a local Bridge connection on an oversized response", async (
 });
 
 test("PR-002 bridge token is one-time and challenge proof is bound to runtime identity", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "omp-studio-bridge-"));
+  const directory = await mkdtemp(join(tmpdir(), "step-studio-bridge-"));
   const secured: string[] = [];
   const bootstrap = await createBridgeBootstrap(directory, "win32", {
     secureDirectory: async (path) => {
@@ -795,7 +795,7 @@ test("PR-002 bridge token is one-time and challenge proof is bound to runtime id
 });
 
 test("SEC-007 concurrent Bridge token consumers cannot both claim the secret", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "omp-studio-token-race-"));
+  const directory = await mkdtemp(join(tmpdir(), "step-studio-token-race-"));
   for (let index = 0; index < 500; index += 1) {
     const tokenFile = join(directory, `bridge-${index}.token`);
     await writeFile(tokenFile, "one-time-token", { encoding: "utf8", flag: "wx" });
@@ -808,7 +808,7 @@ test("SEC-007 concurrent Bridge token consumers cannot both claim the secret", a
 });
 
 test("SEC-007 an existing Bridge token claim fails closed without deleting the token", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "omp-studio-token-claimed-"));
+  const directory = await mkdtemp(join(tmpdir(), "step-studio-token-claimed-"));
   const tokenFile = join(directory, "bridge.token");
   await writeFile(tokenFile, "one-time-token", { encoding: "utf8", flag: "wx" });
   await writeFile(`${tokenFile}.claimed`, "", { encoding: "utf8", flag: "wx" });
@@ -817,7 +817,7 @@ test("SEC-007 an existing Bridge token claim fails closed without deleting the t
 });
 
 test("SEC-002 Windows bootstrap fails closed without an ACL provider", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "omp-studio-bridge-no-acl-"));
+  const directory = await mkdtemp(join(tmpdir(), "step-studio-bridge-no-acl-"));
   await assert.rejects(() => createBridgeBootstrap(directory, "win32"), /ACL provider/u);
 });
 
@@ -828,7 +828,7 @@ test("SEC-002 production Windows ACL provider grants only the current SID", asyn
     if (executable === "whoami.exe") return '"desktop\\operator","S-1-5-21-100-200-300-400"';
     return "processed";
   });
-  const directory = await mkdtemp(join(tmpdir(), "omp-studio-acl-provider-"));
+  const directory = await mkdtemp(join(tmpdir(), "step-studio-acl-provider-"));
   const tokenFile = join(directory, "bridge.token");
   await acl.secureDirectory(directory);
   await acl.createSecureTokenFile(tokenFile, "secret");
@@ -1220,7 +1220,7 @@ test("WP-013 readiness failure force-stops the spawned Runtime", async () => {
 });
 
 test("PR-009 terminal ledger outcomes survive a Host restart", () => {
-  const directory = join(tmpdir(), `omp-studio-ledger-${randomUUID()}`);
+  const directory = join(tmpdir(), `step-studio-ledger-${randomUUID()}`);
   const store = new JsonlCommandLedgerStore(join(directory, "commands.jsonl"));
   const commandId = "durable-command" as CommandId;
   const first = new CommandLedger(() => "2026-08-10T00:00:00.000Z", store);
@@ -1233,7 +1233,7 @@ test("PR-009 terminal ledger outcomes survive a Host restart", () => {
 });
 
 test("ledger keeps the Runtime failure message beside the code and caps its length", () => {
-  const directory = join(tmpdir(), `omp-studio-ledger-message-${randomUUID()}`);
+  const directory = join(tmpdir(), `step-studio-ledger-message-${randomUUID()}`);
   const store = new JsonlCommandLedgerStore(join(directory, "commands.jsonl"));
   const ledger = new CommandLedger(() => "2026-08-21T00:00:00.000Z", store);
   const commandId = "message-command" as CommandId;
@@ -1286,7 +1286,7 @@ test("ledger keeps the Runtime failure message beside the code and caps its leng
 });
 
 test("REC-002 ledger recovery ignores only a crash-truncated tail record", async () => {
-  const directory = join(tmpdir(), `omp-studio-ledger-tail-${randomUUID()}`);
+  const directory = join(tmpdir(), `step-studio-ledger-tail-${randomUUID()}`);
   const path = join(directory, "commands.jsonl");
   const store = new JsonlCommandLedgerStore(path);
   const commandId = "tail-command" as CommandId;
@@ -1299,7 +1299,7 @@ test("REC-002 ledger recovery ignores only a crash-truncated tail record", async
 });
 
 test("WP-013 ledger recovery rejects an invalid durable status", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "omp-studio-ledger-invalid-"));
+  const directory = await mkdtemp(join(tmpdir(), "step-studio-ledger-invalid-"));
   const path = join(directory, "commands.jsonl");
   await writeFile(
     path,

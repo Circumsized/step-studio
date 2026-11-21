@@ -5,8 +5,8 @@ import type {
   ConversationRuntimeEvent,
   ConversationTranscriptPage,
   OpaqueCursor,
-} from "@omp-studio/client-contract";
-import { tailUtf8, truncateUtf8, utf8ByteLength } from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
+import { tailUtf8, truncateUtf8, utf8ByteLength } from "@step-studio/client-contract";
 import type { ComposerDoc } from "../composer/types";
 import type { ConversationIdentity } from "./conversationHost";
 import { backgroundToolState, toolResultStatus, buildPersistedTimeline, buildPersistedTimelineRow, buildTransientTimeline, emptyConversationState, tagTimelineStructure, type ConversationNotice, type ConversationState, type LiveMessage, type LiveTool, type PendingUser, type TimelineRow, type TimelineRowCache } from "./conversationViewModel";

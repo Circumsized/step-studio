@@ -8,7 +8,7 @@ import {
   clampRoleThinking,
   parseCacheThinkingEfforts,
   roleThinkingControl,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import {
   authProbeUrl,
   availableFromCacheModel,

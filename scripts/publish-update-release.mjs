@@ -17,7 +17,7 @@ for (const dir of await readdir("outputs/publish")) {
     const root = join("outputs/publish", dir), name = `remote-environment-${platform}.json`;
     const { manifest: m, signature: s } = JSON.parse(await readFile(join(root, name), "utf8"));
     const keyName = table.keys[s.keyId];
-    if (!keyName || s.algorithm !== "ed25519" || !verify(null, Buffer.from(`omp-studio-remote-environment-v1\n${canonical(m)}`), createPublicKey(await readFile(join("packaging/keys", keyName))), Buffer.from(s.value, "base64url"))) throw new Error("Invalid remote environment signature");
+    if (!keyName || s.algorithm !== "ed25519" || !verify(null, Buffer.from(`step-studio-remote-environment-v1\n${canonical(m)}`), createPublicKey(await readFile(join("packaging/keys", keyName))), Buffer.from(s.value, "base64url"))) throw new Error("Invalid remote environment signature");
     if (process.env.OMP_RELEASE_KIND === "runtime" || m.repo !== repo || m.platform !== platform || m.schema !== 1) throw new Error("Remote environment candidate identity mismatch");
     const tag = `v${m.appVersion}`, file = m.archive;
     if (!/^[A-Za-z0-9._-]+$/u.test(file.asset) || file.url !== `https://github.com/${repo}/releases/download/${tag}/${file.asset}`) throw new Error("Invalid remote environment asset URL");
@@ -34,7 +34,7 @@ for (const dir of await readdir("outputs/publish")) {
   const envelope = JSON.parse(await readFile(join(root, name), "utf8"));
   const { manifest: m, signature: s } = envelope;
   const keyName = table.keys[s.keyId];
-  if (!keyName || s.algorithm !== "ed25519" || !verify(null, Buffer.from(`omp-studio-update-v2\n${canonical(m)}`), createPublicKey(await readFile(join("packaging/keys", keyName))), Buffer.from(s.value, "base64url"))) throw new Error("Invalid candidate signature");
+  if (!keyName || s.algorithm !== "ed25519" || !verify(null, Buffer.from(`step-studio-update-v2\n${canonical(m)}`), createPublicKey(await readFile(join("packaging/keys", keyName))), Buffer.from(s.value, "base64url"))) throw new Error("Invalid candidate signature");
   if (m.repo !== repo || m.platform !== platform || m.schema !== 2) throw new Error("Candidate identity mismatch");
   const runtimeOnly = process.env.OMP_RELEASE_KIND === "runtime";
   if (runtimeOnly === Boolean(m.app)) throw new Error("Release kind mismatch");

@@ -3,7 +3,7 @@
  * ui_reference/ver1/assets/js/models-data.js. Display only.
  */
 
-import { BUILTIN_MODEL_ROLES } from "@omp-studio/client-contract";
+import { BUILTIN_MODEL_ROLES } from "@step-studio/client-contract";
 
 import type {
   ModelApiKind,
@@ -14,7 +14,7 @@ import type {
   ModelPresetGroup,
   ModelProviderRecord,
   ModelRoleRecord,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 function m(
   id: string,
@@ -204,7 +204,7 @@ export function createPreviewModelConfig(): ModelConfigReadModel {
       { ...m("whisper-1", "Whisper", 4096, 4096), kind: "stt" },
     ]));
   }
-  const availableModels: import("@omp-studio/client-contract").AvailableModelRecord[] = providers.flatMap((item) =>
+  const availableModels: import("@step-studio/client-contract").AvailableModelRecord[] = providers.flatMap((item) =>
     item.models.filter((model) => model.status === "available").map((model) => {
       const thinking = !model.reasoning
         ? undefined

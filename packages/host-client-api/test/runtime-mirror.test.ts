@@ -10,11 +10,11 @@ import type {
   RuntimeInstallState,
   StudioRuntimeSettingsGetResult,
   WorkspaceId,
-} from "@omp-studio/client-contract";
-import type { OperatorStateSnapshot, StudioOperation, RuntimeEpoch, RuntimeId, SessionId, StateVersion } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { OperatorStateSnapshot, StudioOperation, RuntimeEpoch, RuntimeId, SessionId, StateVersion } from "@step-studio/studio-protocol";
 import { StudioHostClientFacade, createDefaultHostDiagnosticsFactory } from "../src/index.js";
 import type { HostInvokeOutcome } from "../src/services.js";
-import type { HostBackend } from "@omp-studio/studio-host";
+import type { HostBackend } from "@step-studio/studio-host";
 
 const snapshot: OperatorStateSnapshot = {
   runtimeId: "runtime-1" as RuntimeId,

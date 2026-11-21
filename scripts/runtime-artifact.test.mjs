@@ -1,4 +1,4 @@
-import { WORKBENCH_OPERATION_KINDS, UPGRADE_OPERATION_KINDS } from "@omp-studio/studio-protocol";
+import { WORKBENCH_OPERATION_KINDS, UPGRADE_OPERATION_KINDS } from "@step-studio/studio-protocol";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, verify } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -466,10 +466,10 @@ test("entrypoint must match the artifact platform and the binary must match it",
       ...inputs,
       upstreamVersion: "17.2.12",
       platform: "win32-x64",
-      entrypoint: "omp-studio.exe",
+      entrypoint: "step-studio.exe",
       outDirectory: join(inputs.root, "out"),
     }),
-    /omp-studio\.exe.*reserved/u,
+    /step-studio\.exe.*reserved/u,
   );
   await assert.rejects(
     generateRuntimeArtifact({

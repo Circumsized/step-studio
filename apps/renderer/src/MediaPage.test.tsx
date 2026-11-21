@@ -1,7 +1,7 @@
 import { selectOption } from "./test/selectOption";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import { MediaPage } from "./MediaPage";
 import { I18nProvider } from "./i18n";
 import { PreviewModeProvider } from "./preview/PreviewContext";

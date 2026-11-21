@@ -1,7 +1,7 @@
 import { AppSelect } from "../AppSelect";
 import { useEffect, useRef, useState } from "react";
-import type { AvailableModelRecord } from "@omp-studio/client-contract";
-import type { StudioRuntimeSettingsGetResult } from "@omp-studio/studio-protocol";
+import type { AvailableModelRecord } from "@step-studio/client-contract";
+import type { StudioRuntimeSettingsGetResult } from "@step-studio/studio-protocol";
 import type { FeatureSettingsProps } from "../settings/useFeatureSettings";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";

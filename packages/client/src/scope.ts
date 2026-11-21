@@ -4,7 +4,7 @@
  * which events a scope receives.
  */
 
-import type { ClientEvent, SubscriptionScope } from "@omp-studio/client-contract";
+import type { ClientEvent, SubscriptionScope } from "@step-studio/client-contract";
 
 export function eventMatchesScope(event: ClientEvent, scope: SubscriptionScope): boolean {
   switch (scope.scope) {

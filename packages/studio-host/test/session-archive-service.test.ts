@@ -16,7 +16,7 @@ async function fixture(): Promise<{
   sessionFile: string;
   artifactsDir: string;
 }> {
-  const root = await mkdtemp(join(tmpdir(), "omp-studio-archive-svc-"));
+  const root = await mkdtemp(join(tmpdir(), "step-studio-archive-svc-"));
   const workspace = join(root, "workspace");
   const sessionsRoot = join(root, "agent", "sessions");
   const archiveRoot = join(root, "agent", "archive", "sessions");

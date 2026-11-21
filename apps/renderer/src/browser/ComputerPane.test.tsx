@@ -1,8 +1,8 @@
 import { selectOption } from "../test/selectOption";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { ClientBootstrap, CommandState, StudioClient } from "@omp-studio/client-contract";
-import type { StudioComputerStatus } from "@omp-studio/studio-protocol";
+import type { ClientBootstrap, CommandState, StudioClient } from "@step-studio/client-contract";
+import type { StudioComputerStatus } from "@step-studio/studio-protocol";
 import { I18nProvider } from "../i18n";
 import { PreviewModeProvider } from "../preview/PreviewContext";
 import { PREVIEW_MODE_STORAGE_KEY } from "../preview/mode";
@@ -132,7 +132,7 @@ it("does not issue Computer Use commands to a Runtime without that capability", 
 
 it("shows native target enumeration errors instead of an ordinary empty target state", async () => {
   localStorage.setItem(PREVIEW_MODE_STORAGE_KEY, "0");
-  vi.stubGlobal("ompStudioChrome", { readComputerCapture: vi.fn() });
+  vi.stubGlobal("stepStudioChrome", { readComputerCapture: vi.fn() });
   const reason = "Failed to enumerate native windows: desktop session is unavailable.";
   const nativeStatus: StudioComputerStatus = {
     enabled: true, available: true, backend: "win32",

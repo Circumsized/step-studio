@@ -1,4 +1,4 @@
-import type { CommandLedgerEntry, OperatorStateSnapshot } from "@omp-studio/studio-protocol";
+import type { CommandLedgerEntry, OperatorStateSnapshot } from "@step-studio/studio-protocol";
 
 const TERMINAL = new Set<CommandLedgerEntry["status"]>(["completed", "failed", "rejected", "outcome_unknown"]);
 

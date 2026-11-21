@@ -238,7 +238,7 @@ macOS 的完整磁盘访问是用户的授权选择，不是自动开启项；�
 ### 远端组件部署
 
 - 部署 Studio 自己的版本化 Headless Host 与 patched OMP Runtime，不安装 Electron，优先采用当前用户权限；启用系统 SSH 服务的权限前提单独说明。
-- 安装根目录由远端平台服务解析，例如 Linux `~/.local/share/omp-studio/remote/`、Windows `%LOCALAPPDATA%\omp-studio\remote\`、macOS `~/Library/Application Support/omp-studio/remote/`。这是待定路径建议，不由客户端展开 `~` 或环境变量；各自按版本分目录，避开项目代码目录与已有本地 Host 状态。
+- 安装根目录由远端平台服务解析，例如 Linux `~/.local/share/step-studio/remote/`、Windows `%LOCALAPPDATA%\step-studio\remote\`、macOS `~/Library/Application Support/step-studio/remote/`。这是待定路径建议，不由客户端展开 `~` 或环境变量；各自按版本分目录，避开项目代码目录与已有本地 Host 状态。
 - 本机按**远端 OS + CPU 架构 + 必要 ABI**选择并验证签名制品，通过 SSH 传输，远端校验摘要后暂存、原子激活。正在运行的会话继续使用原版本，不能升级到一半替换进程文件；Windows 不覆盖正在运行的 EXE，macOS 校验代码签名，Linux 校验 ELF 与依赖要求。
 - 这消除了远端下载制品必须能访问 GitHub 的要求，但**不消除远端调用模型 API 的网络要求**。
 - 支持手动导入匹配制品作为离线准备路径；不以临时 `curl | sh` 或服务器上随意 `npm install latest` 作为正式交付方式。

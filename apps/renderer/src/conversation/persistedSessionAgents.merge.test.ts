@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { AgentId, StudioAgentSnapshot } from "@omp-studio/studio-protocol";
+import type { AgentId, StudioAgentSnapshot } from "@step-studio/studio-protocol";
 import { mergeAgentRosters } from "./persistedSessionAgents";
 
 function snapshot(overrides: Partial<StudioAgentSnapshot> = {}): StudioAgentSnapshot {

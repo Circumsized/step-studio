@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SessionHistoryReadModel, SessionId, WorkspaceId } from "@omp-studio/client-contract";
+import type { SessionHistoryReadModel, SessionId, WorkspaceId } from "@step-studio/client-contract";
 import { renameNeedsSessionResume, workspaceForSession } from "./sessionTitle";
 
 const sessionId = "session-1" as SessionId;

@@ -102,7 +102,7 @@ function fixtureAssistantMessage(): AssistantMessage {
 }
 
 async function createFixture(): Promise<Fixture> {
-	const root = await fs.mkdtemp(path.join(os.tmpdir(), "omp-studio-probe-test-"));
+	const root = await fs.mkdtemp(path.join(os.tmpdir(), "step-studio-probe-test-"));
 	const workspace = await makeWorkspace(root, "ws");
 	const agentDir = path.join(root, "agent");
 	await fs.mkdir(agentDir, { recursive: true });
@@ -181,7 +181,7 @@ function fakeRuntime(session: AgentSession, sessionId: string): StudioHostRuntim
 }
 
 beforeAll(async () => {
-	fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "omp-studio-probe-auth-"));
+	fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "step-studio-probe-auth-"));
 	authStorage = await AuthStorage.create(path.join(fixtureRoot, "auth.db"));
 	registry = new ModelRegistry(authStorage);
 });

@@ -1,4 +1,4 @@
-import type { RuntimeProcessHandle } from "@omp-studio/platform";
+import type { RuntimeProcessHandle } from "@step-studio/platform";
 
 /**
  * Native Windows process-control surface injected into

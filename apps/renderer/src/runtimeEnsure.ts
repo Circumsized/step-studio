@@ -1,4 +1,4 @@
-import type { CommandReceipt, CommandRequestId, RuntimeConnection } from "@omp-studio/client-contract";
+import type { CommandReceipt, CommandRequestId, RuntimeConnection } from "@step-studio/client-contract";
 import { waitForCommandReceipt, type CommandWaitClient } from "./sessionLifecycle";
 import { runtimeCanReconnect } from "./diagnosticsModel";
 import type { ActionProgress } from "./ActionProgressBar";

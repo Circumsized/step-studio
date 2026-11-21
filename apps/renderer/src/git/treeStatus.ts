@@ -9,7 +9,7 @@
  * the preview fixtures.
  */
 
-import type { GitFileChange } from "@omp-studio/client-contract";
+import type { GitFileChange } from "@step-studio/client-contract";
 
 export type TreeGitStatus = "modified" | "added" | "deleted" | "renamed" | "untracked" | "conflicted";
 

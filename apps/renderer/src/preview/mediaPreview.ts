@@ -1,5 +1,5 @@
 export const PREVIEW_GRAPHICS: Record<string,string> = { "scene.obj": "v 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\nf 1 3 2\nf 1 2 4\nf 2 3 4\nf 3 1 4\n", "scene.x3dv": "#X3D V3.3 utf8\nPROFILE Interchange\nShape { appearance Appearance { material Material { diffuseColor 0.55 0.4 0.85 } } geometry Box { size 2 2 2 } }" };
-import type { ArtifactRecord } from "@omp-studio/client-contract";
+import type { ArtifactRecord } from "@step-studio/client-contract";
 import { PREVIEW_ANNOTATION_BUNDLE } from "./annotationsPreview";
 
 /** Display-only continuation of the existing workspace fixture. */

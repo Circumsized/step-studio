@@ -1,7 +1,7 @@
 import { AppSelect } from "../AppSelect";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ClientBootstrap, StudioClient } from "@omp-studio/client-contract";
-import type { BrowserObservationEvent, BrowserObservationInput, BrowserObservationResultMap, StudioBrowserTab } from "@omp-studio/studio-protocol";
+import type { ClientBootstrap, StudioClient } from "@step-studio/client-contract";
+import type { BrowserObservationEvent, BrowserObservationInput, BrowserObservationResultMap, StudioBrowserTab } from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";

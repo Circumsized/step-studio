@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SessionId, SessionTelemetryReadResult, SessionTelemetrySnapshot } from "@omp-studio/studio-protocol";
+import type { SessionId, SessionTelemetryReadResult, SessionTelemetrySnapshot } from "@step-studio/studio-protocol";
 
 import { useViewedSessionTelemetry, type ViewedTelemetryClient } from "./useViewedSessionTelemetry";
 

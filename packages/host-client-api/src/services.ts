@@ -1,4 +1,4 @@
-import type { ModelAdaptationInput, ModelAdaptationResult, ModelCatalogRefreshResult } from "@omp-studio/client-contract";
+import type { ModelAdaptationInput, ModelAdaptationResult, ModelCatalogRefreshResult } from "@step-studio/client-contract";
 /**
  * Injected service ports consumed by {@link StudioHostClientFacade}.
  *
@@ -14,10 +14,10 @@ import type { ModelAdaptationInput, ModelAdaptationResult, ModelCatalogRefreshRe
 import { randomUUID } from "node:crypto";
 
 export interface HostArtifactService {
-  saveText?(input: import("@omp-studio/studio-protocol").ArtifactTextInput): Promise<import("@omp-studio/studio-protocol").ArtifactRecord>;
-  readText?(artifactId: string): Promise<import("@omp-studio/studio-protocol").ArtifactTextResult>;
-  list(input: import("@omp-studio/client-contract").ArtifactListInput): Promise<import("@omp-studio/client-contract").ArtifactPage>;
-  state(): Promise<import("@omp-studio/client-contract").ArtifactStorageState>;
+  saveText?(input: import("@step-studio/studio-protocol").ArtifactTextInput): Promise<import("@step-studio/studio-protocol").ArtifactRecord>;
+  readText?(artifactId: string): Promise<import("@step-studio/studio-protocol").ArtifactTextResult>;
+  list(input: import("@step-studio/client-contract").ArtifactListInput): Promise<import("@step-studio/client-contract").ArtifactPage>;
+  state(): Promise<import("@step-studio/client-contract").ArtifactStorageState>;
   remove(artifactId: string): Promise<void>;
 }
 
@@ -89,7 +89,7 @@ import type {
   StudioRuntimeSettingsGetResult,
   StudioRuntimeSettingsSetResult,
   OperationProgress,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   ApprovalMode,
   CommandLedgerEntry,
@@ -104,7 +104,7 @@ import type {
   RuntimeId,
   SessionTelemetrySnapshot,
   StudioAgentSnapshot,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import {
   StudioHostError,
   type HostBackend,
@@ -114,8 +114,8 @@ import {
   type StudioInteractionForward,
   type StudioTelemetryForward,
   type StudioRuntimeSessionController,
-} from "@omp-studio/studio-host";
-import type { StudioOperation } from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-host";
+import type { StudioOperation } from "@step-studio/studio-protocol";
 import { redactText } from "./read-models.js";
 
 /**
@@ -600,7 +600,7 @@ export interface HostUsageService {
    * Loopback endpoint of the native statistics dashboard. Starts the dashboard
    * when nothing is listening yet, so `available` means a server answered.
    */
-  dashboard?(): Promise<import("@omp-studio/client-contract").StatsDashboardReadModel>;
+  dashboard?(): Promise<import("@step-studio/client-contract").StatsDashboardReadModel>;
 }
 
 /** Input accepted by the semantic interaction responder. */

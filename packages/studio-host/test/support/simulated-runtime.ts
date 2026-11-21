@@ -7,7 +7,7 @@ import {
   type StateVersion,
   type StudioReceipt,
   type StudioRequest,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { CommandArbiter } from "../../src/command-arbiter.js";
 import { CommandLedger } from "../../src/command-ledger.js";
 import { ReceiptRegistry } from "../../src/receipt-registry.js";

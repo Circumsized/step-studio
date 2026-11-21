@@ -17,7 +17,7 @@ import type {
   GitWorktreeListReadModel,
   StudioClient,
   WorkspaceId,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { Icon } from "../icons";

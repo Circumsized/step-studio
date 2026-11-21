@@ -170,7 +170,7 @@ startScreencast 属实验协议，侧栏可用性取决于目标实际支持及�
 
 ### 5.4 固定 IPC / preload
 
-建议 `window.ompStudioBrowser` 提供 observe、setView、ackFrame、unobserve，以及 onCatalog / onStatus / onFrame。方法使用固定通道和严格 DTO，不提供 sendCommand / evaluate / invoke。
+建议 `window.stepStudioBrowser` 提供 observe、setView、ackFrame、unobserve，以及 onCatalog / onStatus / onFrame。方法使用固定通道和严格 DTO，不提供 sendCommand / evaluate / invoke。
 
 observe 绑定当前受信窗口和请求中的 workspace/session 作用域，返回新 observationId 与目录快照；setView 表达面板可见性和选择的 opaque tabId，ackFrame 仅确认当前 streamGeneration 的已发序号。具体目标身份和 epoch 由 Main 解析校验，Renderer 提供的值不能成为授权来源。
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { SessionHistoryEntry, SessionHistoryReadModel, StudioClient, TokenUsageReadModel } from "@omp-studio/client-contract";
+import type { SessionHistoryEntry, SessionHistoryReadModel, StudioClient, TokenUsageReadModel } from "@step-studio/client-contract";
 import { Icon } from "../icons";
 import { useI18n } from "../i18n";
 import { usePreviewMode } from "../preview/PreviewContext";

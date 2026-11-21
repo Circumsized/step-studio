@@ -1,4 +1,4 @@
-import type { SessionTierState } from "@omp-studio/studio-protocol";
+import type { SessionTierState } from "@step-studio/studio-protocol";
 
 export const PREVIEW_SERVICE_TIER: SessionTierState = {
  selector:"demo/model",configured:"none",effective:"standard",

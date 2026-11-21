@@ -1,6 +1,6 @@
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ConversationMessageItem } from "@omp-studio/client-contract";
+import type { ConversationMessageItem } from "@step-studio/client-contract";
 
 import { ConvoTranscript } from "./ConvoTranscript";
 import { buildTimeline, emptyConversationState } from "./conversationViewModel";

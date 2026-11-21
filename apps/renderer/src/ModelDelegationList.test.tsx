@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { ClientEvent, StudioClient } from "@omp-studio/client-contract";
+import type { ClientEvent, StudioClient } from "@step-studio/client-contract";
 import { ModelDelegationList } from "./ModelDelegationList";
 import { invokeUpgrade } from "./runtimeUpgrade";
 vi.mock("./runtimeUpgrade", () => ({ invokeUpgrade: vi.fn() }));

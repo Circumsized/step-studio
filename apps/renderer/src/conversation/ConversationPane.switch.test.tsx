@@ -1,6 +1,6 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { RuntimeEpoch, SessionId } from "@omp-studio/studio-protocol";
+import type { RuntimeEpoch, SessionId } from "@step-studio/studio-protocol";
 import { ConversationPane } from "./ConversationPane";
 import { SWITCH_LEAVE_MS, SWITCH_REVEAL_MS, SWITCH_SETTLE_FRAMES } from "./conversationSwitchPhase";
 import type { ConversationSnapshot } from "./conversationEngine";

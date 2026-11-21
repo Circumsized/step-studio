@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { GitCommitChangeRecord, GitCommitChangesReadModel, GitCommitDiffReadModel, GitLogListReadModel, GitLogRef } from "@omp-studio/client-contract";
+import type { GitCommitChangeRecord, GitCommitChangesReadModel, GitCommitDiffReadModel, GitLogListReadModel, GitLogRef } from "@step-studio/client-contract";
 
 import { Icon } from "../icons";
 import { useI18n } from "../i18n";

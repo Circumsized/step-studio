@@ -6,8 +6,8 @@ import type {
   SessionId,
   StudioClient,
   Unsubscribe,
-} from "@omp-studio/client-contract";
-import type { AgentId, ConversationOpenResult, ConversationTarget } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { AgentId, ConversationOpenResult, ConversationTarget } from "@step-studio/studio-protocol";
 
 export type ConversationSourceClient = Pick<StudioClient, "query" | "subscribe">;
 export type ConversationSourcePage = ConversationTranscriptPage | ConversationTranscriptReadPage;

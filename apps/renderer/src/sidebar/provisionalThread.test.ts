@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { HistoryEntryId, SessionHistoryEntry, SessionId, ThreadId, WorkspaceId } from "@omp-studio/client-contract";
+import type { HistoryEntryId, SessionHistoryEntry, SessionId, ThreadId, WorkspaceId } from "@step-studio/client-contract";
 import {
   buildProvisionalProjectThread,
   isPlaceholderSessionTitle,

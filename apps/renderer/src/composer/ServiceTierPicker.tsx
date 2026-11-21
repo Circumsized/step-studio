@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { StudioClient, SessionId } from "@omp-studio/client-contract";
-import type { SessionTier, SessionTierState } from "@omp-studio/studio-protocol";
+import type { StudioClient, SessionId } from "@step-studio/client-contract";
+import type { SessionTier, SessionTierState } from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";

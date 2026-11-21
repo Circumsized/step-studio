@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { MemoryClientTransport, StudioClientImpl } from "@omp-studio/client";
-import type { ClientBootstrap } from "@omp-studio/client-contract";
-import type { SessionId, StudioClient, ThreadId } from "@omp-studio/client-contract";
+import { MemoryClientTransport, StudioClientImpl } from "@step-studio/client";
+import type { ClientBootstrap } from "@step-studio/client-contract";
+import type { SessionId, StudioClient, ThreadId } from "@step-studio/client-contract";
 import { ensureSelectedSessionActive, waitForCommandReceipt } from "./sessionLifecycle";
 
 const TS = "2026-08-12T00:00:00.000Z";

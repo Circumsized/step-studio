@@ -52,8 +52,8 @@
 | `packages/testkit/src/index.ts` | 导出 conversation fixtures / safety |
 | `packages/testkit/src/fixtures.ts` | `session.transcript.read` 与 `conversation.changed` 改走统一夹具 |
 | `packages/testkit/src/suite.ts` | transport 合同套件增加 transcript query + conversation event |
-| `apps/desktop/package.json` | devDependency `@omp-studio/testkit` |
-| `apps/renderer/package.json` | 仅增加 devDependency `@omp-studio/testkit`（vitest / testing-library 为计划 05 既有未提交改动，07 未改那些行） |
+| `apps/desktop/package.json` | devDependency `@step-studio/testkit` |
+| `apps/renderer/package.json` | 仅增加 devDependency `@step-studio/testkit`（vitest / testing-library 为计划 05 既有未提交改动，07 未改那些行） |
 
 未修改 `App.tsx`、`host-composition.ts`、protocol contract、vendor 产品代码。04/05 包内仍有本地 page 构造函数；**未跨界迁移**，请求后续复用 testkit。
 
@@ -72,28 +72,28 @@
 
 | 命令 | 结果 | 原因 |
 |---|---|---|
-| `npm test -w @omp-studio/studio-protocol` | **通过** | 36 tests |
-| `npm test -w @omp-studio/studio-host` | **通过** | 118 tests |
-| `npm test -w @omp-studio/host-client-api` | **通过** | 134 tests |
-| `npm test -w @omp-studio/client` | **通过** | 初跑 37；2026-08-15 14:52 重跑 **38**（含 04 `message.completed` after abort 保留 aborted view） |
-| `npm test -w @omp-studio/transport-desktop` | **通过** | 40 tests（含 suite 新增 transcript/conversation 断言） |
-| `npm test -w @omp-studio/testkit` | **通过** | 71 pass / **4 skip**（见故障矩阵） |
-| `npm test -w @omp-studio/desktop` | **通过** | 初跑与 14:52 重跑均为 **100**（含 2 条 conversation-gate） |
-| `npm test -w @omp-studio/renderer` | **通过** | 初跑 32；14:52 重跑 **36**（含 7 条 conversation-gate + 06 sessionLifecycle + 05 truncated DOM） |
+| `npm test -w @step-studio/studio-protocol` | **通过** | 36 tests |
+| `npm test -w @step-studio/studio-host` | **通过** | 118 tests |
+| `npm test -w @step-studio/host-client-api` | **通过** | 134 tests |
+| `npm test -w @step-studio/client` | **通过** | 初跑 37；2026-08-15 14:52 重跑 **38**（含 04 `message.completed` after abort 保留 aborted view） |
+| `npm test -w @step-studio/transport-desktop` | **通过** | 40 tests（含 suite 新增 transcript/conversation 断言） |
+| `npm test -w @step-studio/testkit` | **通过** | 71 pass / **4 skip**（见故障矩阵） |
+| `npm test -w @step-studio/desktop` | **通过** | 初跑与 14:52 重跑均为 **100**（含 2 条 conversation-gate） |
+| `npm test -w @step-studio/renderer` | **通过** | 初跑 32；14:52 重跑 **36**（含 7 条 conversation-gate + 06 sessionLifecycle + 05 truncated DOM） |
 | `npm run omp:verify:patches` | **失败** | vendor `omp-patch/vendor/oh-my-pi` 工作树不干净。任务禁止 reset。脚本在 apply 前要求 porcelain empty。 |
 | 替代：干净 worktree 对 0001–0017 `git apply --check` 再 apply | **通过** | detached HEAD `45e12e5`；`ALL_PATCHES_OK`；随后 `worktree remove --force`。**未**跑 vendor `bun test` / 根 `check`（那是原脚本后半段）。 |
 | `npm run runtime:verify-source` | **通过** | `Verified OMP source commit 45e12e5bb758198a920c6070e7e64cb33b21beac` |
 | `npm run conversation:e2e` | **未跑通（exit 2）** | Electron/desktop entry 存在；未设置可用的 `OMP_RUNTIME_EXECUTABLE`。骨架不宣称成功。 |
-| `npm run typecheck -w @omp-studio/desktop` | **通过** | 含 conversation-gate |
-| `npm run typecheck -w @omp-studio/testkit` | **通过** | 含于 `npm run check` 前半段 |
-| `npm run typecheck -w @omp-studio/renderer` | **通过** | 2026-08-15 14:52 重跑：06 已修 `sessionLifecycle.test.ts` 品牌类型与 `SessionHistoryEntry` 字段 |
+| `npm run typecheck -w @step-studio/desktop` | **通过** | 含 conversation-gate |
+| `npm run typecheck -w @step-studio/testkit` | **通过** | 含于 `npm run check` 前半段 |
+| `npm run typecheck -w @step-studio/renderer` | **通过** | 2026-08-15 14:52 重跑：06 已修 `sessionLifecycle.test.ts` 品牌类型与 `SessionHistoryEntry` 字段 |
 | `npm run check` | **通过** | 2026-08-15 14:52 重跑 exit 0。typecheck 全包通过后根 `npm test` 跑完（desktop 100 pass）。**不**等于真 Runtime E2E 通过，也 **不**等于完整闭环。 |
 
-根 `npm test` 现已包含 `@omp-studio/host-client-api` 与 `@omp-studio/renderer`。`check` = typecheck && test；本回合二者均通过。
+根 `npm test` 现已包含 `@step-studio/host-client-api` 与 `@step-studio/renderer`。`check` = typecheck && test；本回合二者均通过。
 
 ## 统一 fixtures（交付 1）
 
-全部经同一 contract validator。包应 import `@omp-studio/testkit`，不要再复制形状不同的对象。
+全部经同一 contract validator。包应 import `@step-studio/testkit`，不要再复制形状不同的对象。
 
 | 类别 | 导出 |
 |---|---|
@@ -199,7 +199,7 @@
 
 本次环境：
 
-- 隔离临时 workspace 已创建（例：`%TEMP%\omp-studio-conversation-e2e-*`，含无害 `package.json` / README）  
+- 隔离临时 workspace 已创建（例：`%TEMP%\step-studio-conversation-e2e-*`，含无害 `package.json` / README）  
 - `node_modules/electron/cli.js` 与 `apps/desktop/dist/src/main.js` 存在  
 - `OMP_RUNTIME_EXECUTABLE` 未配置 → **exit 2**  
 - 即使配置了 omp.exe，骨架也 **没有** 接好自动化驱动 Electron；仍须人工。不要把 fixture 测试写成真 E2E。
@@ -282,14 +282,14 @@
 
 ### 计划 06 — 已解除 `check` 阻塞
 
-`sessionLifecycle.test.ts` 品牌类型与 `SessionHistoryEntry` 字段已修。`npm run typecheck -w @omp-studio/renderer` 与根 `npm run check` 已通过。新对话仍禁用，等待 `session.create`。
+`sessionLifecycle.test.ts` 品牌类型与 `SessionHistoryEntry` 字段已修。`npm run typecheck -w @step-studio/renderer` 与根 `npm run check` 已通过。新对话仍禁用，等待 `session.create`。
 
 ### 计划 04
 
 - abort 与 `message.completed` 竞态：**已合入**（保留 aborted view）。  
 - `CONVERSATION_STATE_ITEM_CAP=500` 与「1000 条分页仍全保留」的计划表述不一致。  
 - transcript 路径无第二层 secret redact（若要 Host defense-in-depth）。  
-- 可选：测试改为复用 `@omp-studio/testkit` conversation fixtures。
+- 可选：测试改为复用 `@step-studio/testkit` conversation fixtures。
 
 ### 计划 05
 

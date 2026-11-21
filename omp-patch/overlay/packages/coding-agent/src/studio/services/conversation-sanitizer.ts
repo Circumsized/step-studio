@@ -190,7 +190,7 @@ export function sanitizeToolArguments(
 	return { arguments: sanitized.value, truncated: sanitized.truncated };
 }
 
-/** FNV-1a 32-bit hex. Must match `@omp-studio/studio-protocol` `fnv1aHex`. */
+/** FNV-1a 32-bit hex. Must match `@step-studio/studio-protocol` `fnv1aHex`. */
 export function fnv1aHex(text: string): string {
 	let hash = 0x811c9dc5;
 	for (let index = 0; index < text.length; index++) {

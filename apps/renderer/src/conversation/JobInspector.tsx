@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
-import type { JobInspection } from "@omp-studio/studio-protocol";
+import type { StudioClient } from "@step-studio/client-contract";
+import type { JobInspection } from "@step-studio/studio-protocol";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import { JobWidget } from "./JobWidget";

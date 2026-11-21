@@ -1,5 +1,5 @@
-import type { SessionOwnerState } from "@omp-studio/studio-protocol";
-import type { ContextViewOperation, ContextViewResultMap, SessionModelsListResult } from "@omp-studio/studio-protocol";
+import type { SessionOwnerState } from "@step-studio/studio-protocol";
+import type { ContextViewOperation, ContextViewResultMap, SessionModelsListResult } from "@step-studio/studio-protocol";
 import type {
   AgentTranscriptPage,
   CommandId,
@@ -14,7 +14,7 @@ import type {
   StudioPendingInteraction,
   StudioReceipt,
   StudioRequest,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { StudioBridgeClient } from "./bridge-client.js";
 import { BtwEventFanout, type StudioBtwForward } from "./btw-events.js";
 import { CommandLedger } from "./command-ledger.js";
@@ -400,4 +400,4 @@ export class StudioRuntimeSessionController {
     this.#btw.dispose();
   }
 }
-import type { PredictionQuery, PredictionResult } from "@omp-studio/studio-protocol";
+import type { PredictionQuery, PredictionResult } from "@step-studio/studio-protocol";

@@ -12,10 +12,10 @@ function api() {
   };
   return { value, emit: (text: string) => data({ id: "terminal", data: text }) };
 }
-afterEach(() => { cleanup(); globalThis.ompStudioTerminal = undefined; });
+afterEach(() => { cleanup(); globalThis.stepStudioTerminal = undefined; });
 
 it("keeps remote terminal output and identity while its target view is unmounted", async () => {
-  const remote = api(); globalThis.ompStudioTerminal = remote.value;
+  const remote = api(); globalThis.stepStudioTerminal = remote.value;
   let store!: TerminalSessions;
   function View() { const value = useTerminalSessions(); store = value.store; return <button onClick={() => void store.create("remote", "ws")}>create</button>; }
   const mounted = render(<TerminalSessionsProvider><View /></TerminalSessionsProvider>);

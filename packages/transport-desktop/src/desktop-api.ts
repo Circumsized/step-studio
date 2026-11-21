@@ -25,7 +25,7 @@ import type {
   QueryName,
   SubscriptionScope,
   Unsubscribe,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 /** Desktop shell surface consumed by the renderer-side transport adapter. */
 export interface OmpStudioDesktopApi {

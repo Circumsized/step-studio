@@ -1,4 +1,4 @@
-import type { ClientInteraction } from "@omp-studio/client-contract";
+import type { ClientInteraction } from "@step-studio/client-contract";
 
 export type ApprovalRisk = "high" | "medium" | "low";
 

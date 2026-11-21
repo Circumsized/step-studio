@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CommandInput, StudioClient } from "@omp-studio/client-contract";
-import type { DictationResultMap, DictationState } from "@omp-studio/studio-protocol";
+import type { CommandInput, StudioClient } from "@step-studio/client-contract";
+import type { DictationResultMap, DictationState } from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { useExecutionTarget } from "../workspaces/ExecutionTargets";

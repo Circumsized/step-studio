@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { OperatorStateSnapshot, StudioPlanSaveAndQuitResult } from "@omp-studio/studio-protocol";
+import type { OperatorStateSnapshot, StudioPlanSaveAndQuitResult } from "@step-studio/studio-protocol";
 
 // App imports the terminal surface, but these pure wiring tests never render it.
 // Keep xterm's canvas initialization out of jsdom so the test has no noisy stderr.

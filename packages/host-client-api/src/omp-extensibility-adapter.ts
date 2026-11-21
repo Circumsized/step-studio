@@ -24,7 +24,7 @@ import type {
   PluginRecord,
   PluginSourceKind,
   SkillRecord,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 import { redactText, sanitizeDisplayText } from "./read-models.js";
 import type { HostExtensibilityService } from "./services.js";

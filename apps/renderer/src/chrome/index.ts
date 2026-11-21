@@ -1,13 +1,13 @@
 //! The renderer's only door to the desktop shell.
 //!
-//! Before this module existed, every feature asked `globalThis.ompStudioChrome`
+//! Before this module existed, every feature asked `globalThis.stepStudioChrome`
 //! for a method and branched on whether it came back. That is what made deleting
 //! Electron cascade: each missing member took a whole component with it, because
 //! "the method is not there" and "this machine cannot do that" were the same
 //! check, and the only available response to the first was to render nothing.
 //!
 //! The rule now is one line: **no file outside this module reads
-//! `globalThis.ompStudioChrome`.** A feature asks for a capability bit and
+//! `globalThis.stepStudioChrome`.** A feature asks for a capability bit and
 //! renders a degraded state when it is false, or calls a method it already knows
 //! is present.
 //!
@@ -19,11 +19,11 @@
 /**
  * The surface, as the preload declares it. Absent on a plain browser build.
  *
- * Derived rather than imported: `vite-env.d.ts` declares `ompStudioChrome`
+ * Derived rather than imported: `vite-env.d.ts` declares `stepStudioChrome`
  * inline and exports no name for it, and exporting one would mean editing that
  * declaration every time a member changes.
  */
-export type ChromeSurface = NonNullable<typeof globalThis.ompStudioChrome>;
+export type ChromeSurface = NonNullable<typeof globalThis.stepStudioChrome>;
 
 /**
  * One bit per capability, not per method.
@@ -81,7 +81,7 @@ export interface ChromeCapabilities {
 
 /** The shell's own surface, or `undefined` where there is no shell. */
 export function shellSurface(): ChromeSurface | undefined {
-  return globalThis.ompStudioChrome;
+  return globalThis.stepStudioChrome;
 }
 
 /** Whether a member is wired at all.

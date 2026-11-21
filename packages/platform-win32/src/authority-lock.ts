@@ -28,7 +28,7 @@ export const AUTHORITY_LOCK_MAX_ACQUIRE_RETRIES = 3;
 export const AUTHORITY_LOCK_METADATA_MAX_BYTES = 4096;
 
 /** Lock file name placed inside the profile directory. Internal; never exposed. */
-const LOCK_FILE_NAME = "omp-studio-authority.lock.json";
+const LOCK_FILE_NAME = "step-studio-authority.lock.json";
 
 /** Exact fields of a valid lock metadata record. */
 const METADATA_FIELDS = ["environmentKey", "ownerNonce", "createdAt"] as const;

@@ -5,7 +5,7 @@ import {
   runtimeProcessHandle,
   type ResourceHandle,
   type RuntimeProcessHandle,
-} from "@omp-studio/platform";
+} from "@step-studio/platform";
 import {
   Win32PlatformPort,
   Win32RuntimeContainment,
@@ -19,7 +19,7 @@ interface RecordedCall {
 
 function recordingServices(
   overrides: Partial<Win32PlatformServices> = {},
-  appDataDirectory = "C:\\Users\\operator\\AppData\\Local\\omp-studio",
+  appDataDirectory = "C:\\Users\\operator\\AppData\\Local\\step-studio",
 ): { services: Win32PlatformServices; calls: RecordedCall[] } {
   const calls: RecordedCall[] = [];
   const record = (method: string, ...args: unknown[]): void => {
@@ -80,12 +80,12 @@ test("Win32RuntimeContainment rejects a controller missing required methods", ()
 test("appDataDirectory returns the validated service-supplied directory", async () => {
   const { services, calls } = recordingServices();
   const port = new Win32PlatformPort(services);
-  assert.equal(await port.appDataDirectory(), "C:\\Users\\operator\\AppData\\Local\\omp-studio");
+  assert.equal(await port.appDataDirectory(), "C:\\Users\\operator\\AppData\\Local\\step-studio");
   assert.deepEqual(calls, [{ method: "appDataDirectory", args: [] }]);
 });
 
 test("appDataDirectory rejects relative, drive-relative, and empty directories", async () => {
-  for (const bad of ["AppData\\Local\\omp-studio", "omp-studio", "C:relative", ""]) {
+  for (const bad of ["AppData\\Local\\step-studio", "step-studio", "C:relative", ""]) {
     const { services } = recordingServices({}, bad);
     const port = new Win32PlatformPort(services);
     await assert.rejects(port.appDataDirectory(), /absolute Windows path|non-empty string/u);
@@ -103,7 +103,7 @@ test("appDataDirectory uses the current-user directory without assuming elevatio
 test("createPrivateEndpoint wraps the service authority as an opaque named-pipe endpoint", async () => {
   const { services, calls } = recordingServices();
   const port = new Win32PlatformPort(services);
-  const profile = "C:\\Users\\operator\\AppData\\Local\\omp-studio\\profiles\\default";
+  const profile = "C:\\Users\\operator\\AppData\\Local\\step-studio\\profiles\\default";
   const endpoint = await port.createPrivateEndpoint(profile);
   assert.equal(endpoint.kind, "named-pipe");
   assert.equal(endpoint.authority, "endpoint-authority-7f3a9c");
@@ -130,7 +130,7 @@ test("createPrivateEndpoint rejects an empty profile directory", async () => {
 test("createPrivateEndpoint rejects an empty opaque authority from the service", async () => {
   const { services } = recordingServices({ createCurrentUserOnlyEndpoint: async () => "" });
   const port = new Win32PlatformPort(services);
-  await assert.rejects(port.createPrivateEndpoint("C:\\Users\\operator\\AppData\\Local\\omp-studio"), /non-empty string/u);
+  await assert.rejects(port.createPrivateEndpoint("C:\\Users\\operator\\AppData\\Local\\step-studio"), /non-empty string/u);
 });
 
 test("containment maps opaque handles to native controller calls in order", async () => {

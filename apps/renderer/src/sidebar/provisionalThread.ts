@@ -1,4 +1,4 @@
-import type { SessionHistoryEntry, SessionId, WorkspaceId } from "@omp-studio/client-contract";
+import type { SessionHistoryEntry, SessionId, WorkspaceId } from "@step-studio/client-contract";
 
 export const PROVISIONAL_THREAD_TITLE_CODE_POINTS = 20;
 

@@ -97,7 +97,7 @@ async function main() {
     await verifyTrustedKeys();
     console.log("Trusted keys verification passed.");
   } else if (command === "generate") {
-    let keyId = "omp-studio-release-2026a";
+    let keyId = "step-studio-release-2026a";
     const keyIdIdx = args.indexOf("--key-id");
     if (keyIdIdx !== -1 && args[keyIdIdx + 1]) {
       keyId = args[keyIdIdx + 1];

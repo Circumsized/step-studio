@@ -8,7 +8,7 @@
  * uses). Each shot is `preview-app-harness.html?preview=1&route=<id>`, so every
  * page renders with preview fixtures and no Host.
  *
- * What this is for: M4.1 要的是「六页面与 omp-studio 逐页一致」，而那只有人能判。
+ * What this is for: M4.1 要的是「六页面与 step-studio 逐页一致」，而那只有人能判。
  * 这个脚本不试图替代那个判断——它把判断的成本降到最低：一次跑出全部页面、
  * 固定视口、固定主题、固定语言、无演示标记噪声，人只需要逐张看。
  *
@@ -346,4 +346,4 @@ for (const scenario of unreachable) {
 
 await browser.close();
 console.log(`\n${PAGES.length} pages captured to ${path.relative(root, outDir)}/`);
-console.log("Next: compare each against omp-studio by eye. The script does not diff — there is no reference set in this repo.");
+console.log("Next: compare each against step-studio by eye. The script does not diff — there is no reference set in this repo.");

@@ -13,8 +13,8 @@
  * receipt.
  */
 
-import type { WorkspaceId, WorkspaceListReadModel, WorkspaceRecord } from "@omp-studio/client-contract";
-import type { StoredWorkspace, WorkspaceRegistry } from "@omp-studio/studio-host";
+import type { WorkspaceId, WorkspaceListReadModel, WorkspaceRecord } from "@step-studio/client-contract";
+import type { StoredWorkspace, WorkspaceRegistry } from "@step-studio/studio-host";
 
 import { sanitizeDisplayText } from "./read-models.js";
 import type { HostWorkspaceService } from "./services.js";

@@ -6,10 +6,10 @@ typed Studio Bridge.
 
 ```
 Renderer (apps/renderer)
-  → @omp-studio/client          StudioClient + conversation reducer
-  → transport-desktop           preload `window.ompStudio`
+  → @step-studio/client          StudioClient + conversation reducer
+  → transport-desktop           preload `window.stepStudio`
   → apps/desktop                ipc.ts
-  → @omp-studio/host-client-api product facade
+  → @step-studio/host-client-api product facade
         ├─ Host-owned: session catalog, archive, models.yml,
         │              skills scan, git, workspace registry
         └─ Runtime Bridge: studio-host
@@ -20,16 +20,16 @@ Renderer (apps/renderer)
 
 | Package | Responsibility |
 |---|---|
-| `@omp-studio/studio-protocol` | Bridge frames, command kinds, validators |
-| `@omp-studio/client-contract` | Renderer-visible queries, commands, read models |
-| `@omp-studio/client` | Client state machine, conversation reducer |
-| `@omp-studio/host-client-api` | Facade: query/command → Host or Runtime |
-| `@omp-studio/studio-host` | Runtime process, Bridge, ledger, catalog, telemetry |
-| `@omp-studio/transport-desktop` | Fixed IPC channel names and validation |
-| `@omp-studio/transport-web` | Optional local web transport |
-| `@omp-studio/runtime-installer` | Signed artifact install / rollback |
-| `@omp-studio/platform*` | Single-instance lock, Job Object, private endpoint |
-| `@omp-studio/testkit` | Shared fixtures and contract suites |
+| `@step-studio/studio-protocol` | Bridge frames, command kinds, validators |
+| `@step-studio/client-contract` | Renderer-visible queries, commands, read models |
+| `@step-studio/client` | Client state machine, conversation reducer |
+| `@step-studio/host-client-api` | Facade: query/command → Host or Runtime |
+| `@step-studio/studio-host` | Runtime process, Bridge, ledger, catalog, telemetry |
+| `@step-studio/transport-desktop` | Fixed IPC channel names and validation |
+| `@step-studio/transport-web` | Optional local web transport |
+| `@step-studio/runtime-installer` | Signed artifact install / rollback |
+| `@step-studio/platform*` | Single-instance lock, Job Object, private endpoint |
+| `@step-studio/testkit` | Shared fixtures and contract suites |
 
 Authoritative lists:
 

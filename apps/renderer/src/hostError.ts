@@ -4,7 +4,7 @@ import type {
   CommandState,
   StudioClient,
   Unsubscribe,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 const RECEIPT_TIMEOUT_MS = 120_000;
 

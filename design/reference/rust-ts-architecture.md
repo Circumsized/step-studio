@@ -41,16 +41,16 @@ OMP Studio 在 Electron 下的痛苦，核心不在于“有一个 WebView 在�
 💎 对你而言的实际结论
 Tauri 给你的不是“没有 WebView”，而是把 Electron 的“N 个 Chromium renderer”替换为“1 个系统 WebView + Rust 后端” 的机会。OMP Studio 如果能在迁移时把标签页、面板、终端都收敛到单一 WebView 内的前端组件树，那么收益是真实的——内存从“每标签页 50–100 MB”降到“总量 30–50 MB”量级，这个判断在 AgentMux 的案例中有直接数据支撑。
 但如果你因为某些功能需要（比如终端隔离、重型插件沙箱）而决定保留多 WebView 实例，那么 Tauri 相对 Electron 的优势会大幅收窄，甚至在某些重负载下（如上面的视频场景）可能没有优势。Tauri 是“少开 WebView 才省资源”的框架，不是“WebView 本身免费”的魔法。
-从 omp-studio（原版通常基于 Electron 三进程架构）迁移并构建你自己的 Step Studio（Rust + TypeScript 架构），方向非常精准。
+从 step-studio（原版通常基于 Electron 三进程架构）迁移并构建你自己的 Step Studio（Rust + TypeScript 架构），方向非常精准。
 在动手设计架构前，首先需要校准一个关键的技术认知：Electron 之所以内存占用高、开销大、启动慢，并不是因为它“使用了系统的 WebView”，恰恰相反，是因为它“不使用系统 WebView”，而是为每个应用硬塞了一整套完整的 Chromium 浏览器内核 + 完整的 Node.js 运行时。这导致哪怕是一个空窗口，也会拉起主进程、GPU 进程、多个渲染进程和实用工具进程，起步吃掉 150MB 至 300MB 内存，安装包体积动辄 100MB 以上。
 当你决定切换到 Rust + TypeScript 技术栈时，围绕“如何处理 UI 渲染层与 Agent 运行时”，有三条截然不同的架构演进路线，以及一系列决定成败的性能拐点。
 一、 三条核心架构路线选型
-在立项阶段，你需要先根据 对 omp-studio 现有 TS 前端代码的复用诉求 与 极致性能目标 做出路线抉择：
+在立项阶段，你需要先根据 对 step-studio 现有 TS 前端代码的复用诉求 与 极致性能目标 做出路线抉择：
 | 架构路线 | 核心技术组合 | 内存与体积表现 | 核心优势与适用场景 |
 |---|---|---|---|
 | 路线 1：系统级瘦身（最推荐）
 Rust 宿主内核 + OS 原生 WebView | Tauri v2 (Rust) + React / SolidJS (TS) | 安装包 3MB–8MB
-空载内存 40MB–80MB | 砍掉捆绑的 Chromium 与 Node.js，直接调用系统原生 WebView（Windows WebView2 / Linux WebKitGTK / macOS WKWebView），可最大化复用 omp-studio 现有的 TS 界面代码，同时将重 I/O、Git、终端全部下沉至 Rust。 |
+空载内存 40MB–80MB | 砍掉捆绑的 Chromium 与 Node.js，直接调用系统原生 WebView（Windows WebView2 / Linux WebKitGTK / macOS WKWebView），可最大化复用 step-studio 现有的 TS 界面代码，同时将重 I/O、Git、终端全部下沉至 Rust。 |
 | 路线 2：零壳常驻架构
 Rust 本地守护进程 + 浏览器工作台 | Rust (Axum + Tokio) + Vite TS SPA / PWA | 服务端仅 15MB–30MB
 额外浏览器内核开销为 0 | 这正是 Zeta (Work Studio) 和 OpenCode 采用的路线。不打包任何桌面 WebView 壳，Rust 作为后台极轻量 Daemon 运行，界面直接复用用户本就打开的主力浏览器（支持 --app 独立窗口模式）。 |
@@ -113,7 +113,7 @@ Rust 原生 GPU 渲染 + 嵌入式 TS 运行时 | Zed gpui / Iced (Rust UI) + de
 | 功能模块 | 推荐开源组件 / 框架 | 为什么选它（对比传统 Electron 常见重型组件的收益） |
 |---|---|---|
 | UI 视图框架 | SolidJS（极致性能首选）
-或 React 19（生态复用首选） | 若从零写 UI，SolidJS 无虚拟 DOM、基于细粒度信号（Signals）更新，在高频流式 Token 输出场景下 CPU 与内存开销比 React 低 30%–50%；若想直接移植 omp-studio 现有组件，则用 React 19 并开启 React Compiler。 |
+或 React 19（生态复用首选） | 若从零写 UI，SolidJS 无虚拟 DOM、基于细粒度信号（Signals）更新，在高频流式 Token 输出场景下 CPU 与内存开销比 React 低 30%–50%；若想直接移植 step-studio 现有组件，则用 React 19 并开启 React Compiler。 |
 | 轻量状态管理 | Zustand 或 Nanostores | 极简、无冗余 Context 重渲染开销，非常适合通过外部 WebSocket / IPC 流直接驱动外部 Store 更新。 |
 | 代码编辑器与 Diff | CodeMirror 6
 （替代 Monaco Editor） | 关键减负点：VS Code 的 Monaco Editor 体积庞大且极吃内存；CodeMirror 6 采用高度模块化架构，内存占用不到 Monaco 的 1/5，且对大文件虚拟滚动和自定义 Agent 行内批注（Inline Widget）支持极佳。 |

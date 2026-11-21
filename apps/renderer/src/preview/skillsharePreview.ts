@@ -1,4 +1,4 @@
-import type { SkillshareResultMap } from "@omp-studio/studio-protocol";
+import type { SkillshareResultMap } from "@step-studio/studio-protocol";
 const hit = { package: "@studio/service-review", description: "检查服务配置与运行日志，保存配置后由使用者明确启动。", version: "1.2.0", downloads: 184, updatedAt: 1789948800000 };
 export const PREVIEW_SKILLSHARE_STATUS: SkillshareResultMap["skillshare.status"] = { registry: "https://skills.omp.sh", accountAuthenticated: true, publishAuthenticated: true, privateTokenChannel: true, actions: [] };
 export const PREVIEW_SKILLSHARE_SEARCH: SkillshareResultMap["skillshare.search"] = { hits: [hit], total: 1, page: 0, perPage: 20 };

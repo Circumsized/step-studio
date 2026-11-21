@@ -1,5 +1,5 @@
 {
-  "name": "@omp-studio/client-contract",
+  "name": "@step-studio/client-contract",
   "version": "0.1.17",
   "private": true,
   "type": "module",
@@ -19,6 +19,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@omp-studio/studio-protocol": "0.1.17"
+    "@step-studio/studio-protocol": "0.1.17"
   }
 }

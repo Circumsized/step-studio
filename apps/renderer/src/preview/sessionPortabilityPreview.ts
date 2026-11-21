@@ -1,4 +1,4 @@
-import type { PortableExport, SessionImportPreview } from "@omp-studio/studio-protocol";
+import type { PortableExport, SessionImportPreview } from "@step-studio/studio-protocol";
 export const PREVIEW_TRANSFER_SESSIONS = [
   { sessionId: "demo-archive-queue", title: "消息队列恢复与附件验证" },
   { sessionId: "demo-archive-browser", title: "浏览器观察与人工接管" },

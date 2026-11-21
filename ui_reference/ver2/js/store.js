@@ -10,7 +10,7 @@
      written here and restored verbatim on reload.
      ========================================================================== */
 
-  const LS_KEY = 'omp-studio:v2';
+  const LS_KEY = 'step-studio:v2';
 
   /* Which slices of state survive a reload. Everything else is ephemeral. */
   const PERSISTED = [

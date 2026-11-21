@@ -9,7 +9,7 @@
 //! | Settings | a mapping table | **Keep the unknown key.** A setting a newer version wrote is not corrupt, and deleting it loses the user's choice on downgrade. |
 //! | Schema | a step number | **Refuse to start, and say so.** A schema with no version is not an old one, it is an unrecognisable one, and guessing would corrupt the index. |
 //!
-//! Only this fork's own data is in scope. `omp-studio`'s user data is not: the
+//! Only this fork's own data is in scope. `step-studio`'s user data is not: the
 //! product is a fork, not an upgrade replacement, and the configuration directory
 //! differs — so there is nothing to migrate from it and no reason to try.
 

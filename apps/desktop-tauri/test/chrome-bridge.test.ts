@@ -1,5 +1,5 @@
 /**
- * The `ompStudioChrome` bridge: what it exposes, and that every command it
+ * The `stepStudioChrome` bridge: what it exposes, and that every command it
  * reaches actually exists on the Rust side.
  *
  * The second half is the point. A renamed `#[tauri::command]` or a dropped

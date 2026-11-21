@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { StudioClient } from "@omp-studio/client-contract";
-import type { McpAuthResult } from "@omp-studio/studio-protocol";
+import type { StudioClient } from "@step-studio/client-contract";
+import type { McpAuthResult } from "@step-studio/studio-protocol";
 import { hostErrorMessage, waitReceipt } from "../hostError";
 import "./mcpAuth.css";
 

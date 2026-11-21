@@ -130,7 +130,7 @@ export class StudioBrowserObservationService {
 		const tabId = studioTabIdentity(tab);
 		const endpoint =
 			process.platform === "win32"
-				? "\\\\.\\pipe\\omp-studio-browser-" + id
+				? "\\\\.\\pipe\\step-studio-browser-" + id
 				: path.join(this.socketDirectory!, browserObservationSocketName(id));
 		if (process.platform !== "win32" && Buffer.byteLength(endpoint) > 103)
 			throw new SessionControlError("COMMAND_BLOCKED", "Browser observation socket path is too long");

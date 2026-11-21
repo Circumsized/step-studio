@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RuntimeConnection } from "@omp-studio/client-contract";
+import type { RuntimeConnection } from "@step-studio/client-contract";
 import { HomePage, SecondaryPage } from "./HomePage";
 import { PAGE_EXIT_MS } from "./pageTransition";
 import { PreviewModeProvider } from "./preview/PreviewContext";

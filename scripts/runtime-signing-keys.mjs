@@ -1,7 +1,7 @@
 /**
  * Local managed-Runtime signing keys.
  *
- * Lives under the Host profile (`%APPDATA%\omp-studio\keys` on Windows),
+ * Lives under the Host profile (`%APPDATA%\step-studio\keys` on Windows),
  * never in the git repository. Env vars still win when both are set.
  *
  *   npm run omp:keys
@@ -16,13 +16,13 @@ import { fileURLToPath } from "node:url";
 export const RUNTIME_KEY_ID_FILE = "key-id.txt";
 export const RUNTIME_PUBLIC_KEY_FILE = "trusted-public.pem";
 export const RUNTIME_PRIVATE_KEY_FILE = "signing-private.pem";
-export const DEFAULT_RUNTIME_KEY_ID = "omp-studio-local";
+export const DEFAULT_RUNTIME_KEY_ID = "step-studio-local";
 
 export function defaultRuntimeKeysDirectory() {
   if (process.platform === "darwin") {
-    return join(homedir(), "Library", "Application Support", "omp-studio", "keys");
+    return join(homedir(), "Library", "Application Support", "step-studio", "keys");
   }
-  return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "omp-studio", "keys");
+  return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "step-studio", "keys");
 }
 
 async function exists(path) {

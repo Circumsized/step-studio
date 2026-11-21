@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { StudioClient } from "@step-studio/client-contract";
 import { I18nProvider } from "../i18n";
 import { RuntimeQueue, queueTakebackSnapshot } from "./RuntimeQueue";
 vi.mock("../hostError",()=>({waitReceipt:async(client:{results:Record<string,unknown>},id:string)=>client.results[id],hostErrorMessage:(error:Error)=>error.message}));

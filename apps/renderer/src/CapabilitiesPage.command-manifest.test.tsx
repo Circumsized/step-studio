@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { OperatorCommandManifest, OperatorCommandManifestEntry } from "@omp-studio/studio-protocol";
-import type { StudioClient } from "@omp-studio/client-contract";
+import type { OperatorCommandManifest, OperatorCommandManifestEntry } from "@step-studio/studio-protocol";
+import type { StudioClient } from "@step-studio/client-contract";
 import { CapabilitiesPage } from "./CapabilitiesPage";
 import type { StudioSlashCommand } from "./composer/commands";
 import { PreviewModeProvider } from "./preview/PreviewContext";

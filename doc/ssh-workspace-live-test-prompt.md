@@ -10,7 +10,7 @@
 
 ## 1. 工作目录和先读材料
 
-工作目录：`D:\Project\omp-studio\.claude\worktrees\trusting-khorana-a24ebe`
+工作目录：`D:\Project\step-studio\.claude\worktrees\trusting-khorana-a24ebe`
 
 预期分支：`claude/trusting-khorana-a24ebe`。先核对实际分支、HEAD 和 `git status`，不要切换分支。全部命令在此工作树执行，不进入原仓库根目录。
 
@@ -49,8 +49,8 @@
 
 1. 记录本机 OS / Node / npm / OpenSSH；远端 OS / 架构 / Node / Git / SSH 版本、Windows 登录 shell（只读，不修改）。主机地址、账号只在必要时脱敏描述，不复制完整个人 SSH 配置。
 2. 两台主机分别做少量、有限超时的系统 SSH 基线探测。ucloud 历史有 TCP 超时；若失败，至多补做两次有间隔的对照，不循环刷连接。区分系统 SSH 也失败与仅应用失败。
-3. 每台主机创建唯一运行标识，例如 `omp-studio-recovery-<timestamp>-<random>`，先确保目标目录不存在，再创建。优先使用远端实际临时目录：Windows 从远端 Node 的 `os.tmpdir()` 得到；Ubuntu 可用该账户私有缓存目录。记录本轮拥有的精确路径。
-4. **新建独立 Host root/state 与测试项目**，不能使用默认生产 `omp-studio/remote/state`。测试工作区包含中文和空格，例如 `稳定性 test project`；创建本机另一个同名文件作为不应被修改的哨兵。
+3. 每台主机创建唯一运行标识，例如 `step-studio-recovery-<timestamp>-<random>`，先确保目标目录不存在，再创建。优先使用远端实际临时目录：Windows 从远端 Node 的 `os.tmpdir()` 得到；Ubuntu 可用该账户私有缓存目录。记录本轮拥有的精确路径。
+4. **新建独立 Host root/state 与测试项目**，不能使用默认生产 `step-studio/remote/state`。测试工作区包含中文和空格，例如 `稳定性 test project`；创建本机另一个同名文件作为不应被修改的哨兵。
 5. 新增脚本放当前工作树 `tmp/ssh-recovery-<run-id>/` 等独立测试目录，不和下载/解压内容混放。下载/解压各用新的空目录，不从其中运行解释器；读取不可信文件的 Python 用 `-I`。
 6. 可以注入 manager 的 `services.probeRemote`：实际调用产品 `probeRemote`，仅将返回的 `environment.root` 改为本轮私有 root；`deployRemote` / `attachRemote` / OpenSSH / 远端 Host 都使用真实实现。完整记录这项隔离，不改生产源码或全局环境来改变默认根。
 7. 测试 UI 时也必须隔离本机 userData/profile 与远端数据根。先核对项目真实支持的启动/注入方式，不能凭猜测传参数。若正常 Electron 无可用隔离入口，可以写独立 Electron 测试入口，复用真实 preload/IPC/manager，并只注入测试目录；报告要标注这是测试入口，不冒充正常安装包。无法隔离就将该项标阻塞，不冒险接管用户默认 Host。
@@ -68,7 +68,7 @@ node --test apps/desktop/dist/test/remote-*.test.js
 ```
 
 ```bash
-npm run test -w @omp-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/workspaces/remoteTransport.test.ts src/workspaces/SshPasswordDialog.test.tsx src/conversation/useConversation.test.ts src/conversation/conversation.test.tsx src/terminalSessions.test.tsx src/sidebar/useProjectHistories.test.ts
+npm run test -w @step-studio/renderer -- src/workspaces/ExecutionTargets.test.tsx src/workspaces/remoteTransport.test.ts src/workspaces/SshPasswordDialog.test.tsx src/conversation/useConversation.test.ts src/conversation/conversation.test.tsx src/terminalSessions.test.tsx src/sidebar/useProjectHistories.test.ts
 ```
 
 保留退出码与通过/失败/跳过计数。若临时目录被策略阻止，可为本次测试设置工作树内的新 TEMP/TMP/TMPDIR；不要修改全局设置。构建删除被拒不能擅自移动/删除目标来绕过权限。长命令后台执行，结束后读取结果。

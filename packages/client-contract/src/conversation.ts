@@ -17,7 +17,7 @@ export type {
   JsonValue,
   OpaqueCursor,
   SessionTranscriptRead,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 export {
   CONVERSATION_LIMITS,
@@ -31,12 +31,12 @@ export {
   tailUtf8,
   truncateUtf8,
   utf8ByteLength,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import type {
   ConversationItem,
   OpaqueCursor,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import type { SessionId } from "./ids.js";
 

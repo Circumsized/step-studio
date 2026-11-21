@@ -9,13 +9,13 @@ import type {
   ClientBootstrap,
   CommandInput,
   StudioClient,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import type {
   SessionOptionsResultMap,
   SessionSpeedState,
   SessionWarmingState,
   StudioSpeed,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { useI18n } from "../i18n";
 import { hostErrorMessage, waitReceipt } from "../hostError";

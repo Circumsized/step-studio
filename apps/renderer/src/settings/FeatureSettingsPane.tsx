@@ -1,6 +1,6 @@
 import { AppSelect } from "../AppSelect";
 import { useEffect, useState } from "react";
-import type { FeatureSettingKey, FeatureSettingRow, FeatureSettingValue } from "@omp-studio/studio-protocol";
+import type { FeatureSettingKey, FeatureSettingRow, FeatureSettingValue } from "@step-studio/studio-protocol";
 import { useI18n } from "../i18n";
 import { SettingRow, Switch } from "./SettingRow";
 import { useFeatureSettings, type FeatureSettingsProps } from "./useFeatureSettings";

@@ -10,6 +10,6 @@
     }
   },
   "build": {
-    "beforeBuildCommand": "npm run build:bridge && npm run build -w @omp-studio/renderer && cargo build --release --target x86_64-pc-windows-msvc -p step-studio-host -p step-studio-runtime"
+    "beforeBuildCommand": "npm run build:bridge && npm run build -w @step-studio/renderer && cargo build --release --target x86_64-pc-windows-msvc -p step-studio-host -p step-studio-runtime"
   }
 }

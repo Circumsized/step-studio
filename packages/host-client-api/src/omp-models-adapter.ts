@@ -1,6 +1,6 @@
 import { createModelCatalogService, createModelOriginStore } from "./model-adaptation.js";
-import { modelParameterValues, parseModelThinkingConfig, providerModelYamlNode, providerOverrideYamlNode } from "@omp-studio/client-contract";
-import type { ModelParameterValues, ModelParameterSources } from "@omp-studio/client-contract";
+import { modelParameterValues, parseModelThinkingConfig, providerModelYamlNode, providerOverrideYamlNode } from "@step-studio/client-contract";
+import type { ModelParameterValues, ModelParameterSources } from "@step-studio/client-contract";
 import { migrateModelRoleConfig } from "./model-role-migration.js";
 import { readWebRouting, writeWebRouting } from "./web-routing.js";
 /**
@@ -46,8 +46,8 @@ import type {
   ModelWebSearchCredentialSetInput,
   ModelWebSearchCredentialRemoveInput,
   WebSearchConfigReadModel,
-} from "@omp-studio/client-contract";
-import { BUILTIN_MODEL_ROLES, parseModelKind, isModelEnvConfigName, parseCacheThinkingEfforts, parseModelThinkingEfforts, parseModelPricing } from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
+import { BUILTIN_MODEL_ROLES, parseModelKind, isModelEnvConfigName, parseCacheThinkingEfforts, parseModelThinkingEfforts, parseModelPricing } from "@step-studio/client-contract";
 
 import { parse as parseYaml, stringify as stringifyYaml, parseDocument } from "yaml";
 import { parseModelsYml, redactModelsYmlText, restoreRedactedApiKeys, serializeModelsYml, type YamlValue } from "./models-yml.js";
@@ -2092,7 +2092,7 @@ export function createOmpModelsService(options: OmpModelsAdapterOptions = {}): H
         .prepare(
           "UPDATE auth_credentials SET disabled_cause = ?, updated_at = strftime('%s','now') WHERE provider = ? AND credential_type = 'api_key' AND disabled_cause IS NULL",
         )
-        .run("removed by omp-studio", authId) as { changes?: number };
+        .run("removed by step-studio", authId) as { changes?: number };
       return typeof result.changes === "number" ? result.changes : 0;
     } catch {
       throw { code: "UNAVAILABLE", message: "无法更新 auth 存储（agent.db）。" };

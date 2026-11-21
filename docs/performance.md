@@ -48,7 +48,7 @@ Main/Host 处于同一 Electron Main 进程，只采样一次。Renderer 使用�
 
 常规采样 60 秒一次、不重叠；首次、显著变化、资源计数改变或 5 分钟心跳才写日志。heap 变化门槛 5%，RSS/external/ArrayBuffer 10%，绝对变化不足 1MiB 时忽略比值噪声。固定的 chrome IPC 对 Renderer 样本校验可信 sender、白名单字段、有限非负数、大小和 60 秒限频。Runtime 使用专门的 `[studio.performance]` 数值 stderr 行进入既有 Host 日志链，不从日志推导业务状态。
 
-日志位于 `%APPDATA%\omp-studio\logs\host-YYYY-MM-DD.log`，事件 `performance.sample` / `runtime.stderr`。`role` 为 `main-host`、`renderer` 或 `runtime`；`instance` 为进程内诊断序号，不是 PID。字段 `rssBytes`、`heapUsedBytes`、`heapTotalBytes`、`externalBytes`、`arrayBuffersBytes` 分开解释，不能相加；ArrayBuffer 可能已包含于 external。未知字段省略，不用 0 冒充未知。Runtime 的 `workerResidency` 编码依次为 active=0、sleeping=1、recycling=2、reviving=3、dormant=4、failed=5。
+日志位于 `%APPDATA%\step-studio\logs\host-YYYY-MM-DD.log`，事件 `performance.sample` / `runtime.stderr`。`role` 为 `main-host`、`renderer` 或 `runtime`；`instance` 为进程内诊断序号，不是 PID。字段 `rssBytes`、`heapUsedBytes`、`heapTotalBytes`、`externalBytes`、`arrayBuffersBytes` 分开解释，不能相加；ArrayBuffer 可能已包含于 external。未知字段省略，不用 0 冒充未知。Runtime 的 `workerResidency` 编码依次为 active=0、sleeping=1、recycling=2、reviving=3、dormant=4、failed=5。
 
 ## 重复验证
 

@@ -2,7 +2,7 @@
    OMP Studio — Theme (Light / Dark)，localStorage 记忆
    ============================================================ */
 (function () {
-  const KEY = 'omp-studio-theme';
+  const KEY = 'step-studio-theme';
   function apply(t) {
     document.documentElement.setAttribute('data-theme', t);
     try { localStorage.setItem(KEY, t); } catch (e) {}

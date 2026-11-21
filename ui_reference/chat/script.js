@@ -121,7 +121,7 @@ found 0 vulnerabilities`
       {
         name: 'Write',
         status: 'success',
-        input: 'D:\\Project\\omp-studio\\ui_reference\\chat\\index.html',
+        input: 'D:\\Project\\step-studio\\ui_reference\\chat\\index.html',
         output: 'Successfully wrote 245 lines to index.html'
       },
       {

@@ -3,7 +3,7 @@
  * card shapes. Does not invent loaded/session facts.
  */
 
-import type { ExtensibilityReadModel, PluginRecord, SkillRecord } from "@omp-studio/client-contract";
+import type { ExtensibilityReadModel, PluginRecord, SkillRecord } from "@step-studio/client-contract";
 
 import type { DrawerItem, PluginPreview, SkillPreview } from "./skillsPreview";
 

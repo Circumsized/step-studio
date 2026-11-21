@@ -5,9 +5,9 @@
  * 打开 `preview-app-harness.html?preview=1` 会强制预览夹具，便于截图。
  */
 import { createRoot } from "react-dom/client";
-import { StudioClientImpl } from "@omp-studio/client";
-import type { ClientTransport } from "@omp-studio/client-contract";
-import { createContractFixtureApi } from "@omp-studio/testkit";
+import { StudioClientImpl } from "@step-studio/client";
+import type { ClientTransport } from "@step-studio/client-contract";
+import { createContractFixtureApi } from "@step-studio/testkit";
 
 import {
   STARTUP_NOTICE_ID,

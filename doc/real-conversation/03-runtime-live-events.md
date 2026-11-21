@@ -156,8 +156,8 @@ Runtime 已有的关键源事件包括：
 ## 10. 验收命令
 
 ```bash
-npm run typecheck -w @omp-studio/studio-protocol
-npm test -w @omp-studio/studio-protocol
+npm run typecheck -w @step-studio/studio-protocol
+npm test -w @step-studio/studio-protocol
 npm run omp:verify:patches
 ```
 

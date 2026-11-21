@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { CONVERSATION_LIMITS } from "@omp-studio/studio-protocol";
+import { CONVERSATION_LIMITS } from "@step-studio/studio-protocol";
 
 import { SessionArchiveError, StudioSessionArchiveReader } from "../src/index.js";
 
@@ -54,7 +54,7 @@ async function fixture(lines: readonly string[] = [userLine("m-1", "hello", null
   sessionFile: string;
   reader: StudioSessionArchiveReader;
 }> {
-  const root = await mkdtemp(join(tmpdir(), "omp-studio-archive-reader-"));
+  const root = await mkdtemp(join(tmpdir(), "step-studio-archive-reader-"));
   const workspace = join(root, "workspace");
   const sessionsRoot = join(root, "agent", "sessions");
   const archiveRoot = join(root, "agent", "archive", "sessions");

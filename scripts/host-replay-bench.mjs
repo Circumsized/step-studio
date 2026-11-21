@@ -24,8 +24,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ConversationEventFanout } from "@omp-studio/studio-host";
-import { parseConversationRuntimeEvent } from "@omp-studio/studio-protocol";
+import { ConversationEventFanout } from "@step-studio/studio-host";
+import { parseConversationRuntimeEvent } from "@step-studio/studio-protocol";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const RUNS = Number(process.env.PERF_BENCH_RUNS ?? 5);

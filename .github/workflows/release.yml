@@ -38,7 +38,7 @@ permissions:
 env:
   BUN_VERSION: "1.4.4"
 concurrency:
-  group: omp-studio-release
+  group: step-studio-release
   cancel-in-progress: false
 
 jobs:

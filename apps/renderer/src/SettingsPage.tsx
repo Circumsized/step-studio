@@ -43,7 +43,7 @@ import type {
   StudioRuntimeSettingKey,
   StudioRuntimeSettingValue,
   StudioRuntimeSettingsActivation,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 export const SETTINGS_INTENT_KEY = "omp.settingsIntent";
 
@@ -99,7 +99,7 @@ function SettingsPageContent({
   predictionSessionId,
   predictionAvailable = false,
 }: {
-  client?: import("@omp-studio/client-contract").StudioClient;
+  client?: import("@step-studio/client-contract").StudioClient;
   /** 当前 Runtime 审批模式；undefined = 无 Runtime 快照。 */
   approvalMode?: ApprovalModeId;
   onSetApprovalMode: (mode: ApprovalModeId) => void;

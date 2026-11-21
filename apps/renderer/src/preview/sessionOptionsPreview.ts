@@ -1,4 +1,4 @@
-import type { ModelPresetRow, SessionSpeedState, SessionWarmingState } from "@omp-studio/studio-protocol";
+import type { ModelPresetRow, SessionSpeedState, SessionWarmingState } from "@step-studio/studio-protocol";
 export const PREVIEW_MODEL_PRESETS: ModelPresetRow[] = [
   { name: "everyday", source: "global", active: true, roles: { default: "demo/swift", task: "demo/swift", judge: "demo/reason" }, thinking: "medium" },
   { name: "review", source: "project", active: false, roles: { default: "demo/reason", task: "demo/swift", judge: "demo/reason" }, thinking: "high" },

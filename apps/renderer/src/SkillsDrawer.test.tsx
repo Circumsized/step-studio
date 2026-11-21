@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { ExtensibilityReadModel, StudioClient } from "@omp-studio/client-contract";
+import type { ExtensibilityReadModel, StudioClient } from "@step-studio/client-contract";
 
 import { SkillsDrawer } from "./SkillsDrawer";
 import { PreviewModeProvider } from "./preview/PreviewContext";

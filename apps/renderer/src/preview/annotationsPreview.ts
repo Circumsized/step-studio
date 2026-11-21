@@ -1,4 +1,4 @@
-import type { AnnotationBundle } from "@omp-studio/studio-protocol";
+import type { AnnotationBundle } from "@step-studio/studio-protocol";
 export const PREVIEW_ANNOTATION_FILE = "export function greeting() {\n  return 'Hello Studio';\n}\n";
 export const PREVIEW_ANNOTATION_DIFF = "diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-const ready = false;\n+const ready = true;\n";
 export const PREVIEW_ANNOTATION_BUNDLE: AnnotationBundle = {

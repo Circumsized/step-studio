@@ -1,4 +1,4 @@
-import type { ConversationItem } from "@omp-studio/client-contract";
+import type { ConversationItem } from "@step-studio/client-contract";
 
 const T0 = "2026-08-17T04:00:00.000Z";
 const T1 = "2026-08-17T04:00:08.000Z";

@@ -5,7 +5,7 @@ import { useTerminalSessions, type TerminalSession as Session, type TerminalScre
 import { TerminalGraphicView } from "./TerminalGraphicView";
 import { TerminalRecordingControls } from "./recordings/TerminalRecordingControls";
 /**
- * Desktop-chrome integrated shell. Uses `window.ompStudioTerminal` when the
+ * Desktop-chrome integrated shell. Uses `window.stepStudioTerminal` when the
  * Electron preload is present; otherwise shows an honest unavailable state.
  * This is not Runtime TUI attach and does not talk to the Host contract.
  */
@@ -30,7 +30,7 @@ export const TerminalPane = forwardRef<TerminalPaneHandle, { visible: boolean; w
   ref,
 ) {
   const { t } = useI18n();
-  const api = globalThis.ompStudioTerminal;
+  const api = globalThis.stepStudioTerminal;
   const executionTarget = useExecutionTarget();
   const { store, sessions: allSessions, graphics, graphicsErrors } = useTerminalSessions();
   const sessions = allSessions.filter(session => session.targetId === executionTarget.id);
@@ -160,7 +160,7 @@ function XtermScreen({
   active,
 }: {
   session: Session;
-  api: NonNullable<typeof globalThis.ompStudioTerminal>;
+  api: NonNullable<typeof globalThis.stepStudioTerminal>;
   hosts: Map<string, Host>;
   pending: Map<string, string>;
   active: boolean;

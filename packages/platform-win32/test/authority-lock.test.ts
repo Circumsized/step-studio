@@ -38,21 +38,21 @@ function fakeServices(options: { alive?: boolean } = {}) {
 
 test("the default lock path keeps the historic Windows form", async () => {
   const fake = fakeServices();
-  const lock = new Win32AuthorityLock({ profileDirectory: "C:\\Users\\me\\AppData\\Roaming\\omp-studio\\", environmentKey: "desktop", services: fake.services });
+  const lock = new Win32AuthorityLock({ profileDirectory: "C:\\Users\\me\\AppData\\Roaming\\step-studio\\", environmentKey: "desktop", services: fake.services });
   await lock.acquire();
-  assert.deepEqual([...fake.files.keys()], ["C:\\Users\\me\\AppData\\Roaming\\omp-studio\\omp-studio-authority.lock.json"]);
+  assert.deepEqual([...fake.files.keys()], ["C:\\Users\\me\\AppData\\Roaming\\step-studio\\step-studio-authority.lock.json"]);
 });
 
 test("a POSIX profile keeps the lock file inside the profile directory", async () => {
   const fake = fakeServices();
   const lock = new Win32AuthorityLock({
-    profileDirectory: "/Users/me/Library/Application Support/omp-studio/",
+    profileDirectory: "/Users/me/Library/Application Support/step-studio/",
     environmentKey: "desktop",
     services: fake.services,
     pathStyle: "posix",
   });
   const lease = await lock.acquire();
-  assert.deepEqual([...fake.files.keys()], ["/Users/me/Library/Application Support/omp-studio/omp-studio-authority.lock.json"]);
+  assert.deepEqual([...fake.files.keys()], ["/Users/me/Library/Application Support/step-studio/step-studio-authority.lock.json"]);
   await lease.release();
   assert.equal(fake.files.size, 0);
 });
@@ -67,15 +67,15 @@ test("a live owner blocks a second owner and a dead owner is taken over", async 
   const dead = fakeServices({ alive: false });
   await new Win32AuthorityLock({ profileDirectory: "/p", environmentKey: "desktop", services: dead.services, pathStyle: "posix" }).acquire();
   const successor = await new Win32AuthorityLock({ profileDirectory: "/p", environmentKey: "desktop", services: dead.services, pathStyle: "posix" }).acquire();
-  assert.equal(JSON.parse(dead.files.get("/p/omp-studio-authority.lock.json")!).ownerNonce, successor.nonce);
+  assert.equal(JSON.parse(dead.files.get("/p/step-studio-authority.lock.json")!).ownerNonce, successor.nonce);
 });
 
 test("corrupt lock metadata fails closed and is never deleted", async () => {
   const fake = fakeServices();
-  fake.files.set("/p/omp-studio-authority.lock.json", "{not json");
+  fake.files.set("/p/step-studio-authority.lock.json", "{not json");
   await assert.rejects(
     () => new Win32AuthorityLock({ profileDirectory: "/p", environmentKey: "desktop", services: fake.services, pathStyle: "posix" }).acquire(),
     AuthorityLockCorruptError,
   );
-  assert.equal(fake.files.get("/p/omp-studio-authority.lock.json"), "{not json");
+  assert.equal(fake.files.get("/p/step-studio-authority.lock.json"), "{not json");
 });

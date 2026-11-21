@@ -138,7 +138,7 @@ describe("session.transcript.read dispatcher", () => {
 		dispatcher.dispose();
 	});
 	test("reads the active branch without a lease, pending command, or remembered receipt", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-dispatch-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-dispatch-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		manager.appendMessage({ role: "user", content: "hello", timestamp: Date.now() });
 		const { projector, frames, dispatcher, request, session } = transcriptFixture(manager);
@@ -172,7 +172,7 @@ describe("session.transcript.read dispatcher", () => {
 	});
 
 	test("snapshot messagesCursor is the service head cursor and rejects a stale epoch", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-transcript-snapshot-");
+		using tempDir = TempDir.createSync("@step-studio-transcript-snapshot-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const { projector, frames, dispatcher, request, transcript } = transcriptFixture(manager);
 		const snapshot = projector.response("snap") as StudioSnapshotResponse;
@@ -191,7 +191,7 @@ describe("session.transcript.read dispatcher", () => {
 
 describe("agent.conversation.read dispatcher", () => {
 	test("reads concurrently without a lease, pending command, or remembered receipt", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-agent-convo-dispatch-");
+		using tempDir = TempDir.createSync("@step-studio-agent-convo-dispatch-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const childPage = {
 			runtimeEpoch: 7,
@@ -235,7 +235,7 @@ describe("agent.conversation.read dispatcher", () => {
 	});
 
 	test("maps missing agents to COMMAND_BLOCKED without accepting a command", async () => {
-		using tempDir = TempDir.createSync("@omp-studio-agent-convo-missing-");
+		using tempDir = TempDir.createSync("@step-studio-agent-convo-missing-");
 		const manager = SessionManager.create(tempDir.path(), tempDir.path());
 		const { StudioAgentConversationError } =
 			await import("@oh-my-pi/pi-coding-agent/studio/services/agent-conversation-service");

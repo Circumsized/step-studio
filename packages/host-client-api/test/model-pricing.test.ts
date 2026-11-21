@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseModelPricing, resolveModelPrice } from "@omp-studio/client-contract";
+import { parseModelPricing, resolveModelPrice } from "@step-studio/client-contract";
 import { availableFromCacheModel, catalogEntryFromAvailable } from "../src/omp-models-adapter.js";
 
 const base = { input: 2, output: 4, cacheRead: 0, cacheWrite: 1 };

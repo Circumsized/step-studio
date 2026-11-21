@@ -3,7 +3,7 @@ import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractRuntimeArchive, verifyUpdateManifest, verifySignedArtifact, RUNTIME_ARTIFACT_LAYOUT, parseRuntimeInstallationManifest, createTrustedKeyVerifier, parseRuntimeSignatureManifest } from "@omp-studio/runtime-installer";
+import { extractRuntimeArchive, verifyUpdateManifest, verifySignedArtifact, RUNTIME_ARTIFACT_LAYOUT, parseRuntimeInstallationManifest, createTrustedKeyVerifier, parseRuntimeSignatureManifest } from "@step-studio/runtime-installer";
 import { releaseKeys } from "./build-update-assets-v2.mjs";
 import { containsPrivateMaterial } from "./private-material.mjs";
 import { MAC_TARGET_PLATFORM, legacyIndexName, releaseOutputDirectory, releaseTargetsDarwin } from "./release-assets.mjs";
@@ -59,6 +59,6 @@ export async function verifyUpdateAssets(directory, keys, repo, platform) {
 }
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   const root = resolve("."), platform = releaseTargetsDarwin() ? MAC_TARGET_PLATFORM : `win32-${process.env.OMP_TARGET_ARCH ?? "x64"}`;
-  await verifyUpdateAssets(process.argv[2] ?? releaseOutputDirectory(root, platform), await releaseKeys(root), process.env.GITHUB_REPOSITORY ?? "the-snowpear/omp-studio", platform);
+  await verifyUpdateAssets(process.argv[2] ?? releaseOutputDirectory(root, platform), await releaseKeys(root), process.env.GITHUB_REPOSITORY ?? "the-snowpear/step-studio", platform);
   console.log("Signed release assets verified");
 }

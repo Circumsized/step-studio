@@ -1,7 +1,7 @@
 import { ModelParameterEditor } from "./models/ModelParameterEditor";
 import { createModelParameterDraft, effectiveModelParameters, effectiveParameterSources, modelParameterDraftError, type ModelParameterDraft } from "./models/modelParameterDraft";
 import { previewModelAdaptation } from "./preview/modelAdaptationPreview";
-import { thinkingForRoleModel, sameModelParameter, modelParameterValues } from "@omp-studio/client-contract";
+import { thinkingForRoleModel, sameModelParameter, modelParameterValues } from "@step-studio/client-contract";
 import { AppSelect } from "./AppSelect";
 import { AgentPoolsPane } from "./models/AgentPoolsPane";
 import { ModelCompactionPane } from "./models/ModelCompactionPane";
@@ -35,14 +35,14 @@ import type {
   ModelRoleRecord,
   ModelRoleStorage,
   StudioClient,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import {
   modelAcceptsRole,
   clampRoleThinking,
   isModelEnvConfigName,
   roleThinkingControl,
   resolveModelPrice,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 import { Brand, hasBrand } from "./brands";
 import { Icon } from "./icons";
 import { useI18n } from "./i18n";
@@ -241,7 +241,7 @@ function sortProviders(
 }
 
 export type ModelPickItem = {
-  readonly execution?: import("@omp-studio/client-contract").ModelExecutionMetadata;
+  readonly execution?: import("@step-studio/client-contract").ModelExecutionMetadata;
   readonly provider: string;
   readonly id: string;
   readonly selector: string;
@@ -2900,14 +2900,14 @@ export function ModelConfigPage({ client, sessionId, workspaceId, runtimeAvailab
     const requestGeneration = ++fetchGeneration.current;
     const requestIdentity = fetchIdentity.current;
     const stillCurrent = () => requestGeneration === fetchGeneration.current && requestIdentity === fetchIdentity.current;
-    const adaptFetched = async (models: readonly import("@omp-studio/client-contract").ModelDiscoveryModel[]) => {
+    const adaptFetched = async (models: readonly import("@step-studio/client-contract").ModelDiscoveryModel[]) => {
       const matches = await Promise.all(models.map(async model => {
         const endpoint = { ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }), ...(model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens }), ...(model.reasoning === undefined ? {} : { reasoning: model.reasoning }) };
         const input = { providerId, api: draft.api, modelId: model.id, name: model.name, endpoint, ...(data?.catalog ? { catalogVersion: data.catalog.version } : {}) };
         const result = preview ? previewModelAdaptation(input) : await client.query("models.adaptation.resolve", input).catch(() => undefined);
         return [model.id, result] as const;
       }));
-      return new Map(matches.filter((pair): pair is readonly [string, import("@omp-studio/client-contract").ModelAdaptationResult] => pair[1] !== undefined));
+      return new Map(matches.filter((pair): pair is readonly [string, import("@step-studio/client-contract").ModelAdaptationResult] => pair[1] !== undefined));
     };
     if (preview) {
       const demo = createPreviewFetchedModels();
@@ -2972,7 +2972,7 @@ export function ModelConfigPage({ client, sessionId, workspaceId, runtimeAvailab
     setCatalogUpdating(true);
     try {
       const handle = await client.command("models.catalog.refresh", {});
-      const result = await waitReceipt<import("@omp-studio/client-contract").ModelCatalogRefreshResult>(client, handle.requestId);
+      const result = await waitReceipt<import("@step-studio/client-contract").ModelCatalogRefreshResult>(client, handle.requestId);
       setData(current => current ? { ...current, catalog: result.catalog } : current);
       toast(result.message);
     } catch (error) { toast(hostErrorMessage(error, t("modelConfig.toastRefreshFailed"))); }

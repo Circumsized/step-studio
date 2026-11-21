@@ -1,5 +1,5 @@
-import { parseModelKind, type AvailableModelRecord, type StudioClient } from "@omp-studio/client-contract";
-import type { WorkbenchResultMap } from "@omp-studio/studio-protocol";
+import { parseModelKind, type AvailableModelRecord, type StudioClient } from "@step-studio/client-contract";
+import type { WorkbenchResultMap } from "@step-studio/studio-protocol";
 import { waitReceipt } from "../hostError";
 
 /** Runtime includes local and keyless runners absent from models.db discovery caches. */

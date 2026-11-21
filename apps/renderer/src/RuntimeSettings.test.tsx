@@ -2,7 +2,7 @@ import { selectOption } from "./test/selectOption";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import type { RuntimeSettingsReadModel } from "@omp-studio/client-contract";
+import type { RuntimeSettingsReadModel } from "@step-studio/client-contract";
 import { I18nProvider } from "./i18n";
 import { PreviewModeProvider } from "./preview/PreviewContext";
 import { BackgroundProvider } from "./background/BackgroundProvider";

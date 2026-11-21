@@ -12,7 +12,7 @@ import type { ModelParameterValues, ModelParameterSources, ModelCatalogStatus } 
 import type {
   OperatorStateSnapshot,
   StudioRuntimeSettingsSnapshot,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 /** Runtime settings projection carried by an optional snapshot field. */
 export type RuntimeSettingsReadModel = StudioRuntimeSettingsSnapshot;

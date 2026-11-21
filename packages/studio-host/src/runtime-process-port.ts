@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
-import type { SessionBinding } from "@omp-studio/studio-protocol";
+import type { SessionBinding } from "@step-studio/studio-protocol";
 import type { RuntimeProcessPort } from "./runtime-actor.js";
 
 export interface RuntimeProcessExit {

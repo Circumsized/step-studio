@@ -11,7 +11,7 @@ import {
   type StateVersion,
   type StudioEventEnvelope,
   utf8ByteLength,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 import {
   CONVERSATION_REPLAY_EVENT_LIMIT,

@@ -12,7 +12,7 @@ import type {
   CommandRequestId,
   SubscriptionScope,
   ThreadId,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 /** Thrown when an IPC payload is not a well-formed envelope. */
 export class ValidationError extends Error {

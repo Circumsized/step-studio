@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ModelCatalogEntry } from "@omp-studio/client-contract";
+import type { ModelCatalogEntry } from "@step-studio/client-contract";
 
 import { extractYamlMapEntry, mergeYamlMapEntry, parseStructured } from "../structured-editor";
 import type { ProviderYamlDraft } from "./providerYaml";

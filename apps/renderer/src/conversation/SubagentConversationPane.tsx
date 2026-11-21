@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import { SHORTCUTS, formatShortcut } from "../keyboard/shortcuts";
-import type { SessionId } from "@omp-studio/client-contract";
+import type { SessionId } from "@step-studio/client-contract";
 import { ChipComposer } from "../composer/ChipComposer";
 import type { MentionCandidate } from "../composer/types";
 import { Icon } from "../icons";

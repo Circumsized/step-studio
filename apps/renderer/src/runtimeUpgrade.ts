@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { StudioClient, CommandInput, UpgradeOperation, UpgradeResultMap } from "@omp-studio/client-contract";
+import type { StudioClient, CommandInput, UpgradeOperation, UpgradeResultMap } from "@step-studio/client-contract";
 import { waitReceipt } from "./hostError";
 export async function invokeUpgrade<K extends UpgradeOperation["kind"]>(
  client: StudioClient, kind: K, input: CommandInput<K>,

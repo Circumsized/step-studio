@@ -60,7 +60,7 @@ const blank = (available: boolean): LiveAudioState => ({
 const MAX_UNIX_SOCKET_PATH_BYTES = 103;
 /**
  * Socket name for one audio id, identical to `liveAudioSocketName` in
- * `@omp-studio/studio-host` (`socket-paths.ts`): Desktop connects only to the
+ * `@step-studio/studio-host` (`socket-paths.ts`): Desktop connects only to the
  * endpoint it derives itself, so both copies assert the same test vector.
  */
 export function liveAudioSocketName(audioId: string): string {
@@ -464,7 +464,7 @@ export class StudioLiveAudioService {
 			throw new StudioLiveError("COMMAND_BLOCKED", "Stop the current Live call before preparing another");
 		const id = randomUUID(),
 			token = randomBytes(32).toString("hex");
-		const endpoint = process.platform === "win32" ? `\\\\.\\pipe\\omp-studio-audio-${id}` : this.#socketEndpoint(id);
+		const endpoint = process.platform === "win32" ? `\\\\.\\pipe\\step-studio-audio-${id}` : this.#socketEndpoint(id);
 		const dir = join(this.#root, "audio");
 		await mkdir(dir, { recursive: true, mode: 0o700 });
 		const descriptor = join(dir, id + ".json");

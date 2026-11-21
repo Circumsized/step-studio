@@ -3,8 +3,8 @@ import { cp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildBlockMap } from "app-builder-lib/out/targets/blockmap/blockmap.js";
-import { createRuntimeArchive, verifySignedArtifact, RUNTIME_ARTIFACT_LAYOUT, parseRuntimeInstallationManifest, verifyUpdateManifest, updateSigningBytes, createTrustedKeyVerifier, parseRuntimeSignatureManifest } from "@omp-studio/runtime-installer";
-import { STUDIO_PROTOCOL_VERSION } from "@omp-studio/studio-protocol";
+import { createRuntimeArchive, verifySignedArtifact, RUNTIME_ARTIFACT_LAYOUT, parseRuntimeInstallationManifest, verifyUpdateManifest, updateSigningBytes, createTrustedKeyVerifier, parseRuntimeSignatureManifest } from "@step-studio/runtime-installer";
+import { STUDIO_PROTOCOL_VERSION } from "@step-studio/studio-protocol";
 import { resolveTargetArch } from "./windows-architecture.mjs";
 import { MAC_TARGET_PLATFORM, legacyIndexName, packagedAppAssetPath, packagedFirstInstallPath, releaseOutputDirectory, releaseTargetsDarwin, runtimeArchiveAssetName } from "./release-assets.mjs";
 import { compareRuntimeVersions } from "../packages/runtime-installer/dist/src/index.js";
@@ -25,7 +25,7 @@ export async function buildUpdateAssetsV2(options = {}) {
   // Windows keeps its arch-only interface; macOS is a platform of its own.
   const platform = options.platform ?? (options.arch === undefined && releaseTargetsDarwin() ? MAC_TARGET_PLATFORM : `win32-${options.arch ?? resolveTargetArch()}`);
   const arch = platform.slice(platform.indexOf("-") + 1), darwin = platform.startsWith("darwin-");
-  const repo = options.repo ?? process.env.GITHUB_REPOSITORY ?? "the-snowpear/omp-studio";
+  const repo = options.repo ?? process.env.GITHUB_REPOSITORY ?? "the-snowpear/step-studio";
   const appVersion = options.appVersion ?? JSON.parse(await readFile(join(root, "package.json"), "utf8")).version;
   const runtimeOnly = options.runtimeOnly ?? (useEnvironment && process.env.OMP_RELEASE_KIND === "runtime");
   const out = options.out ?? releaseOutputDirectory(root, platform);

@@ -1,4 +1,4 @@
-import { MODEL_PARAMETER_FIELDS, mergeModelParameters, modelParameterValues, type ModelAdaptationCandidate, type ModelAdaptationResult, type ModelParameterValues, type ModelParameterSources } from "@omp-studio/client-contract";
+import { MODEL_PARAMETER_FIELDS, mergeModelParameters, modelParameterValues, type ModelAdaptationCandidate, type ModelAdaptationResult, type ModelParameterValues, type ModelParameterSources } from "@step-studio/client-contract";
 /**
  * Candidate list for the provider editor's "auto-fetch models" button.
  *
@@ -12,13 +12,13 @@ import type {
   AvailableModelRecord,
   ModelCatalogEntry,
   ModelDiscoveryModel,
-} from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
 
 export type FetchedModelCandidate = {
   readonly parameters?: ModelParameterValues;
   readonly parameterSources?: ModelParameterSources;
   readonly adaptation?: ModelAdaptationResult;
-  readonly kind?: import("@omp-studio/client-contract").ModelKind;
+  readonly kind?: import("@step-studio/client-contract").ModelKind;
   readonly webSearch?: string;
   readonly api?: string;
   readonly id: string;

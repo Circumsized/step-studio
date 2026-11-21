@@ -67,11 +67,11 @@ describe("updates store", () => {
       runtime: { plan: "available" as const, runtimeVersion: "1.2.3" },
     };
 
-    const originalChrome = globalThis.ompStudioChrome;
-    globalThis.ompStudioChrome = {
+    const originalChrome = globalThis.stepStudioChrome;
+    globalThis.stepStudioChrome = {
       ...originalChrome,
       checkUpdates: vi.fn().mockResolvedValue(mockCheckResult),
-    } as unknown as typeof globalThis.ompStudioChrome;
+    } as unknown as typeof globalThis.stepStudioChrome;
 
     try {
       const res = await checkForUpdates({ silent: true });
@@ -79,19 +79,19 @@ describe("updates store", () => {
       expect(getUpdatesState().check).toEqual(mockCheckResult);
       expect(getUpdatesState().checking).toBe(false);
     } finally {
-      globalThis.ompStudioChrome = originalChrome;
+      globalThis.stepStudioChrome = originalChrome;
     }
   });
 
   it("importLocalUpdate delegates to chrome API and captures errors", async () => {
-    const originalChrome = globalThis.ompStudioChrome;
-    globalThis.ompStudioChrome = {
+    const originalChrome = globalThis.stepStudioChrome;
+    globalThis.stepStudioChrome = {
       ...originalChrome,
       importLocalUpdate: vi.fn().mockResolvedValue({
         ok: false,
         message: "验签失败",
       }),
-    } as unknown as typeof globalThis.ompStudioChrome;
+    } as unknown as typeof globalThis.stepStudioChrome;
 
     try {
       const res = await importLocalUpdate({ kind: "runtime", source: "directory" });
@@ -99,7 +99,7 @@ describe("updates store", () => {
       expect(res.message).toBe("验签失败");
       expect(getUpdatesState().error).toBe("验签失败");
     } finally {
-      globalThis.ompStudioChrome = originalChrome;
+      globalThis.stepStudioChrome = originalChrome;
     }
   });
 
@@ -113,12 +113,12 @@ describe("updates store", () => {
       lastIndexSequence: 10,
     };
 
-    const originalChrome = globalThis.ompStudioChrome;
-    globalThis.ompStudioChrome = {
+    const originalChrome = globalThis.stepStudioChrome;
+    globalThis.stepStudioChrome = {
       ...originalChrome,
       getUpdatePrefs: vi.fn().mockResolvedValue(mockPrefs),
       setUpdatePrefs: vi.fn().mockResolvedValue({ ...mockPrefs, runtimeChannel: "canary" }),
-    } as unknown as typeof globalThis.ompStudioChrome;
+    } as unknown as typeof globalThis.stepStudioChrome;
 
     try {
       const loaded = await fetchUpdatePrefs();
@@ -129,24 +129,24 @@ describe("updates store", () => {
       expect(saved?.runtimeChannel).toBe("canary");
       expect(getUpdatesState().prefs?.runtimeChannel).toBe("canary");
     } finally {
-      globalThis.ompStudioChrome = originalChrome;
+      globalThis.stepStudioChrome = originalChrome;
     }
   });
 
   it("startRuntimeUpdate calls chrome.startRuntime and manages error state", async () => {
-    const originalChrome = globalThis.ompStudioChrome;
+    const originalChrome = globalThis.stepStudioChrome;
 
     // Bridge unavailable
-    globalThis.ompStudioChrome = undefined as unknown as typeof globalThis.ompStudioChrome;
+    globalThis.stepStudioChrome = undefined as unknown as typeof globalThis.stepStudioChrome;
     const missingRes = await startRuntimeUpdate();
     expect(missingRes.ok).toBe(false);
     expect(missingRes.message).toBe("Desktop bridge interface unavailable");
     expect(getUpdatesState().error).toBe("Desktop bridge interface unavailable");
 
     // Success path
-    globalThis.ompStudioChrome = {
+    globalThis.stepStudioChrome = {
       startRuntime: vi.fn().mockResolvedValue({ ok: true, jobId: "rt-123" }),
-    } as unknown as typeof globalThis.ompStudioChrome;
+    } as unknown as typeof globalThis.stepStudioChrome;
     dismissUpdateError();
     expect(getUpdatesState().error).toBeNull();
 
@@ -156,42 +156,42 @@ describe("updates store", () => {
     expect(getUpdatesState().error).toBeNull();
 
     // Error result path
-    globalThis.ompStudioChrome = {
+    globalThis.stepStudioChrome = {
       startRuntime: vi.fn().mockResolvedValue({ ok: false, message: "Disk full" }),
-    } as unknown as typeof globalThis.ompStudioChrome;
+    } as unknown as typeof globalThis.stepStudioChrome;
     const failRes = await startRuntimeUpdate();
     expect(failRes.ok).toBe(false);
     expect(getUpdatesState().error).toBe("Disk full");
 
     // Exception path
-    globalThis.ompStudioChrome = {
+    globalThis.stepStudioChrome = {
       startRuntime: vi.fn().mockRejectedValue(new Error("Network exploded")),
-    } as unknown as typeof globalThis.ompStudioChrome;
+    } as unknown as typeof globalThis.stepStudioChrome;
     const throwRes = await startRuntimeUpdate();
     expect(throwRes.ok).toBe(false);
     expect(getUpdatesState().error).toBe("Network exploded");
 
-    globalThis.ompStudioChrome = originalChrome;
+    globalThis.stepStudioChrome = originalChrome;
   });
 
   it("cancelUpdate delegates to chrome API if present", async () => {
-    const originalChrome = globalThis.ompStudioChrome;
+    const originalChrome = globalThis.stepStudioChrome;
     const cancelMock = vi.fn().mockResolvedValue(undefined);
-    globalThis.ompStudioChrome = {
+    globalThis.stepStudioChrome = {
       cancelUpdate: cancelMock,
-    } as unknown as typeof globalThis.ompStudioChrome;
+    } as unknown as typeof globalThis.stepStudioChrome;
 
     try {
       await cancelUpdate("job-999");
       expect(cancelMock).toHaveBeenCalledWith("job-999");
     } finally {
-      globalThis.ompStudioChrome = originalChrome;
+      globalThis.stepStudioChrome = originalChrome;
     }
 
     // When chrome is unavailable, does not throw
-    globalThis.ompStudioChrome = undefined as unknown as typeof globalThis.ompStudioChrome;
+    globalThis.stepStudioChrome = undefined as unknown as typeof globalThis.stepStudioChrome;
     await expect(cancelUpdate("job-999")).resolves.toBeUndefined();
-    globalThis.ompStudioChrome = originalChrome;
+    globalThis.stepStudioChrome = originalChrome;
   });
 
   it("dismissUpdateError clears error from store", () => {
@@ -201,28 +201,28 @@ describe("updates store", () => {
   });
 
   it("checkForUpdates handles missing chrome and non-silent errors", async () => {
-    const originalChrome = globalThis.ompStudioChrome;
+    const originalChrome = globalThis.stepStudioChrome;
 
     // Missing chrome API
-    globalThis.ompStudioChrome = undefined as unknown as typeof globalThis.ompStudioChrome;
+    globalThis.stepStudioChrome = undefined as unknown as typeof globalThis.stepStudioChrome;
     const res = await checkForUpdates({ silent: true });
     expect(res).toBeNull();
 
     // Thrown error with silent: false rethrows
-    globalThis.ompStudioChrome = {
+    globalThis.stepStudioChrome = {
       checkUpdates: vi.fn().mockRejectedValue(new Error("Offline")),
-    } as unknown as typeof globalThis.ompStudioChrome;
+    } as unknown as typeof globalThis.stepStudioChrome;
 
     await expect(checkForUpdates({ silent: false })).rejects.toThrow("Offline");
 
-    globalThis.ompStudioChrome = originalChrome;
+    globalThis.stepStudioChrome = originalChrome;
   });
 
   it("captures completion before start resolves and ignores another job", async () => {
     let listener!: (event: UpdateProgressEvent) => void;
     let start!: (value: { ok: boolean; jobId: string }) => void;
     const unsubscribe = vi.fn();
-    vi.stubGlobal("ompStudioChrome", {
+    vi.stubGlobal("stepStudioChrome", {
       subscribeUpdateProgress: (fn: typeof listener) => { listener = fn; return unsubscribe; },
       startRuntime: () => new Promise((resolve) => { start = resolve; }),
     });
@@ -238,7 +238,7 @@ describe("updates store", () => {
 
   it.each(["rejected", "failed"])("cleans listener and timeout when start is %s", async (mode) => {
     const unsubscribe = vi.fn();
-    vi.stubGlobal("ompStudioChrome", {
+    vi.stubGlobal("stepStudioChrome", {
       subscribeUpdateProgress: () => unsubscribe,
       startApp: () => mode === "rejected" ? Promise.reject(new Error("busy")) : Promise.resolve({ ok: false, message: "busy" }),
     });
@@ -250,7 +250,7 @@ describe("updates store", () => {
   it("uses an inactivity timeout and releases the listener after progress stops", async () => {
     let listener!: (event: UpdateProgressEvent) => void;
     const unsubscribe = vi.fn();
-    vi.stubGlobal("ompStudioChrome", {
+    vi.stubGlobal("stepStudioChrome", {
       subscribeUpdateProgress: (fn: typeof listener) => { listener = fn; return unsubscribe; },
       startRuntime: async () => ({ ok: true, jobId: "runtime-1" }),
     });

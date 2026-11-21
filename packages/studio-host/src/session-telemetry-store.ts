@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { parseSessionTelemetrySnapshot, type SessionTelemetrySnapshot } from "@omp-studio/studio-protocol";
+import { parseSessionTelemetrySnapshot, type SessionTelemetrySnapshot } from "@step-studio/studio-protocol";
 
 /** On-disk record under `<profileDirectory>/session-telemetry/v1/`. */
 export interface PersistedSessionTelemetryRecord {

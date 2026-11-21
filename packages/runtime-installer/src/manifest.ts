@@ -1,4 +1,4 @@
-import type { RuntimeInstallationManifest } from "@omp-studio/studio-protocol";
+import type { RuntimeInstallationManifest } from "@step-studio/studio-protocol";
 
 export interface ChecksumManifest {
   algorithm: "sha256";

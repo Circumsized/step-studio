@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CommandInput, StudioClient } from "@omp-studio/client-contract";
-import type { FeatureSettingKey, FeatureSettingRow, FeatureSettingsResultMap, FeatureSettingValue } from "@omp-studio/studio-protocol";
+import type { CommandInput, StudioClient } from "@step-studio/client-contract";
+import type { FeatureSettingKey, FeatureSettingRow, FeatureSettingsResultMap, FeatureSettingValue } from "@step-studio/studio-protocol";
 import type { NativePreferencesContext } from "./NativePreferencesPane";
 import { usePreviewMode } from "../preview/PreviewContext";
 import { PREVIEW_FEATURE_SETTINGS } from "../preview/featureSettingsPreview";

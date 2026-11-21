@@ -7,8 +7,8 @@ import type {
   SessionId,
   StudioClient,
   ThreadId,
-} from "@omp-studio/client-contract";
-import type { OperatorStateSnapshot } from "@omp-studio/studio-protocol";
+} from "@step-studio/client-contract";
+import type { OperatorStateSnapshot } from "@step-studio/studio-protocol";
 import { waitReceipt } from "./hostError";
 
 // Live: App.tsx types its session-create wait on this. I deleted it a moment ago

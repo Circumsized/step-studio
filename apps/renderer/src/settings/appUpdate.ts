@@ -71,7 +71,7 @@ function updateCopy(key: string): string {
   return translate(resolveLanguage(getAppSettings().language), key);
 }
 
-let unifiedSnapshot: import("@omp-studio/runtime-installer").UnifiedUpdateSnapshot | undefined;
+let unifiedSnapshot: import("@step-studio/runtime-installer").UnifiedUpdateSnapshot | undefined;
 const unsubscribeUpdates = subscribeUpdates(() => {
   if (unifiedSnapshot) return;
   const { check, checking, job, prefs, error } = getUpdatesState();
@@ -93,7 +93,7 @@ const unsubscribeUpdates = subscribeUpdates(() => {
     } : {}),
   });
 });
-function receiveUnifiedUpdate(snapshot: import("@omp-studio/runtime-installer").UnifiedUpdateSnapshot): void {
+function receiveUnifiedUpdate(snapshot: import("@step-studio/runtime-installer").UnifiedUpdateSnapshot): void {
   const sameTarget = unifiedSnapshot?.app.version === snapshot.app.version && unifiedSnapshot?.runtime.version === snapshot.runtime.version;
   unifiedSnapshot = snapshot;
   const parts = [snapshot.app, snapshot.runtime];

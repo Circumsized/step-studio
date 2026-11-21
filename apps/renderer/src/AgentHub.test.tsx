@@ -1,8 +1,8 @@
 import { selectOption } from "./test/selectOption";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { conversationPages } from "@omp-studio/testkit";
-import type { StudioClient } from "@omp-studio/client-contract";
+import { conversationPages } from "@step-studio/testkit";
+import type { StudioClient } from "@step-studio/client-contract";
 import type {
   AgentId,
   CapabilityManifest,
@@ -13,7 +13,7 @@ import type {
   SessionId,
   StateVersion,
   StudioAgentSnapshot,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 import { AgentHubPage, setHubIntent } from "./AgentHub";
 import { PreviewModeProvider } from "./preview/PreviewContext";
 import { TAB_PANE_MS } from "./pageTransition";

@@ -1,4 +1,4 @@
-import type { RuntimeEpoch, RuntimeId, SessionBinding } from "@omp-studio/studio-protocol";
+import type { RuntimeEpoch, RuntimeId, SessionBinding } from "@step-studio/studio-protocol";
 import { CommandLedger } from "./command-ledger.js";
 
 export type RuntimeActorState = "idle" | "starting" | "running" | "stopping" | "stopped" | "crashed";

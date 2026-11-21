@@ -3,6 +3,6 @@ export {
   envNameForProviderId,
   mapApiAlias,
   nestedProviderYamlNode,
-} from "@omp-studio/client-contract";
-export type { ProviderYamlDraft, YamlNode } from "@omp-studio/client-contract";
+} from "@step-studio/client-contract";
+export type { ProviderYamlDraft, YamlNode } from "@step-studio/client-contract";
 export { serializeYamlValue as serializeModelsYmlNode } from "../structured-editor/parse";

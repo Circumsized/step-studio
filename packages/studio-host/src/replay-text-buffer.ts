@@ -1,4 +1,4 @@
-import { truncateUtf8 } from "@omp-studio/studio-protocol";
+import { truncateUtf8 } from "@step-studio/studio-protocol";
 
 const MAX_CHUNKS = 1024;
 const PAGE_UNITS = 8192;

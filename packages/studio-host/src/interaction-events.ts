@@ -3,7 +3,7 @@ import type {
   RemoteInteractionRequiredEvent,
   StudioEventEnvelope,
   StudioInteractionResolvedEvent,
-} from "@omp-studio/studio-protocol";
+} from "@step-studio/studio-protocol";
 
 export interface StudioInteractionForward {
   readonly envelope: StudioEventEnvelope<RemoteInteractionRequiredEvent | StudioInteractionResolvedEvent>;

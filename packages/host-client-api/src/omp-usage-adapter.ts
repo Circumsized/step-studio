@@ -14,7 +14,7 @@ import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import { promisify } from "node:util";
 
-import type { ConfigWriteResult, StatsDashboardReadModel, TokenUsageReadModel } from "@omp-studio/client-contract";
+import type { ConfigWriteResult, StatsDashboardReadModel, TokenUsageReadModel } from "@step-studio/client-contract";
 
 import { getStatsDbPath } from "./omp-discovery/paths.js";
 import { sanitizeDisplayText } from "./read-models.js";

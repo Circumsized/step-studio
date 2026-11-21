@@ -1,4 +1,4 @@
-import type { StudioAgentSnapshot, StudioAgentUsage } from "@omp-studio/studio-protocol";
+import type { StudioAgentSnapshot, StudioAgentUsage } from "@step-studio/studio-protocol";
 import { isRealSubagentId, type SubagentHubTarget, type SubagentView } from "./toolMeta";
 
 const REDACTED_METRIC = "[redacted]";
