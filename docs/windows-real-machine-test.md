@@ -12,14 +12,14 @@
 | 文件 | 大小 | 作用 |
 | --- | --- | --- |
 | `step-studio-desktop-tauri.exe` | 21.2 MB | 壳，双击启动 |
-| `step-studio-host.exe` | 763 KB | daemon，由壳拉起来 |
-| `step-studio-runtime.exe` | 876 KB | adapter，由 daemon 拉起来 |
+| `step-studio-host.exe` | 780 KB | daemon，由壳拉起来 |
+| `step-studio-runtime.exe` | 882 KB | adapter，由 daemon 拉起来 |
 
 或者只带安装器 `bundle/nsis/Step Studio_0.1.0_x64-setup.exe`（12.2 MB，未 Authenticode 签名，SmartScreen 会拦）。装完三个文件都在同一个 `$INSTDIR` 下。
 
 可选，不参与上面的链路：`step-studio-tui.exe`（1.2 MB）、`pty-bench.exe`（344 KB）。
 
-体积是 2026-11-21 那次构建的实测值，重新构建会变；核对文件时以目录里的实际大小为准。
+体积是 2026-11-21 全量重建后的实测值，重新构建会变；核对文件时以目录里的实际大小为准。
 
 **三个文件必须在同一个目录。** 壳先在自己同目录找 `step-studio-host`，再找 `<repo>/target/{release,debug}/step-studio-host`；daemon 用同样的顺序找 adapter（`bridge.rs:644`、`studio-host.rs:381`）。装机版三者同处 `$INSTDIR`，所以安装这条路天然成立；手工拷文件时漏一个，壳会打一行 `[bridge] no step-studio-host binary found` 然后什么都不做。
 

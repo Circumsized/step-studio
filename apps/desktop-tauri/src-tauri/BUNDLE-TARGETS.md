@@ -50,6 +50,37 @@ tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin
   `link.exe`，链接阶段失败。
 - **`--target` 要与 resources 路径里的三元组一致**，否则 Tauri 找不到要打包的文件。
 
+## 为什么不能直接 `cargo build --workspace` 再单独 bundle
+
+`bundle.resources` 指向的是 `target/` 里的构建产物，而 `tauri-build` 的 build
+script 在**编译期**校验这些路径存在。干净的 `target/` 下直接跑
+`cargo-xwin build --release --workspace` 会失败：
+
+```
+resource path `../../../target/x86_64-pc-windows-msvc/release/step-studio-runtime.exe` doesn't exist
+```
+
+原因是 `step-studio-desktop-tauri` 编译时，同一次 cargo 调用里的
+`step-studio-host` / `step-studio-runtime` 二进制还没产出——壳只依赖它们的 lib，
+cargo 不构建依赖包的 bin。四个不依赖 `tauri-build` 的 exe 会正常出来，只有壳失败。
+
+`tauri build` 本身没有这个问题：它的 `beforeBuildCommand` 在壳编译**之前**跑，
+里面那句 `cargo build -p step-studio-host -p step-studio-runtime` 正好把 sibling
+先建好。所以在 Windows 主机上 `tauri build` 一条命令到底。
+
+Linux 交叉编译不行——`beforeBuildCommand` 里是裸 `cargo`，没有 `link.exe`。
+要分两步，先让 sibling 存在，再 bundle 时把 beforeBuildCommand 覆盖掉：
+
+```bash
+cargo-xwin build --release --target x86_64-pc-windows-msvc \
+  -p step-studio-host -p step-studio-runtime -p step-studio-tui -p pty-bench
+cargo-xwin build --release --target x86_64-pc-windows-msvc -p step-studio-desktop-tauri
+
+cd apps/desktop-tauri
+tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin -b nsis \
+  -c '{"build":{"beforeBuildCommand":"npm run build:bridge && npm run build -w @step-studio/renderer"}}'
+```
+
 ## `bundle.resources` 要写成映射，不能写成数组
 
 安装器要把 `step-studio-host.exe` 和 `step-studio-runtime.exe` 放到壳的同目录
@@ -72,7 +103,7 @@ File /a "/oname=_up_\_up_\_up_\target\x86_64-pc-windows-msvc\release\step-studio
 
 配置写好了，安装器也产出过了（`Step Studio_0.1.0_x64-setup.exe`，11.66 MiB），
 但**产线仍没接**：没有任何 CI 调用 `tauri build`。`scripts/release-assets.mjs` 算出的
-`OMP-Studio-Setup-<版本>-windows-<arch>.exe` 指向的路径与捆绑器实际输出的
+`Step-Studio-Setup-<版本>-windows-<arch>.exe` 指向的路径与捆绑器实际输出的
 `Step Studio_<版本>_x64-setup.exe` 不是同一个，发布前要对一遍。
 
 Windows 侧还缺 WebView2 引导与 VC++ 运行时——NSIS 不自带这两个（M5.3）。

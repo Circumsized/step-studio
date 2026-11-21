@@ -1,6 +1,6 @@
 # Step Studio
 
-在 [`the-snowpear/omp-studio`](https://github.com/the-snowpear/omp-studio) 基础上把
+在 [`the-snowpear/step-studio`](https://github.com/the-snowpear/step-studio) 基础上把
 运行时从 OMP 换成 **Step Code**（[`stepfun-ai/Step-Code`](https://github.com/stepfun-ai/Step-Code)）
 的可视化智能体平台。OMP 的 Studio Bridge 协议、host、客户端、Electron 壳全部复用；
 换掉的只有"runtime 进程"这一层。
@@ -18,8 +18,8 @@ fork 的状态与差异。
 **运行时链路已端到端跑通**（真实 Step CLI + 真实模型，不是 mock）：
 
 ```
-Renderer → @omp-studio/client → transport-desktop → apps/desktop-tauri (Tauri IPC)
-  → @omp-studio/host-client-api → step-studio-host (Rust daemon)
+Renderer → @step-studio/client → transport-desktop → apps/desktop-tauri (Tauri IPC)
+  → @step-studio/host-client-api → step-studio-host (Rust daemon)
   → step-studio-runtime (Rust adapter)
   → step --mode rpc --include-live-events
 ```
@@ -138,7 +138,7 @@ cargo build --release
 
 `cargo test` 41 个测试，含对真实适配器与真实 CLI 的端到端。
 
-帧编解码与 `@omp-studio/studio-protocol` 逐字节兼容（大端长度前缀、五键帧头、HMAC
+帧编解码与 `@step-studio/studio-protocol` 逐字节兼容（大端长度前缀、五键帧头、HMAC
 challenge proof）。第一版我写成了小端 + 只含 body 的长度 + 两键头——对着 mock 全能过，
 是对着真实适配器的端到端测试抓出来的。
 
@@ -191,7 +191,7 @@ renderer 挂载 + bridge 注入」，不含任何面板迁移。
 
 ```
 apps/desktop-tauri/
-├── src/preload.ts              init script：createDesktopIpcBridge(tauriSender) → window.ompStudio
+├── src/preload.ts              init script：createDesktopIpcBridge(tauriSender) → window.stepStudio
 ├── src/tauri-sender.ts         Tauri invoke/listen → DesktopIpcBridge sender
 ├── test/                       18 个无头测试（无 Tauri 运行时、无 WebView）
 └── src-tauri/                  Cargo.toml、main.rs、bridge.rs（六个 stub）、capabilities、icons
@@ -199,7 +199,7 @@ apps/desktop-tauri/
 
 三个关键点：
 
-- **renderer 零改动**。`apps/renderer/src/main.tsx:74` 本来就读 `globalThis.ompStudio` 自己建
+- **renderer 零改动**。`apps/renderer/src/main.tsx:74` 本来就读 `globalThis.stepStudio` 自己建
   client，所以壳唯一的任务是注入那个 global。`createDesktopIpcBridge` 已从
   `apps/desktop/src/ipc-validation.ts` 移进 `packages/transport-desktop/src/ipc-validation.ts`
   并再导出——Electron preload 与它的测试都改为从包里导入，桥本身一行未改。
@@ -208,7 +208,7 @@ apps/desktop-tauri/
   （无通用 invoke、无 IPC 泄漏、桥是唯一桌面 API）。代价是 Tauri 没有 contextBridge，
   init script 跑在主世界，所以 `Object.defineProperty` 显式设为不可写——这是加固不是边界，
   真正的不变量按方案 §8 放在 Rust facade。
-- **M1.1 只注入 `ompStudio`**。`ompStudioChrome`/`ompStudioTerminal`/`ompStudioRemote`
+- **M1.1 只注入 `stepStudio`**。`stepStudioChrome`/`stepStudioTerminal`/`stepStudioRemote`
   三个 global 留给 M1.2；renderer 对三者全是可选调用，缺省即降级（性能上报变 no-op、
   平台改从 UA 推断、终端面板禁用、remote 面板进入本地模式）。
 
@@ -257,7 +257,7 @@ DPI 150%/200%、IME、xterm.js 帧时与 RSS）；`cargo test --workspace` 并�
 
 ### M1.2c 完成：remote 桥不建，方案非目标（2026-11-12）
 
-M1.2c 三条桥，chrome 与 terminal 已落地（见上面两节）。第三条 `ompStudioRemote`
+M1.2c 三条桥，chrome 与 terminal 已落地（见上面两节）。第三条 `stepStudioRemote`
 **不建**——方案 §1.3 非目标明文写着「不做远程工作区、手机连接、插件市场、delta 更新」。
 
 不建的理由不是工作量，是范围：`apps/desktop/src/remote/` 是 2416 行 / 23 个文件的
@@ -265,7 +265,7 @@ SSH 子系统（部署、网络代理、本地 vault、provisioning、环境安�
 其中 6 个方法（`list` / `connect` / `select` / `onChanged` / `approveDeployment` /
 `disconnect`）。为一个非目标搭 2416 行基础设施没有意义。
 
-`ompStudioRemote` 因此保持缺席，renderer 的 remote 面板走 M1.1 已确立的降级路径
+`stepStudioRemote` 因此保持缺席，renderer 的 remote 面板走 M1.1 已确立的降级路径
 （本地模式）。这与 chrome 的 Host 背后方法留空是同一条纪律：**缺席即诚实不可用，
 不伪造**。
 
@@ -321,6 +321,35 @@ Step Studio，界面内全是 OMP。本次把**可见文案**里的 OMP 全部�
 44 条测试断言跟着改——它们钉的就是显示文案，文案动了它们必须动。
 
 实机验证：侧栏「Step Studio」、状态「Step Ready」、底部页签「Step Logs」。
+
+### 改名第二轮：小写形态也改（2026-11-21，推翻上面的「故意不改」）
+
+上一轮的正则故意放过了小写形态，理由是改动面。2026-11-21 这个决定被推翻：**全部改**。
+npm scope `@omp-studio/*` → `@step-studio/*`、preload 全局 `ompStudio*` → `stepStudio*`、
+`com.snowpear.omp-studio` → `com.snowpear.step-studio`。568 个文件。
+
+推翻的理由是当初把两件事混为一谈了：包名**不上线**。帧格式（大端长度前缀、五键帧头）、
+HMAC-SHA256、协议版本号、JSON 形状才是在线上的东西，`package.json` 的 `"name"` 一个字节
+都不出本机。而且 10 个包全是 `private: true`，没有任何外部消费者，所以这是纯机械重构，
+`npm run check` 能全量验证。当初记的「改名会破坏依赖图和架构约束」——那是
+`scripts/architecture.test.mjs` 的 `ALLOWED_INTERNAL_DEPS` 表和 lockfile，机械成本，
+不是正确性风险。
+
+**真正在上线的只有一个**，而且这次动了它：`crates/studio-bridge/src/frame.rs` 的
+`PROTOCOL_NAME`，它写进帧头五键之一、收帧时校验不匹配即拒（`:78` 写入、`:172` 校验），
+TS 侧 `packages/studio-protocol/src/contracts/protocol.ts` 有同名常量，
+`omp-patch/overlay` 里还有第三份。两侧原子改成 `"step-studio"`；当前活的帧协议是
+Rust↔Rust（`studio-host` ↔ `step-studio-runtime`），全在本仓库内，TS 那份只在
+`packages/studio-protocol` 内部自引用、没有外部消费者，所以原子改是安全的。
+
+签名域分隔前缀与 keyId 同批改（`step-studio-update-v2`、`step-studio-remote-environment-v1`、
+`step-studio-release-2026a/b`），共 5 个文件，`.pem` 文件名也一起改——只改一个文件会让
+验签失败，全改则此前签发的工件失效，但 `outputs/` 不存在，没有已签发工件。
+
+**没有改的**：`omp-patch/vendor/**`（上游子模块，改了会在 vendor 树留脏改动）；
+`CHANGELOG.md`、`docs/releases/*`、`docs/migrations/*`——历史记录，记载的是当时实际
+发布的工件名（`OMP-Studio-<ver>-macos-arm64.zip`、`# OMP Studio 0.1.10`），
+改写等于伪造历史。
 **踩到一个只有真机能发现的问题**：改完 dist 后界面仍是旧文案，原因是 Tauri 在**编译期**把
 `frontendDist` 嵌进二进制，光重建 renderer dist 不够，必须重新 `cargo build --release`。
 同理 `index.html` 的 `<title>` 也在嵌入范围内。
@@ -444,7 +473,7 @@ Node 进程里驱动：
 - 实证：在裸 Node 里跑既有契约套件 `node --test apps/desktop/dist/test/desktop-composition.test.js`
   → 22 过 1 跳 0 失败，且该套件用的是真的 `createDesktopRuntimeSessionPort`。
 - 七个必填 port 的实现（platform / authorityLock / privateEndpoint / runtimeSession 等）
-  全部在 `@omp-studio/platform` 与 `apps/desktop/src` 的非 electron 模块里，electron-free。
+  全部在 `@step-studio/platform` 与 `apps/desktop/src` 的非 electron 模块里，electron-free。
 - **五方法面由 composition 自己构造**：`host-composition.ts:1106-1108` 的
   `get transport() { return this.#facade; }`，而 `#facade` 就是
   `StudioHostClientFacade implements ClientTransport`，后者恰好是
@@ -640,11 +669,11 @@ M6a.1 spike / M6a.2 四仪表盘 / M6a.3 键位 + fixtures / M6a.4 评审 全部
 
 第 1 步已把这些成员的**调用侧**全部收编进 facade，所以第 2 步是纯实现侧工作，渲染层不再需要跟着改——这正是第 1 步的目的。
 
-### M5.6 方向定案：删 Electron、拆掉 `ompStudioChrome` 上帝接口、渲染层改依赖 read model + capability（2026-11-13）
+### M5.6 方向定案：删 Electron、拆掉 `stepStudioChrome` 上帝接口、渲染层改依赖 read model + capability（2026-11-13）
 
-项目负责人裁定：**Electron 彻底删除，不在 `chrome.rs` 里补那 32 个方法，把 `ompStudioChrome` 这个上帝接口拆掉。**
+项目负责人裁定：**Electron 彻底删除，不在 `chrome.rs` 里补那 32 个方法，把 `stepStudioChrome` 这个上帝接口拆掉。**
 
-裁定附带的关键工程判断（比「补方法」或「砍功能」都干净）：55,092 行删除连锁的真正成因**不是「缺 32 个方法」，而是渲染层直接按 `ompStudioChrome` 的成员存在与否做分支**。每缺一个成员，对应组件整块消失，于是删 Electron 会级联撕掉 UI。
+裁定附带的关键工程判断（比「补方法」或「砍功能」都干净）：55,092 行删除连锁的真正成因**不是「缺 32 个方法」，而是渲染层直接按 `stepStudioChrome` 的成员存在与否做分支**。每缺一个成员，对应组件整块消失，于是删 Electron 会级联撕掉 UI。
 
 **解法：渲染层不再依赖方法，改依赖 read model + capability manifest。** capability 为 false 时渲染降级态/置灰，不是消失。接口拆成 4 个 trait：
 
@@ -675,17 +704,17 @@ M6a.1 spike / M6a.2 四仪表盘 / M6a.3 键位 + fixtures / M6a.4 评审 全部
 4. `MediaApi` 按需：`flexaudio` + Tauri capabilities。验收：不开音频时 `capabilities()` 调用不触发任何权限弹窗。
 5. CI 门禁：`cargo deny` 查许可证（重点卡 AGPL）、`cargo test` 后 `git diff --exit-code contracts/generated/`、dhat 堆画像、「按需进程数 = 0」断言。
 
-**实测现状（第 1 步的输入）**：`ompStudioChrome` 41 个成员中 Tauri `chrome.rs` 只实现 9 个；渲染层直读 `globalThis.ompStudioChrome` 共 **86 处、32 个文件**（其中约 49 处是 `?.method` 后判空的写法，3 处显式 `=== undefined` 比较）。
+**实测现状（第 1 步的输入）**：`stepStudioChrome` 41 个成员中 Tauri `chrome.rs` 只实现 9 个；渲染层直读 `globalThis.stepStudioChrome` 共 **86 处、32 个文件**（其中约 49 处是 `?.method` 后判空的写法，3 处显式 `=== undefined` 比较）。
 
-**第 1 步已完成（2026-11-13）**：渲染层 src 内直读 `globalThis.ompStudioChrome` **清零**（原 86 处 / 32 文件）。测试文件里的桩（`globalThis.ompStudioChrome = {…}` 与 `= originalChrome`）不动——那是测试在造 surface，不是产品代码在读它。
+**第 1 步已完成（2026-11-13）**：渲染层 src 内直读 `globalThis.stepStudioChrome` **清零**（原 86 处 / 32 文件）。测试文件里的桩（`globalThis.stepStudioChrome = {…}` 与 `= originalChrome`）不动——那是测试在造 surface，不是产品代码在读它。
 
-facade 落在 `apps/renderer/src/chrome/index.ts`：11 个 capability 位按壳侧 4 trait 分组，`shellSurface()` 是唯一取值点，`shellDegradedReason()` 给每个位一句人话。规则一条：**`chrome/` 之外没有文件读 `globalThis.ompStudioChrome`。**
+facade 落在 `apps/renderer/src/chrome/index.ts`：11 个 capability 位按壳侧 4 trait 分组，`shellSurface()` 是唯一取值点，`shellDegradedReason()` 给每个位一句人话。规则一条：**`chrome/` 之外没有文件读 `globalThis.stepStudioChrome`。**
 
 位按「组」推导而非按单个方法：媒体上传要四个成员全在位才算可用。半接线的组若按单方法判断会显得可用、然后在缺失的那个成员上炸。
 
 变换中暴露出的真实类型不安全（原代码假设 surface 与成员一定存在，用 `!` 压住）：
 - `settings/updates.ts`：`chrome.subscribeUpdateProgress(handle)` 直接解引用，`shellSurface()` 可能是 undefined——这是原来就存在的 crash 路径，转换让 TypeScript 把它指了出来。
-- `LiveAudioPane` / `DictationControl` / `ComputerPane` / `NativeMaintenancePane` / `SkillsharePane`：`globalThis.ompStudioChrome!.x!(...)` 把「壳没接这个能力」变成 TypeError。改为经 facade 取 `?.`，缺失时抛出可读消息。
+- `LiveAudioPane` / `DictationControl` / `ComputerPane` / `NativeMaintenancePane` / `SkillsharePane`：`globalThis.stepStudioChrome!.x!(...)` 把「壳没接这个能力」变成 TypeError。改为经 facade 取 `?.`，缺失时抛出可读消息。
 - `ServicesPane`：守卫用 `shellSurface()?.saveServiceDefinition` 判过，调用却又写 `shellSurface()!.saveServiceDefinition`——同一个表达式两种写法，TypeScript 拒绝后者。统一为先取成员再判再调。
 
 验收标准的落地形态：`App.tsx` 的项目 shell 两项在 capability 缺失时走 `shellItemProps` → `{disabled: true, title: <原因>}`，即置灰 + 原因，不是消失。原来的 `仅桌面端可用` 一个答案覆盖「没有壳」「壳旧了」「这台机器没接」三种不同事实。
@@ -698,7 +727,7 @@ M5.6 是「egui 轻量壳定型 + Electron 删除（4-6 人日）」。egui 已�
 
 三处阻塞，逐条实证：
 
-**一、渲染层依赖 41 个 `ompStudioChrome` 成员，Tauri 的 `chrome.rs` 只实现 9 个，缺 32 个。** 这不是「壳换掉就行」——渲染层每少一个方法，对应功能就整个消失。缺失的按域分：
+**一、渲染层依赖 41 个 `stepStudioChrome` 成员，Tauri 的 `chrome.rs` 只实现 9 个，缺 32 个。** 这不是「壳换掉就行」——渲染层每少一个方法，对应功能就整个消失。缺失的按域分：
 
 | 域 | 缺失成员 |
 | --- | --- |
@@ -945,7 +974,7 @@ turn，一个 turn 结束就释放共享计数，于是隔壁测试释放掉了�
 `Outcome` 五个变体各自有一句理由，测试断言五句话互不相同——理由字符串是用户在诊断页读到的东西。
 `is_usable()` 把 `TooNew` 与 `Unversioned` 归为一类：调用方必须拒绝，而不是读一个它会读错的东西。
 
-**范围只有本方数据。** `omp-studio` 的用户数据不在迁移范围——产品是 fork 不是升级替代，配置目录不同，
+**范围只有本方数据。** `step-studio` 的用户数据不在迁移范围——产品是 fork 不是升级替代，配置目录不同，
 没有东西可迁，也没有理由试着迁。
 
 #### 一个测试又是空的，而且原因值得记
@@ -1230,15 +1259,15 @@ chrome.predictionInput && chrome.onPrediction` 三个成员存在性分支，正
 可以 attach 和 steer，为一个缺失的导入把整条通道报成不可用是过度降级。
 
 **二、渲染层 src 直读 chrome 真正清零，并且这次有测试守着。** 第 1 步记的是「86 处 / 32 文件
-清零」，但那是按 `globalThis.ompStudioChrome` 数的——另有 4 处拼成 `window.ompStudioChrome`
+清零」，但那是按 `globalThis.stepStudioChrome` 数的——另有 4 处拼成 `window.stepStudioChrome`
 （`DiagnosticsPage` 两处、`ChipComposer`、`ToolBody`、`RuntimeCredentials`），一次
 `globalThis` 的 grep 对它们报 0。已全部收编进 `shellSurface()`。
 
-新增的测试按目录扫源文件，规则一条：**`chrome/` 之外没有文件读 `ompStudioChrome`**。它按成员
-访问（`.ompStudioChrome`）而不是按名字匹配，所以声明处（`vite-env.d.ts`）和注释里提到名字都
+新增的测试按目录扫源文件，规则一条：**`chrome/` 之外没有文件读 `stepStudioChrome`**。它按成员
+访问（`.stepStudioChrome`）而不是按名字匹配，所以声明处（`vite-env.d.ts`）和注释里提到名字都
 不算；测试文件与 `.d.ts` 排除。
 
-变异验证：把 `RuntimeCredentials.tsx` 改回 `window.ompStudioChrome?.openUrl(...)`，测试
+变异验证：把 `RuntimeCredentials.tsx` 改回 `window.stepStudioChrome?.openUrl(...)`，测试
 FAILED；改回，绿。
 
 **教训**：一条只靠「找到上一次违法的那个搜索」来守的规则，等于没守。第一次清理数的是
@@ -1867,11 +1896,11 @@ manifest 由派表层派生，所以问适配器要它是一次往返去学自�
 
 **环境备注**：本机 AF_UNIX socketpair 缓冲只有约 250-300 字节（`/tmp/buf_probe2` 在 cargo 之外同样复现），所以「先写完再读」的测试写法在这里必然阻塞；socket 测试必须让写线程与读并发。
 
-### M1.2c-terminal：`ompStudioTerminal` 真 PTY（2026-11-12 完成）
+### M1.2c-terminal：`stepStudioTerminal` 真 PTY（2026-11-12 完成）
 
 底部 Terminal 接上真 PTY（`portable-pty` 0.9），不是行缓冲——AGENTS.md 明确要求
 「Terminal 两种模式都用本机 Shell」。壳级 `$SHELL`，TERM 设为 `xterm-256color`，
-输出由独立 reader 线程读，经 `omp-studio:terminal:data` / `:exit` 两个 Tauri 事件
+输出由独立 reader 线程读，经 `step-studio:terminal:data` / `:exit` 两个 Tauri 事件
 通道送出，JS 侧单 listen 扇出到 Set（与 desktop sender 同一个理由：Tauri 的 `listen`
 返回 Promise，逐订阅注册会让早于 resolve 的 unsubscribe 找不到目标）。
 
@@ -1896,7 +1925,7 @@ manifest 由派表层派生，所以问适配器要它是一次往返去学自�
 未接的部分，与 chrome 同一条边界：`recordingStart/Stop/Status` 要 Host 的 artifact
 library 才能产出 `artifactId`，留空，renderer 禁用录音按钮。`workspaceId` 接收但忽略——
 把 workspace id 映射到目录需要 Host 的 workspace registry，终端因此起在壳自己的工作目录。
-这是相对 omp-studio 的真实缺口，记录下来而不是糊过去。
+这是相对 step-studio 的真实缺口，记录下来而不是糊过去。
 
 **UI 侧未能实机验证**，原因明确且不在本桥：`TerminalPane` 的 `canCreate` 要求
 execution target 处于 connected（`TerminalPane.tsx:43`），而当前没有 workspace 打开
@@ -1905,7 +1934,7 @@ execution target 处于 connected（`TerminalPane.tsx:43`），而当前没有 w
 Bash 工具自己的命令行从而自杀（改用 `pkill -f "step-studio-deskto[p]-tauri"`）；
 以及 Xvfb 捕获图是 1400x900 而窗口只占 1280x800，按捕获图坐标点窗口外的黑区会全部落空。
 
-### M1.2c-chrome：`ompStudioChrome` 壳级子集（2026-11-12 完成）
+### M1.2c-chrome：`stepStudioChrome` 壳级子集（2026-11-12 完成）
 
 `vite-env.d.ts:51-290` 声明了 139 个 chrome 条目。切开看：后半是自动更新器
 （打包面，不是产品面），前半大多数是 Host 背后——artifacts、媒体上传、prediction、
@@ -2080,7 +2109,7 @@ WebKitGTK 上实证过。要真正确认需要一台 Windows 机器或 CI。
 - **Windows 命名管道与打包实测**：适配器只在 Linux 上验过 Unix domain socket；
   `npm run pack:win` 未跑
 - **品牌替换**：窗口标题、关于对话框、`%APPDATA%\<name>`、安装器产品名仍是
-  `omp-studio`。包名（`@omp-studio/*`）不改——它们是复用的依赖，改名会破坏整个
+  `step-studio`。包名（`@step-studio/*`）不改——它们是复用的依赖，改名会破坏整个
   依赖图和架构约束
 - **其余命令映射**：`turn.retry`、`session.drop`、`session.clearContext`、
   `session.handoff`、`mode.plan.*` 未实现；`switch_session`/`clone`/`get_tree`/
@@ -2109,7 +2138,7 @@ WebKitGTK 上实证过。要真正确认需要一台 Windows 机器或 CI。
 | `apps/desktop/src/host-composition.ts` | 改：`STUDIO_RUNTIME_EXECUTABLE` 选择 custom runtime 源，并让显式指定的 limited 运行时获得 session controller |
 | `apps/desktop-tauri/` | 新增：Tauri v2 主壳（M1.1 脚手架 + bridge 注入 + 六个命令 stub） |
 | `packages/transport-desktop/src/ipc-validation.ts` | 新增：`createDesktopIpcBridge` 等从 `apps/desktop/src/` 迁入，桥本身零改动 |
-| `apps/desktop/src/preload.ts` | 改：桥工厂三件套改为从 `@omp-studio/transport-desktop` 导入 |
+| `apps/desktop/src/preload.ts` | 改：桥工厂三件套改为从 `@step-studio/transport-desktop` 导入 |
 | `scripts/architecture.test.mjs` | 改：`transport-desktop` 允许依赖 `client`；`sourceFiles` 跳过 `target`；electron 豁免按路径而非 key 判定 |
 | `scripts/core-suites.mjs` | 改：登记 desktop-tauri 两个测试 |
 | `package-lock.json` | 修：补回缺失的 `packages/runtime-stepcode` 条目（此前任何 `npm install` 都会失败） |

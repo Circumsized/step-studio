@@ -1,15 +1,15 @@
 # Step Studio 设计开发方案 v5.1
 
-> 目标：以 omp-studio 为功能与 UI 基准，用 Rust + TypeScript 重新实现其桌面形态，运行时对接 Step Code CLI，产出 Windows 优先、高性能、低开销、低占用、低存储的可视化智能体平台。
-> **范围（用户 2026-11-11 确认）**：**功能与前端显示基本全复刻 omp-studio，仅把 omp 换成 step**。基准是 `docs/images/` 九张官方截图（README 第 30-86 行的功能说明段），§9.5 矩阵已逐模块对应到具体图片。版式照抄；数据来自 Step——凡 Step 拿不到的，按本节末的「数据源台账」记 unavailable 或自建，不静默留空。
-> 硬约束（用户指定）：**GUI 面板与 omp-studio 像素级一致复刻**；**TUI 做到产品级**；**外壳纯 Tauri**：单个 WebView 承载全部面板（用户 2026-11-11 定，推翻此前的「Tauri + egui + gpui 混合」与「尽量减少 WebView」）。
-> 基线：omp-studio 0.1.17（MIT）、Step Code（stepfun-ai/Step-Code，MIT）、本机 step CLI 随附文档与实测探针（2026-11-11）、crates.io/GitHub/npm API 取数（2026-11-11）。
+> 目标：以 step-studio 为功能与 UI 基准，用 Rust + TypeScript 重新实现其桌面形态，运行时对接 Step Code CLI，产出 Windows 优先、高性能、低开销、低占用、低存储的可视化智能体平台。
+> **范围（用户 2026-11-11 确认）**：**功能与前端显示基本全复刻 step-studio，仅把 omp 换成 step**。基准是 `docs/images/` 九张官方截图（README 第 30-86 行的功能说明段），§9.5 矩阵已逐模块对应到具体图片。版式照抄；数据来自 Step——凡 Step 拿不到的，按本节末的「数据源台账」记 unavailable 或自建，不静默留空。
+> 硬约束（用户指定）：**GUI 面板与 step-studio 像素级一致复刻**；**TUI 做到产品级**；**外壳纯 Tauri**：单个 WebView 承载全部面板（用户 2026-11-11 定，推翻此前的「Tauri + egui + gpui 混合」与「尽量减少 WebView」）。
+> 基线：step-studio 0.1.17（MIT）、Step Code（stepfun-ai/Step-Code，MIT）、本机 step CLI 随附文档与实测探针（2026-11-11）、crates.io/GitHub/npm API 取数（2026-11-11）。
 > 本版相对 v5.0 的变化（M1.2a 实施）：`bootstrap` 从 stub 改为接真实 `BridgeSession`（连接适配器→取 snapshot→翻译成 `ClientBootstrap`），Xvfb 实证状态栏由「Unavailable」变「OMP Ready」。`step-studio-bridge` 加入 workspace.dependencies 与 Tauri crate 依赖。新增一条实施纪律：移植既有代码时不得把「首个匹配即返回」的循环改写成收集式迭代——本次正因此把适配器自身路径当成参数传了进去。
 > 本版相对 v4.10 的变化（**外壳纯 Tauri，架构级变更**）：用户定「外壳使用纯 Tauri」，删除 egui 与 gpui 两个原生面——FR-2 由四表面收窄为二表面（Tauri + HQTUI TUI），§0 结论摘要、架构图、Rust 职责、目录树同步更新；`crates/step-studio-shell` 标记为死代码待删（其无头夹具职责已由 Xvfb + Tauri release 二进制承接，M1.1 实证）；M3 的终端/diff go/no-go 与 gpui 五项 go/no-go 全部关闭；新增两条决策记录——纯 Tauri 的理由与代价、以及内存代价改由 G-1 单独承担（失去 egui 118 MB 低开销模式兜底）。
 > 本版相对 v4.9 的变化（slash 命令可经桥抵达，实测）：用户指出「桥上输 /usage 应与 CLI 输 /usage 等效」，实测成立——`/usage` 作为 prompt 发出后被按 slash 命令分发，渲染面板经 `notify` 回传（适配器已处理的 fire-and-forget 通道）。据此：用量面板的数据源从「待定路由」改为「桥上直接可用」，D-2 关闭；并新增通则——CLI 的 TUI 面板类 slash 命令大多可经 `prompt` 取到，不必等 RPC 暴露或自扫文件，代价是回传为 ANSI 文本。此前「`/usage` 不是 RPC 命令所以取不到」的判断据此作废。
 > 本版相对 v4.8 的变化（Agent Hub 数据源查实后修正）：原写「Step RPC 不暴露 subagent 列表与状态」 overstated——真相是子代理会话以 `origin: "subagent"` / id 前缀存在于 `<agentDir>/sessions`，Step 在 `session-index.md` 中**有意**将其排除出所有列表与搜索，故无枚举命令；数据可达，路径为自扫会话目录（Step 自己的 `/usage` 即如此）。D-3 随之定为自建扫描、不等上游，并要求与 `/usage` 共用同一套读取与缓存。
-> 本版相对 v4.7 的变化（范围确认 + 基准图台账）：用户确认「功能与前端显示基本全复刻 omp-studio，仅 omp→step」，写入目标声明；§9.5 增加「基准图」列并逐模块对应 `docs/images/` 九张官方截图；新增 §9.6 数据源台账，把九个基准面对到 Step 实际数据源，其中 Agent Hub（`hub.png`）经实测确认 Step RPC 不暴露 subagent 列表与状态，记为数据源缺失；列出的 D-1 worktree、D-2 用量路由、D-3 Agent Hub 数据源三条岔路待决策。
-> 本版相对 v4.6 的变化（M1.1 实施 + 专家团三路会审）：`apps/desktop-tauri` 落地（Tauri v2 壳、bridge init script、六个 Rust 命令 stub）；`createDesktopIpcBridge` 从 `apps/desktop/src/ipc-validation.ts` 移入 `packages/transport-desktop/src/ipc-validation.ts` 并再导出（M1.2「三桥重建」种子，Electron preload 与测试改为从包导入）；§19 新增 6 条 M1.1 决策（命令名去前缀、单 listen 扇出、双参事件派发、拒绝重包、桥工厂迁移、只注入 ompStudio）；§21 进展更新。修复 `package-lock.json` 缺 `packages/runtime-stepcode` 条目导致 `npm install` 全量失败的问题。
+> 本版相对 v4.7 的变化（范围确认 + 基准图台账）：用户确认「功能与前端显示基本全复刻 step-studio，仅 omp→step」，写入目标声明；§9.5 增加「基准图」列并逐模块对应 `docs/images/` 九张官方截图；新增 §9.6 数据源台账，把九个基准面对到 Step 实际数据源，其中 Agent Hub（`hub.png`）经实测确认 Step RPC 不暴露 subagent 列表与状态，记为数据源缺失；列出的 D-1 worktree、D-2 用量路由、D-3 Agent Hub 数据源三条岔路待决策。
+> 本版相对 v4.6 的变化（M1.1 实施 + 专家团三路会审）：`apps/desktop-tauri` 落地（Tauri v2 壳、bridge init script、六个 Rust 命令 stub）；`createDesktopIpcBridge` 从 `apps/desktop/src/ipc-validation.ts` 移入 `packages/transport-desktop/src/ipc-validation.ts` 并再导出（M1.2「三桥重建」种子，Electron preload 与测试改为从包导入）；§19 新增 6 条 M1.1 决策（命令名去前缀、单 listen 扇出、双参事件派发、拒绝重包、桥工厂迁移、只注入 stepStudio）；§21 进展更新。修复 `package-lock.json` 缺 `packages/runtime-stepcode` 条目导致 `npm install` 全量失败的问题。
 > 本版相对 v4.5 的变化（文档归并，GAP-16）：全部 Step Studio 设计文档迁入仓库内 `design/` 单一目录（`plan.md` 研发方案 + `status.md` 实现状态 + `reference/` 参考资料 + `README.md` 索引与维护纪律）。此前方案放在仓库外，代码提交不带文档，方案与代码各自漂移；本版起 24 节规定「设计与代码同一个提交」修复该问题。内容无实质变更，仅路径引用与维护规则。
 > 本版相对 v4.4 的变化（M0.4 对抗评审后修订，重要）：M0 首版实现对准了自创契约而非 Studio 真实契约，评审抓出后已修正：`interaction.respond` 的线上形状是 `{interactionId, commandId, decision: submit|cancel, value?}`（不是自创的 `response` 对象），按 method 翻译为 CLI 的 `confirmed`/`value`/`cancelled`；dialog 事件改为契约的 `interaction.required`（嵌套 request，kind 为 confirm/select/input/editor，owner/leaseGeneration），fire-and-forget 因契约里没有对应 kind 而 v1 丢弃（不再发明 `conversation.interaction.notice`）；新增 `interaction.resolved`（submitted/cancelled/aborted）并在 stale、abort、shutdown 三条路径发出；bridge 客户端新增 `send_command`（发命令不消费事件流，生产路径的应答方式）；`interaction.respond` capability 降为 limited 并写明限制；COMMANDS 表补齐既有 capability。测试全部改用契约真实形状重写。
 > 本版相对 v4.3 的变化（M0 里程碑完成）：审批环在 Rust 适配器侧落地（9 个 extension_ui method + interaction.respond + INTERACTION_STALE 失败关闭）；真实 CLI 往返实证 dialog 类请求到达 RPC 客户端且应答后 turn 继续（3.3 末新增实测段）；B4 与第 8 节的 profile 隔离假设被实测推翻并修正（隔离 STEP_CODING_AGENT_DIR 会导致 models.json 不被解析、模型 2 变 0、turn 失败，故不隔离 step 自身 profile）；第 21 节进展更新。M0.3 的 Windows 冒烟因无真机阻塞，M0.4 对抗评审进行中。
@@ -21,7 +21,7 @@
 
 | 项 | 决策 | 一行理由 |
 |---|---|---|
-| 主外壳 | Tauri v2 + **单一 WebView** + React renderer 原样复用 | 像素级复刻 omp-studio 的唯一路径 |
+| 主外壳 | Tauri v2 + **单一 WebView** + React renderer 原样复用 | 像素级复刻 step-studio 的唯一路径 |
 | 终端 / diff / 文件树 / Git / 进程树 / 诊断 | **全部 WebView**（xterm.js、CodeMirror 等在库） | 纯 Tauri 定案：无原生化选项，M3 的 go/no-go 随之关闭 |
 | ~~gpui 原表面板~~ | **已删除**（v5.0） | 纯 Tauri 后无第二个原生面；进程树监控改 WebView 实现，无像素级义务 |
 | ~~egui 轻量壳~~ | **已删除**（v5.0） | 同上；`crates/step-studio-shell` 成为死代码待清。代价是失去 118 MB 低开销模式，G-1 成为唯一内存门禁 |
@@ -42,7 +42,7 @@
 ### 1.1 目标
 
 - Windows 10/11 x64 桌面应用；主链路：登录 → 工作区 → 会话 → 流式对话 → 工具审批 → 会话恢复。
-- GUI 面板与 omp-studio **像素级一致复刻**（WebView 承载面；窗口拓扑是否在像素级范围内见 19 节待签字项）。
+- GUI 面板与 step-studio **像素级一致复刻**（WebView 承载面；窗口拓扑是否在像素级范围内见 19 节待签字项）。
 - 二表面同一核心：Tauri 桌面壳（单 WebView 承载全部面板，像素级）、HQTUI TUI（产品级终端）。v5.0 起 egui 与 gpui 删除。
 - 计算全部下沉 Rust，UI 只做纯视图投影。
 
@@ -77,10 +77,10 @@
 |---|---|---|
 | FR-1 | 运行时对接 Step Code CLI：复用 Studio Bridge 协议，零上游补丁，版本下限探测 | v1.0 延续 |
 | FR-2 | 二表面：Tauri 主壳（单 WebView 承载全部面板，像素级）、HQTUI TUI（产品级） | 用户指定；v5.0 起由四表面收窄 |
-| FR-3 | omp-studio 功能模块全量等价（矩阵见 9.5） | 用户指定 |
+| FR-3 | step-studio 功能模块全量等价（矩阵见 9.5） | 用户指定 |
 | FR-4 | 审批交互：9 个 `extension_ui_request` method 全处理，Full Access 二次确认，plan 提案 UI | 3.3 实测 |
 | FR-5 | 会话管理：创建/恢复/树/归档/惰性激活/热进程窗口 | 3.3 实测 |
-| FR-6 | 工作台能力：git（gix 读 + CLI 写）、文件树、终端、diff 审查、进程树监控、Agent 状态监控、用量 | omp-studio 等价 |
+| FR-6 | 工作台能力：git（gix 读 + CLI 写）、文件树、终端、diff 审查、进程树监控、Agent 状态监控、用量 | step-studio 等价 |
 | FR-7 | 插件系统：rquickjs 沙箱 + 白名单能力 + TS 类型剥离 + Bun 逃生舱 | 预算约束推导 |
 | FR-8 | MCP：rmcp client + TS server 按 stdio 托管 + 纳入进程树 | 组件选型 |
 | FR-9 | TUI 四仪表盘（进程树/Agent 状态/用量/会话树）产品级，键位体系对标 tuicr | 用户指定 |
@@ -119,7 +119,7 @@
 
 ## 3. 事实基线
 
-### 3.1 omp-studio 架构与规模（2026-11-11 仓库清点）
+### 3.1 step-studio 架构与规模（2026-11-11 仓库清点）
 
 | 部分 | 语言 | 位置 | 行数（清点） |
 |---|---|---|---|
@@ -316,8 +316,8 @@ capability 等级（v4.3 改名以示区分）：stable / limited / unavailable�
 
 ### 5.2 renderer ↔ Tauri 壳契约
 
-- 5 方法（`bootstrap/query/command/subscribe/close`），`transport-desktop` 传输实现一行不改；6 个 channel 字符串变 `#[tauri::command]` 名；`initialization_script` 包 `invoke`/`listen` 挂 `window.ompStudio` 并 `Object.freeze`。
-- 三座桥：`ompStudioChrome`（`IpcRendererLike` + `WebUtilsLike` 抽象已就绪）、`ompStudioTerminal`（PTY 状态通道，数据面走 daemon→壳→WebView 二进制帧）、`ompStudioRemote`（SSH，v4 留桩）。
+- 5 方法（`bootstrap/query/command/subscribe/close`），`transport-desktop` 传输实现一行不改；6 个 channel 字符串变 `#[tauri::command]` 名；`initialization_script` 包 `invoke`/`listen` 挂 `window.stepStudio` 并 `Object.freeze`。
+- 三座桥：`stepStudioChrome`（`IpcRendererLike` + `WebUtilsLike` 抽象已就绪）、`stepStudioTerminal`（PTY 状态通道，数据面走 daemon→壳→WebView 二进制帧）、`stepStudioRemote`（SSH，v4 留桩）。
 
 ### 5.3 daemon ↔ adapter 命令映射
 
@@ -442,7 +442,7 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 
 > 纯 Tauri 定案后本表面删除。进程树监控改由 WebView 实现（htop 式 canvas/SVG，无像素级义务），原 go/no-go 五项与降级梯作废。以下内容仅作历史留存。
 
-- 范围收缩：**唯一候选是进程树监控面板**（htop 式新形态，omp-studio 无 dock 像素级义务）；终端与 diff 的迁移权收回到 9.1 默认，除非 9.6 go/no-go 五项全过。
+- 范围收缩：**唯一候选是进程树监控面板**（htop 式新形态，step-studio 无 dock 像素级义务）；终端与 diff 的迁移权收回到 9.1 默认，除非 9.6 go/no-go 五项全过。
 - 构成（若过）：gpui + gpui-component + `NativePanel` trait；独立无边框 owner 窗，主窗最小化/关闭时跟随（4.3 窗口生命周期）。
 - 依赖风险：锁 git rev；**gpui Windows 后端 `WindowKind::Floating` 目前是空操作，Zed PR #63277（2026-08-27 开，未合）补的正是 WS_POPUPWINDOW + parent_hwnd**。若选独立窗形态，要么自带 patch（fork 维护税 +1）要么等合入；进程树面板若无浮空需求可避开。
 - 降级梯（AT-6 二审）：L1 go/no-go 不过 → 进程树监控也回 WebView（htop 式用 canvas/SVG 实现，renderer 内新增，估 3-5 人日），gpui 线整体关闭；L2 gpui 全败（rev 构建不过/trait 覆盖不了）→ 原生的线推迟至 M5 后重评。**egui 终端面板不再作为退路选项**（16-24 人日成本黑洞，且 egui 三角色不含此）。
@@ -522,11 +522,11 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 
 ### 9.7 可访问性与本地化（v4.3 新增，GAP-5/6）
 
-- 键盘：全部交互可 Tab 到达、Enter/Space 激活、Escape 关对话框；焦点指示可见；renderer 侧既有实现需逐页核对（对照 omp-studio 行为）。
+- 键盘：全部交互可 Tab 到达、Enter/Space 激活、Escape 关对话框；焦点指示可见；renderer 侧既有实现需逐页核对（对照 step-studio 行为）。
 - 对比度：WCAG AA（正文 4.5:1、大字 3:1），三表面各自口径；TUI 的 16/256 色降级路径一并验。
 - 高 DPI：150%/200% 两档进像素级验收；gpui 子窗（若存在）per-monitor DPI 各自处理 WM_DPICHANGED。
 - IME：中文输入法最早测（三表面各自路径：WebView 随 WebView2、egui 0.31 已知弱项、gpui 自兜）。
-- 诚实记账：屏幕阅读器语义（AccessKit/UI Automation）**非 v1 目标**；像素级复刻会连带继承 omp-studio 既有的 a11y 缺陷，v1 只承诺「不新增缺陷 + 键盘可达 + 对比度」。
+- 诚实记账：屏幕阅读器语义（AccessKit/UI Automation）**非 v1 目标**；像素级复刻会连带继承 step-studio 既有的 a11y 缺陷，v1 只承诺「不新增缺陷 + 键盘可达 + 对比度」。
 - i18n：v1 中文界面；英文与 RTL 非目标（后续）；OMP 遗留的 i18n 资源文件随 renderer 复用，不新增语言。
 
 ---
@@ -583,7 +583,7 @@ turn：`idle → streaming → (awaiting_approval) → settling → settled`（c
 ### 12.4 升级、数据迁移与回滚（v4.3 新增，GAP-1/2）
 
 - **daemon 热替换序列**：更新启动 → 通知 daemon 立即排空（**升级场景宽限期强制 0**）→ daemon 退出 → 换包（先 rename 旧再 move 新，失败回滚）→ 首个表面拉起新版本 daemon。新壳 connect 时若 daemon 是旧构建号，**不拒绝而是提示需要重启更新**（避免「更新后打不开」，AT-3）。
-- **v1→v2 数据迁移**：迁移范围仅本方数据：DPAPI 凭据（格式版本号，不变则透传）、设置项（版本化映射表，未知项保留不删）、SQLite schema（版本号 + 迁移步进，无版本号则拒绝启动并提示）。**omp-studio 用户数据不在迁移范围**（产品是 fork 不是升级替代，配置目录不同）。
+- **v1→v2 数据迁移**：迁移范围仅本方数据：DPAPI 凭据（格式版本号，不变则透传）、设置项（版本化映射表，未知项保留不删）、SQLite schema（版本号 + 迁移步进，无版本号则拒绝启动并提示）。**step-studio 用户数据不在迁移范围**（产品是 fork 不是升级替代，配置目录不同）。
 - **回滚**：保留上一版本安装包（`%LOCALAPPDATA%\Step Studio\updates\previous`）；新版本启动失败（连续崩溃或 daemon 熔断）时提供「回退到上一版本」入口；回滚不碰凭据与索引（向前兼容）。
 - 验收（M5）：升级中 daemon 在跑、降级攻击（旧版清单）、迁移后凭据可用、回滚后数据完好，各一个真机用例。
 
@@ -744,7 +744,7 @@ flowchart LR
 - **并行启动（非人日）**：Windows 真机采购、签名证书采购（组织验证日历周级）、step CLI CDN 拉取方案（IM-7）
 
 **M1 Tauri 壳 + 像素级基线（约 18 至 28 人日）**
-- M1.1 Tauri 脚手架 + renderer 挂载 + `window.ompStudio` 注入（3-5）
+- M1.1 Tauri 脚手架 + renderer 挂载 + `window.stepStudio` 注入（3-5）
 - M1.2 6 channel 迁移 + 三桥重建 + 门禁表同提交（4-7）
 - M1.3 窗口铬重校 + Vite base + CSP + **150%/200% DPI 两档**（3-5；IM-4 上调）
 - M1.4 WebView2 兼容矩阵 + 六页面人工比对清单（3-6；IM-4 上调）
@@ -849,13 +849,13 @@ flowchart LR
 | 每会话一 step 进程 + 惰性激活 | 上游实测约束 | 进程内切会话（上游不支持） | M2 重入实测后 |
 | **外壳纯 Tauri，删除 egui 与 gpui 两个原生面**（v5.0） | 用户 2026-11-11 定。一个 UI 栈承载全部 19 个 WebView 模块，像素级复刻零成本（同一份 React）；省掉两套原生面的实现与协调（gpui 子窗 owner 链/最小化跟随/杀壳重连恢复、egui 双模式与无头夹具）；M3 的终端/diff go/no-go 与 gpui 五项 go/no-go 随之关闭 | Tauri + egui + gpui 混合（v4.x 既定架构）；单一 egui（v3.0-v3.2，用户曾禁 WebView） | M5 实测后 |
 | 纯 Tauri 的内存代价由 G-1 单独承担 | 失去 egui 118 MB 低开销模式后无兜底；但上游地板 252 MB（step 167.1 + MCP 84.9）不变，壳层差异被稀释 | 保留 egui 作低开销模式 | M5 回填 G-1 后 |
-| Tauri 命令名去掉 `omp-studio:desktop:` 家族前缀 | Tauri 插件命令按 `plugin:name\|cmd` 命名空间化，带冒号的命令名要逐个 rename | 直接用 channel 串作命令名（v4.2 §5.2 原述，不可达） | 不改 |
+| Tauri 命令名去掉 `step-studio:desktop:` 家族前缀 | Tauri 插件命令按 `plugin:name\|cmd` 命名空间化，带冒号的命令名要逐个 rename | 直接用 channel 串作命令名（v4.2 §5.2 原述，不可达） | 不改 |
 | sender 用「单 listen 扇出到 Set」 | Tauri `listen` 返回 Promise，逐订阅注册会让早于 resolve 的 `removeListener` 找不到目标，监听活到窗口生命周期结束 | 每订阅一个 listen + `Map<listener, UnlistenFn>` | M1.2 三桥重建时 |
 | **次级页渲染在壳内，保留应用侧栏与应用顶栏**（待批，2026-11-14 实测提出） | `ui_reference/ver2/__shots/` 的 `light-settings-perms.png` 与 `light-diagnostics.png` **都**保留左侧应用侧栏（项目与对话 + EXPLORER 文件树）与应用顶栏，次级页只是主列里的内容；本仓 `App.tsx` 的 `{showPage ? <SecondaryPage/> : <壳>}` 是二选一，次级页拿到的是自己的 `.page-head`（返回键 + 标题 + 页签轨 + 主题键）并**完全没有侧栏与顶栏**。这是 M4.1 首轮结构比对里最大的一处「缺」，且横跨全部 10 个次级路由 | 维持全屏次级页（现状）：省掉一次壳层重构，但 10 个页面都与基准面不一致，像素签收无法通过 | M4.1 人眼比对前 |
 | 事件派发传 `(event, payload)` 两个参数 | `subscribeChannel`（`apps/desktop/src/chrome-api.ts:81-93`）解构第二个参数 | 只传 payload：M1.2 所有 chrome/terminal 监听会收到 undefined | 不改 |
 | Tauri 拒绝统一重包为 `Error` | Tauri 拒绝时是 Rust 错误的裸序列化（struct Err 即 `{code, message}`），透传会让真实 ClientErrorCode 泄漏到 UI；Electron 下统一是 TRANSPORT_ERROR | 原样透传 | 不改 |
 | `createDesktopIpcBridge` 移入 `packages/transport-desktop` | `apps/desktop-tauri` 不能跨 app 相对导入（破坏 `rootDir`）；依赖 `desktop/dist` 会在 M5.6 删除 apps/desktop 时断 | 从 `../../desktop/src/ipc-validation.ts` 相对导入（esbuild 能解析，但是把 M1.2 的债提前背） | M1.2 |
-| M1.1 只注入 `ompStudio` | renderer 对另三个 global 全部是可选调用，缺省即降级不白屏 | 同时做 chrome/terminal/remote 三桥（超出 M1.1 的 3-5 人日） | M1.2 |
+| M1.1 只注入 `stepStudio` | renderer 对另三个 global 全部是可选调用，缺省即降级不白屏 | 同时做 chrome/terminal/remote 三桥（超出 M1.1 的 3-5 人日） | M1.2 |
 | Tauri 依赖显式开 `custom-protocol` | `tauri-build` 的 `is_dev()` 以该 feature 缺失为 dev，裸 `cargo build` 会走 `devUrl` 连不上 localhost；`tauri build` 才隐式传它 | 只依赖 `tauri build` | 不改 |
 | 不开 `security.freezePrototype` | 开了它 renderer bundle 在 import 阶段抛 `Attempted to assign to readonly property`，整个 module 不执行、页面全白；Tauri 文档明示它会打断 polyfill 与部分框架，方案 §8 也从未要求这层硬化 | 开启（脚手架初版），Xvfb 实证推翻 | 若将来要开，先定位是哪个 polyfill 再定向修，不要全局冻结 |
 
@@ -870,8 +870,8 @@ flowchart LR
 | 状态版本不随 delta 前进 | 适配器只对改变状态的事件递增 `stateVersion`（`main.ts:162-167`），`runtime-projection.ts:38-50` 记了每 token 重发未变 read model 是成本不是功能；镜像它，renderer 的 `advanceConnection` 取最大值才不失真 | 每事件递增（触发 renderer 全量重算） | 不改 |
 | 未送达的事件不得推进 `cursor` | bootstrap 把 `cursor: 0` 声明为续起点；被丢弃的事件（`subscribe` 之前的全部）若照常计数，第一个真事件就成了间隙，而间隙强制 `resync_required`（`reducer.ts:737`），且本壳不发 snapshot 所以永不消退 | 无条件递增（首个实现，实机截图抓出） | 不改 |
 | 回滚覆盖 `cursor` 与 `pending_turn` 两个字段 | `translate()` 合成回合结束回执时会消费 `pending_turn`；只回滚 cursor 会留下一个永不到达的回执 | 只回滚 cursor（第一版修法，被测试抓出） | 不改 |
-| 改名只动独立大写词 `\bOMP\b` | 这一条限定同时保护了三类不该动的东西：`OMP_STUDIO_CLIENT`（`_` 是词字符）、全小写的 `omp-studio` / `@omp-studio` / `ompStudio`、真实配置路径 `~/.omp/agent/config.yml` | 全文替换 OMP（会破坏注入点与路径字面量） | 不改 |
-| `tauri.conf.json` 的 identifier 保持 `com.snowpear.omp-studio` | 改它等于迁移安装目录与 app-data 目录，会让已有 profile 失效；它不是界面显示 | 改成 `com.snowpear.step-studio` | 用户明确要求迁移安装身份时 |
+| 改名只动独立大写词 `\bOMP\b`（**2026-11-21 已推翻，见 status.md「改名第二轮」**） | 这一条限定同时保护了三类不该动的东西：`OMP_STUDIO_CLIENT`（`_` 是词字符）、全小写的 `step-studio` / `@step-studio` / `stepStudio`、真实配置路径 `~/.omp/agent/config.yml` | 全文替换 OMP（会破坏注入点与路径字面量） | 不改 |
+| `tauri.conf.json` 的 identifier 保持 `com.snowpear.step-studio`（**2026-11-21 已改**） | 改它等于迁移安装目录与 app-data 目录，会让已有 profile 失效；它不是界面显示 | 改成 `com.snowpear.step-studio` | 用户明确要求迁移安装身份时 |
 | **M3.5 对抗评审：两条 Critical 推翻了「Git 面板全部接上」（2026-11-12）** | 评审对象是刚落成的 `git.rs`（1713 行）。两条 Critical：① `resolve_operation` 的 git 臂**手工挑字段而不是 spread**，`operation`/`path`/`target`/`paths` 全丢——于是每个 `git.execute` 都因缺 operation 被拒、每个 `workspace.fileTree` 都列仓库根、每个 `git.diff.get` 都返回空 patch；② `command` 传 `Want::Result`，`client.command` 因此 resolve 到没有 `requestId` 的 payload，`waitReceipt(client, undefined, 60_000)` 挂一分钟。**两条逃过全部测试的原因相同：模块测试全部直调函数，接线从未被验证。**已修，并补一个经 `resolve_operation` 的接线测试。同批修掉：`pull` 的 match 没有 `ff-only` 臂（而那是默认值、也正是面板 Pull 按钮发的，所以每次 Pull 必错）；`worktree_path` 漏 `..` 检查（可在仓库外建 worktree），且三处 `..` 检查都只 split `'/'`，漏 Windows 的 `..\..\x`；`unborn` 永不为真（porcelain v2 对未出生分支仍给分支名，只有 oid 是 `(initial)`）；`truncated` 在循环内按 `limit` break，正好 `limit` 条提交时误报有更多；`%D` 剥前缀导致本地 `feature/x` 与远端 `origin/feature/x` 同名歧义，改用完整 refname 建映射分类；**`revision` 从未发出，导致我宣称的乐观并发检查在面板上全是死的**（discard 因 `!repository.revision` 永久 disabled、hard reset 不可达、branch.delete 干脆不发 `expectedRevision` 而静默丢失检查） | 只信模块单测（它们直调函数，接线坏了照样绿）；用名字形状猜 ref 种类 | 接线测试随新增本地 query 一起补，不许再只有直调测试 |
 | **M2.6 三路对抗评审的结论与处置（2026-11-12）** | 三路并行（并发/死锁、信任边界、数据诚实）各自读码不构建。合计 30 条 finding，其中 **5 条是本 session 自己引入的**，最严重的一条是 `Dispatch::Local` 把 ack 当结果返回——`capabilities.get` 因此交回一个回执形状的对象，渲染层 `usableCapabilityManifest` 读 `.capabilities.length` 直接 TypeError。已修：该 crash、`providers[].models` 与 `webSearch` 缺必填成员（两处都会 throw）、`next_frame` 对 `payload_length < 4` 的 panic（panic 会跳过 B1 依赖的 surface 释放清理）、全局 `to_surface` 被陈旧泵线程清空（与已修的 `alive` 竞态同形）、bind 竞争失败者删掉赢家的 socket 文件、panic 的泵被 `join().ok()` 当成正常退出、`/tmp` 端点无属主/权限校验（目录 0700 + 属主校验 + socket 0600，任何 umask 下成立）、`notify` 不再被任意扩展消息冒领（按 `extensionPath: "command:usage"` 判别）、双向不变式补齐 RENAMED 表。**修不了的两条已记为缺口**：peer-uid 校验（`UnixStream::peer_cred` 仍 unstable 而 workspace 禁 `unsafe`）与 Windows 侧 `#[cfg(not(unix))]` 分支（无真机，只保证编译） | 只报告不修（评审就失去意义）；引入 `unsafe` 或新依赖换 peer-cred | peer-cred 随 M5.1 平台能力一起做；Windows 分支待真机 |
 | **M3.2 进程树面板的真实阻塞是 M2.3，不是设计（2026-11-12 实证）** | 上一轮记「需从零设计契约面」，本轮查清真正卡住它的东西：**进程树的事实在 daemon 手里，而壳拿不到**。壳侧 `bridge.rs:587` 用 `process_group(0)`（setsid）拉起 daemon，M2.1 的验收测试也已实证 daemon 在壳 `kill -9` 后**同 PID 存活**——即它被 init 收养、不在壳的进程树里。所以壳侧读 `/proc` 只能看到壳自己与终端 PTY，看不到 daemon/适配器/step；而 daemon 是**纯转发**，不终结协议，没有任何非转发路径回答查询。要让进程树面板成立只有两条路：(a) daemon 为该 operation 终结协议（正是 M2.3 的工作）；(b) 把 daemon 改回壳的子进程——直接推翻「壳重启不杀会话」，是 M2 的存在理由。**结论：M3.2 应并入 M2.3 那一批，不是独立的 M3 项。** 此前把它单列为 M3.2 是排期错误 | 在壳侧读 `/proc` 做一个只有壳自己的进程树（UI 会显示一个永远不含 daemon 的「进程树」，比没有更误导）；为它单独给 daemon 加一个非转发查询（那是 M2.3 的形状，提前做会做两遍） | 随 M2.3 一起做 |
@@ -957,7 +957,7 @@ flowchart LR
 | 设计文档 | v4.7 落盘于 `design/plan.md`（v4.7 = M1.1 实施 + 三路专家会审的 6 条决策）；两轮专家团 73 条 finding 处置台账见 26 节 |
 | Rust 桥与适配器 | 已跑通真实 Step CLI 与真实模型（41 个 cargo 测试） |
 | egui 壳 | 核心对话链路端到端 + Catalog 抽屉（扩展/MCP/命令），egui 0.31；双模式定位 |
-| React renderer | 产品本体，已挂载进 Tauri 壳（M1.1）：renderer 零改动，`globalThis.ompStudio` 注入即建 client |
+| React renderer | 产品本体，已挂载进 Tauri 壳（M1.1）：renderer 零改动，`globalThis.stepStudio` 注入即建 client |
 | Tauri 壳 | **M1.1 / M1.2a / M1.2b / M1.2c / M1.3 完成并实证**。M1.2a：状态栏由「Unavailable」变「Step Ready」。M1.2b：`query`/`command` 接真实会话 + 事件泵（泵独占 `BridgeSession`，`core.prompt` 是唯一 `Dispatch::Turn`，`conversation.changed` 原样透传，能力清单由派发表派生）；Xvfb 下真机跑完整个回合——prompt 接受、逐字流式、回执合成、转写渲染。M1.2c：chrome 壳级子集 10 个方法 + terminal 真 PTY（`portable-pty`，含「开真 PTY / 起真 shell / 写命令 / 读回输出」的集成测试）；remote 桥按 §1.3 非目标不建。M1.3：Vite base 与 CSP 查证后无需改动，窗口铬无事可做（File/Edit/View/Help 是 renderer 自绘），150%/200% DPI 在 Xvfb 下两档渲染正常。全过程中修掉三个只有真机能抓的问题：bootstrap 缺 `snapshot` 导致 composer 永久禁用、未送达事件推进 `cursor` 导致 resync 横幅常驻、Tauri 编译期嵌入 `frontendDist` 导致改 dist 不生效。clippy 干净，shell 侧 23 个 Rust 测试 + 29 个 TS 测试进核心门禁 |
 | 审批环 | **M0.1-M0.4 完成**：Rust 适配器 9 method；M0.4 对抗评审后改为对准契约真实形状（`interaction.required` 嵌套 request + `interaction.respond` 的 `{interactionId, commandId, decision, value}` + `interaction.resolved` 三路径 + `send_command`）；真实 CLI dialog 往返实证（3.3 末） |
 | host daemon 化 | **M2.1 完成并实证**（daemon 生命周期 + 监督者 + 宽限期：杀壳后 daemon/适配器/step 同 PID 存活，重启壳重连同一适配器）。**M2.2 壳侧重连 + 用量/模型/capabilities 三面 + 熔断演练完成并实证**：杀适配器 → daemon 释放 surface → 壳 session 结束并重连 → 新适配器起来；渲染层在权威变更时重跑 `load()`，否则 reducer 清空实体后无回填、composer 永久禁用。跳过的：daemon↔surface 新协议与多表面（M2.3）。新增 `crates/studio-host`（daemon bin + supervisor + lifecycle + state + relay，23 个单测 + 5 个端到端测试）。壳改为客户端：连 daemon，连不上就 detached 拉起再连；适配器由 daemon 拥有，壳侧 session 是 client-only。**真机验收通过**：Xvfb 下跑壳 → 自检回合拿到逐字流式 → `kill -9` 壳 → daemon / 适配器 / `step` 同 PID 全部存活 → 重启壳 → 重连到同一个适配器（没有新起）且回合正常完成。过程中修掉四个只有真机/无头测试能抓的问题：适配器 `serve()` 无限循环导致 daemon 死后适配器孤儿化握着会话（R1）、`BridgeSession` reader 线程持有 socket 克隆导致 drop 不断开、`/tmp/step-studio-<uid>/` 目录未建导致 bind ENOENT、`--grace` 未接到 `GraceClock`（写死了常量）。同时把 §19 的 `Crashed --> Backoff` 无主人、`drain: true` 假排空、epoch 恒为 1 使 reducer epoch 规则成死代码三条方案缺口补上。跳过的：信号处理排空（fd 级联已覆盖正确性，代价是 unsafe 或新依赖）、OS 自动拉起（M5.2）、daemon↔surface 新协议（M2.2）。详见 §19 新增的 10 条 M2.1 决策 |
@@ -980,7 +980,7 @@ flowchart LR
 
 | 组件 | 许可证 | 义务 |
 |---|---|---|
-| omp-studio（fork 基底） | MIT | 保留 NOTICE 与版权声明；**MIT 不含商标许可**，产品名/图标不得使用 omp-studio 标识 |
+| step-studio（fork 基底） | MIT | 保留 NOTICE 与版权声明；**MIT 不含商标许可**，产品名/图标不得使用 step-studio 标识 |
 | Step Code | MIT | 同上；「Step」相关标识使用需确认授权范围 |
 | Tauri v2 及插件 | MIT/Apache-2.0 | 声明保留 |
 | egui/eframe、gpui（git 依赖 Zed/Longbridge 快照） | MIT/Apache-2.0 | 声明保留；git 依赖需在 NOTICE 记 commit |
@@ -1018,7 +1018,7 @@ flowchart LR
 
 **IC（内部一致性，23 条）**：IC-1 断引 6.5→6.4 采纳；IC-2 环境变量双名采纳（本地裁决 `STEP_CODING_AGENT_DIR`，`STEPCODE_CONFIG_DIR` 不存在）；IC-3 egui 启动门禁采纳（拆可归因段）；IC-4 瀑布混 N 采纳（14.3 重写）；IC-5 WBS 加总采纳（16.3 全表重算）；IC-6/7 追溯闭合采纳（补 C-2/C-3、FR-6/7 落点）；IC-8 术语表 daemon 定义采纳（例外一同步）；IC-9 HQTUI headless 采纳（改待确认）；IC-10 三线改四线采纳（16.2 重写为依赖图）；IC-11 host 客户端归属采纳（并入 studio-bridge）；IC-12 cron/subagents/ultracode 采纳（5.3 为命令面权威）；IC-13 PTY task 改线程采纳；IC-14 grade 同名采纳（capability 改 level）；IC-15/16/17 安装包算术、14% 分母、MemoryHints 状态采纳；IC-18 hqtui 单位置采纳；IC-19 PDEATHSIG 采纳（留档不用）；IC-20 typo 采纳；IC-21 25 测试归属采纳（注明同一套）；IC-22 webview 门禁零余量采纳（拆段）；IC-23 零 Node 口径采纳（注明上游运行时含在 167.1 MB 内）。
 
-**GAP（遗漏，15 条）**：GAP-1 采纳并修正（迁移范围限本方数据，omp-studio 用户数据不在范围，12.4）；GAP-2 采纳（daemon 热替换 + 握手构建号）；GAP-3 采纳（4.3 窗口生命周期）；GAP-4 采纳（4.3 多用户）；GAP-5 采纳（9.7 a11y + NFR-11，屏幕阅读器记账非目标）；GAP-6 采纳（DPI 进像素口径，i18n 记非目标）；GAP-7 采纳（8 节崩溃上报策略：v1 不上报 + 诊断包）；GAP-8 采纳（静默/每机器决策：v1 每用户 + 残留清单）；GAP-9 采纳（15.3 CI 环境策略：mock 进 CI + 真机分层 + 采购提前期）；GAP-10 采纳（23 节许可合规章）；GAP-11 采纳（8 节隐私清单）；GAP-12 采纳（7.2 日志轮转）；GAP-13 采纳（12 节支持矩阵）；GAP-14 采纳（16.3 资源与技能假设）；GAP-15 采纳（24 节文档维护）。
+**GAP（遗漏，15 条）**：GAP-1 采纳并修正（迁移范围限本方数据，step-studio 用户数据不在范围，12.4）；GAP-2 采纳（daemon 热替换 + 握手构建号）；GAP-3 采纳（4.3 窗口生命周期）；GAP-4 采纳（4.3 多用户）；GAP-5 采纳（9.7 a11y + NFR-11，屏幕阅读器记账非目标）；GAP-6 采纳（DPI 进像素口径，i18n 记非目标）；GAP-7 采纳（8 节崩溃上报策略：v1 不上报 + 诊断包）；GAP-8 采纳（静默/每机器决策：v1 每用户 + 残留清单）；GAP-9 采纳（15.3 CI 环境策略：mock 进 CI + 真机分层 + 采购提前期）；GAP-10 采纳（23 节许可合规章）；GAP-11 采纳（8 节隐私清单）；GAP-12 采纳（7.2 日志轮转）；GAP-13 采纳（12 节支持矩阵）；GAP-14 采纳（16.3 资源与技能假设）；GAP-15 采纳（24 节文档维护）。
 
 **AT（对抗性，14 条）**：AT-1 采纳并修正（二审判决：默认回 WebView + 9.6 go/no-go 五项 + 19 节待签字项）；AT-2 采纳（归因断裂，14.1 重排 + G-1 前置条件）；AT-3 采纳（12.4 热替换序列）；AT-4 采纳（M1 接法定 + M2 切面对齐）；AT-5 采纳并修正（renderer 改动与像素级冲突：需动渲染代码的优化降为「可选、须过像素级复审」）；AT-6 采纳并修正（降级梯 L1/L2 + egui 终端退路驳回）；AT-7 采纳（NFR-4 与五二进制冲突：M5 实测校准，不足则合并或放宽）；AT-8 采纳（M0.3 Windows 冒烟）；AT-9 采纳（本地裁决变量名 + M0 探针）；AT-10 采纳（B1 措辞收窄为禁 token/句柄/会话路径，允许工作区路径）；AT-11 采纳（6.1 熔断）；AT-12 采纳（6.4 giving-up 态）；AT-13 采纳（5.5 Bun 逃生舱签名）；AT-14 采纳（5.0 payload 编解码规格）。
 

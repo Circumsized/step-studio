@@ -1,21 +1,21 @@
-# OMP Studio 项目协作说明
+# Step Studio 项目协作说明
 
 ## 项目目标
 
-OMP Studio 是 OMP Runtime / AgentSession 的桌面控制台（Windows 与 macOS Apple Silicon）与配套 Web UI。它通过类型化的 Studio Bridge 暴露运行时能力；不要以 slash 文本、ANSI 输出解析或按键宏模拟控制。
+Step Studio 是 step CLI（Step Code）的桌面控制台（Windows 与 macOS Apple Silicon）与配套 Web UI。它通过类型化的 Studio Bridge 暴露运行时能力；不要以 slash 文本、ANSI 输出解析或按键宏模拟控制。
 
 主要结构：
 
-- `apps/desktop/`：Electron 主进程与 Windows / macOS 桌面壳；平台差异集中在 `apps/desktop/src/platform/`。
+- `apps/desktop-tauri/`：Tauri 壳（Rust）与 preload 桥；平台差异集中在 `src-tauri/src/`。
+- `apps/desktop-tui/`：终端界面，与桌面壳共用同一套 store 读取逻辑。
 - `apps/renderer/`：Vite + React 渲染进程 UI。
 - `packages/`：协议、host、客户端、transport、平台和测试工具包。
-- `omp-patch/overlay/`：Studio 自有的 Runtime 源码（`packages/coding-agent/src/studio/**` 与 `studio-*` 测试），上游没有这些路径，按普通源码维护。
-- `omp-patch/patches/`：接缝补丁，只包含对上游已有文件的改动，按上游子系统分组。
-- `omp-patch/vendor/oh-my-pi/`：上游 OMP submodule，overlay 与接缝补丁施加于其工作区。
+- `crates/`：Rust 侧——`studio-bridge`（帧与握手）、`studio-host`（daemon）、`step-studio-runtime`（适配 `step --mode rpc` 的 adapter）、`step-studio-sessions`、`step-studio-peer-uid`。
+- `omp-patch/`：oh-my-pi 上游子模块与接缝补丁。当前 runtime 走 `step`，这一层是遗留路径。
 - `ui_reference/`：界面参考，不是运行时产品代码。
 - `backup/`：历史备份；不应作为实现或测试输入。
 
-Host 诊断日志：`%APPDATA%\omp-studio\logs\host-YYYY-MM-DD.log`；macOS：`~/Library/Application Support/omp-studio/logs/host-YYYY-MM-DD.log`
+Host 诊断日志：`%APPDATA%\step-studio\logs\host-YYYY-MM-DD.log`；macOS：`~/Library/Application Support/step-studio/logs/host-YYYY-MM-DD.log`
 
 面向使用者和外部贡献者的入口是 [`README.md`](README.md)、[`docs/`](docs/README.md)、[`CHANGELOG.md`](CHANGELOG.md)、[`CONTRIBUTING.md`](CONTRIBUTING.md)。本文件是协作者的工作约定，不是产品说明书。
 
@@ -135,7 +135,7 @@ node scripts/check.mjs --list          # 看有哪些组和包
 - 任何 workspace 都不得依赖、导入 `electron`（Electron 壳已删；`apps/desktop` 不复存在）
 - 只有 `apps/renderer` 可以依赖 `react` / `react-dom` / `@testing-library/*`
 - `apps/renderer` 源码不能直接 import Node 内置模块，必须走 preload（`apps/desktop-tauri/src/preload.ts`）
-- `packages/*/src` 不能 import `@omp-studio/testkit`（演示数据留在渲染层 preview）
+- `packages/*/src` 不能 import `@step-studio/testkit`（演示数据留在渲染层 preview）
 - `PREVIEW_MODE_SWITCH_ENABLED` 只有 `preview/mode.ts` 一处定义，只有 `preview/` 读它
 
 改分层是决策不是失误：同一次提交里改表和代码，diff 就是记录。
