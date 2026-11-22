@@ -23,10 +23,10 @@ function normalizeProfileName(raw: string | undefined): string | undefined {
   return trimmed;
 }
 
-/** OMP_PROFILE overrides PI_PROFILE. */
+/** STEP_STUDIO_PROFILE overrides PI_PROFILE. */
 function getActiveProfile(): string | undefined {
   try {
-    return normalizeProfileName(process.env.OMP_PROFILE ?? process.env.PI_PROFILE);
+    return normalizeProfileName(process.env.STEP_STUDIO_PROFILE ?? process.env.PI_PROFILE);
   } catch {
     return undefined;
   }

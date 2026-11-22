@@ -469,7 +469,7 @@ export function canonicalJson(value) {
 // The patchset version is recorded explicitly rather than derived from the
 // patch count. Counting made the version move backwards the moment patches
 // were consolidated, which collides with an already-installed runtime
-// directory of the same name. `npm run omp:patches:regen` advances it only
+// directory of the same name. `npm run vendor:patches:regen` advances it only
 // when the captured overlay+seam digest actually changed.
 export function derivePatchsetVersion(series) {
   if (typeof series.patchsetVersion === "string" && series.patchsetVersion.length > 0) {
@@ -796,8 +796,8 @@ async function main(argv) {
   const platform = args.platform ?? `${process.platform}-${process.arch}`;
   const entrypoint = args.entrypoint ?? runtimeEntrypointFor(platform);
   const channel = args.channel ?? "stable";
-  const envSigningKeyPath = args.signingKey ?? process.env.OMP_RUNTIME_SIGNING_KEY;
-  const envKeyId = args.keyId ?? process.env.OMP_RUNTIME_SIGNING_KEY_ID;
+  const envSigningKeyPath = args.signingKey ?? process.env.STEP_STUDIO_RUNTIME_SIGNING_KEY;
+  const envKeyId = args.keyId ?? process.env.STEP_STUDIO_RUNTIME_SIGNING_KEY_ID;
   let signingKey;
   let keyId;
   if (envSigningKeyPath !== undefined && envKeyId !== undefined) {
@@ -809,7 +809,7 @@ async function main(argv) {
       signingKey = local.privateKey;
       keyId = local.keyId;
     } catch {
-      throw new Error("--signing-key or OMP_RUNTIME_SIGNING_KEY is required. Run npm run omp:keys to create a local signing key.");
+      throw new Error("--signing-key or STEP_STUDIO_RUNTIME_SIGNING_KEY is required. Run npm run vendor:keys to create a local signing key.");
     }
   }
   const binaryPath = resolve(args.binary ?? defaultBinaryPath());

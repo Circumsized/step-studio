@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 export function resolveTargetArch(env = process.env, hostArch = process.arch) {
-  const arch = String(env.OMP_TARGET_ARCH ?? hostArch).trim().toLowerCase();
+  const arch = String(env.STEP_STUDIO_TARGET_ARCH ?? hostArch).trim().toLowerCase();
   if (arch !== "x64" && arch !== "arm64") throw new Error(`Unsupported Windows target architecture: ${arch}`);
   return arch;
 }

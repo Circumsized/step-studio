@@ -22,9 +22,9 @@ See [`docs/development.md`](docs/development.md). Short version:
 git clone --recurse-submodules https://github.com/the-snowpear/step-studio.git
 cd step-studio
 npm install
-npm run omp:install-deps
-npm run omp:overlay:apply
-npm run omp:keys          # first machine only
+npm run vendor:install-deps
+npm run vendor:overlay:apply
+npm run vendor:keys          # first machine only
 npm run check
 ```
 
@@ -40,7 +40,7 @@ install script documents those.
 3. Preview-mode pages must keep **both** preview fixtures and the real Host
    read model. Never fill an empty real surface with mock data.
 4. Do not edit `omp-patch/patches/*.patch` by hand. Apply the overlay, edit
-   inside `omp-patch/vendor/oh-my-pi`, then `npm run omp:patches:regen`.
+   inside `omp-patch/vendor/oh-my-pi`, then `npm run vendor:patches:regen`.
 5. Do not commit `backup/`, `node_modules/`, `dist/`, Host logs, signing
    private keys, or a dirty vendor gitlink. The submodule pin is a gitlink
    only; overlay apply **will** dirty the vendor working tree locally.
@@ -55,7 +55,7 @@ install script documents those.
    only that package's suites, `npm run check -- --all` widens the test scope,
    and `npm run check -- --production` adds the release bundles. `npm test` runs
    the full workspace suite when needed. Use `npm run test:tooling` for
-   packaging/update scripts and `npm run omp:verify:patches` for Runtime / patch
+   packaging/update scripts and `npm run vendor:verify:patches` for Runtime / patch
    work.
 
 The architecture rules in [`scripts/architecture.test.mjs`](scripts/architecture.test.mjs)

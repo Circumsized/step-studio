@@ -16,7 +16,7 @@ M5.4 门禁实测回填 + RSS 曲线 + 托盘跳帧 + 两种壳产物对比；M5
 **曾经卡住**：M0 验收④「一个真实 turn 端到端」；M4 的 Agent 状态监控数据面；`real-cli` 类测试
 全部 skip。
 
-**解除方式**：`npm run omp:overlay:apply` + `npm run omp:build:host` 构建出
+**解除方式**：`npm run vendor:overlay:apply` + `npm run vendor:build:host` 构建出
 `omp/18.13.2-studio.10`（240 MB，含 `--mode studio-host`），经 `~/.local/bin/step` 上 PATH。
 构建前置：`cmake` 与 `ninja-build`（apt 安装，磁盘原先 100% 满）。
 

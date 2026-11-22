@@ -13,7 +13,7 @@ const renderer = join(root, "apps/renderer");
 const mode = process.env.PERF_BUILD_MODE ?? "development";
 const runs = Number(process.env.PERF_RUNS ?? 5);
 const reportPath = process.env.PERF_REPORT ?? join(root, "outputs/perf/render-work.json");
-process.env.VITE_OMP_PRESERVE_PERFORMANCE_TIMELINE = "1";
+process.env.VITE_STEP_STUDIO_PRESERVE_PERFORMANCE_TIMELINE = "1";
 const fileMode = mode === "file";
 const output = join(root, "outputs/perf/render-work-production");
 let server, browser, electron, page;

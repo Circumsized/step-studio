@@ -919,7 +919,7 @@ export class StudioSessionArchiveReader {
 }
 
 function defaultOmpSessionsRoot(environment: NodeJS.ProcessEnv = process.env): string {
-  const agentDirectory = environment.OMP_AGENT_DIR;
+  const agentDirectory = environment.STEP_STUDIO_AGENT_DIR;
   return resolve(agentDirectory === undefined || agentDirectory.length === 0 ? join(homedir(), ".omp", "agent") : agentDirectory, "sessions");
 }
 

@@ -1,10 +1,10 @@
 // WP-002/WP-003 opt-in end-to-end check: installs a real generated Runtime
 // artifact and activates it with the REAL default self-check runner (which
 // executes the installed `omp.exe --smoke-test`). Not part of the unit test
-// suite; run explicitly after `npm run omp:build:host` (or `npm run
+// suite; run explicitly after `npm run vendor:build:host` (or `npm run
 // omp:artifact`) and `npm run build -w @step-studio/runtime-installer`.
 //
-//   npm run omp:e2e:install [-- --artifact <path>]
+//   npm run vendor:e2e:install [-- --artifact <path>]
 
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
@@ -33,7 +33,7 @@ function resolveArtifactDirectory() {
     if (!value) throw new Error("--artifact requires a directory path");
     return resolve(value);
   }
-  if (process.env.OMP_ARTIFACT_DIR) return resolve(process.env.OMP_ARTIFACT_DIR);
+  if (process.env.STEP_STUDIO_ARTIFACT_DIR) return resolve(process.env.STEP_STUDIO_ARTIFACT_DIR);
   return artifactsRoot;
 }
 
@@ -58,16 +58,16 @@ const artifactDirectory =
   (await findNewestVersion(requestedArtifact)) ?? requestedArtifact;
 if (!existsSync(join(artifactDirectory, "runtime-manifest.json"))) {
   throw new Error(
-    `No Runtime artifact found at ${artifactDirectory}; run "npm run omp:build:host" or "npm run omp:artifact" first`,
+    `No Runtime artifact found at ${artifactDirectory}; run "npm run vendor:build:host" or "npm run vendor:artifact" first`,
   );
 }
 
 const root = await mkdtemp(join(tmpdir(), "step-studio-e2e-"));
 try {
-  const trustedKeyPath = process.env.OMP_RUNTIME_TRUSTED_PUBLIC_KEY;
-  const trustedKeyId = process.env.OMP_RUNTIME_SIGNING_KEY_ID;
+  const trustedKeyPath = process.env.STEP_STUDIO_RUNTIME_TRUSTED_PUBLIC_KEY;
+  const trustedKeyId = process.env.STEP_STUDIO_RUNTIME_SIGNING_KEY_ID;
   if (!trustedKeyPath || !trustedKeyId) {
-    throw new Error("OMP_RUNTIME_TRUSTED_PUBLIC_KEY and OMP_RUNTIME_SIGNING_KEY_ID are required for install E2E");
+    throw new Error("STEP_STUDIO_RUNTIME_TRUSTED_PUBLIC_KEY and STEP_STUDIO_RUNTIME_SIGNING_KEY_ID are required for install E2E");
   }
   const trustedKeys = Object.create(null);
   trustedKeys[trustedKeyId] = await readFile(trustedKeyPath);

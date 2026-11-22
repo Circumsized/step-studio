@@ -27,12 +27,12 @@ export async function buildUpdateAssetsV2(options = {}) {
   const arch = platform.slice(platform.indexOf("-") + 1), darwin = platform.startsWith("darwin-");
   const repo = options.repo ?? process.env.GITHUB_REPOSITORY ?? "the-snowpear/step-studio";
   const appVersion = options.appVersion ?? JSON.parse(await readFile(join(root, "package.json"), "utf8")).version;
-  const runtimeOnly = options.runtimeOnly ?? (useEnvironment && process.env.OMP_RELEASE_KIND === "runtime");
+  const runtimeOnly = options.runtimeOnly ?? (useEnvironment && process.env.STEP_STUDIO_RELEASE_KIND === "runtime");
   const out = options.out ?? releaseOutputDirectory(root, platform);
   await mkdir(out, { recursive: true });
   const keys = options.keys ?? await releaseKeys(root);
-  const signingKey = options.signingKey ?? await readFile(process.env.OMP_RUNTIME_SIGNING_KEY);
-  const keyId = options.keyId ?? process.env.OMP_RUNTIME_SIGNING_KEY_ID;
+  const signingKey = options.signingKey ?? await readFile(process.env.STEP_STUDIO_RUNTIME_SIGNING_KEY);
+  const keyId = options.keyId ?? process.env.STEP_STUDIO_RUNTIME_SIGNING_KEY_ID;
   if (!keys[keyId]) throw new Error("Release signing key is not trusted");
   let runtimeDir = options.runtimeDir;
   if (!runtimeDir) {
@@ -44,12 +44,12 @@ export async function buildUpdateAssetsV2(options = {}) {
   const verified = await verifySignedArtifact({ directory: runtimeDir, layout: RUNTIME_ARTIFACT_LAYOUT, parseManifest: parseRuntimeInstallationManifest, requireCovered: m => ["runtime-manifest.json", m.entrypoint], trustedKeys: keys });
   const rt = verified.manifest;
   if (rt.platform !== platform) throw new Error("Runtime architecture mismatch");
-  const tag = options.tag ?? (useEnvironment ? process.env.OMP_RELEASE_TAG : undefined) ?? (runtimeOnly ? `runtime-v${rt.runtimeVersion}` : `v${appVersion}`);
+  const tag = options.tag ?? (useEnvironment ? process.env.STEP_STUDIO_RELEASE_TAG : undefined) ?? (runtimeOnly ? `runtime-v${rt.runtimeVersion}` : `v${appVersion}`);
   if (!/^(?:v|runtime-v)[\w.-]+$/.test(tag)) throw new Error("Invalid release tag");
   const base = `https://github.com/${repo}/releases/download/${tag}`;
   const previous = [];
   if (options.previous) previous.push(...options.previous.map(v => verifyUpdateManifest(v, keys, repo, platform)));
-  const previousDir = options.previousCatalogDir ?? (useEnvironment ? process.env.OMP_PREVIOUS_CATALOG_DIR : undefined);
+  const previousDir = options.previousCatalogDir ?? (useEnvironment ? process.env.STEP_STUDIO_PREVIOUS_CATALOG_DIR : undefined);
   if (previousDir) for (const entry of await readdir(previousDir)) if (entry.endsWith(".json")) previous.push(verifyUpdateManifest(JSON.parse(await readFile(join(previousDir, entry), "utf8")), keys, repo, platform));
   // A desktop seed must never move an independently published channel backwards.
   // Check all history, including catalogs produced before this guard existed.
@@ -77,7 +77,7 @@ export async function buildUpdateAssetsV2(options = {}) {
   await buildBlockMap(archivePath, "gzip", `${archivePath}.blockmap`);
   const runtime = { version: rt.runtimeVersion, sequence: nextSequence("runtime", rt.channel), channel: rt.channel,
     file: await describeFile(archivePath, base), blockmap: await describeFile(`${archivePath}.blockmap`, base),
-    minAppVersion: options.runtimeMinAppVersion ?? ((useEnvironment ? process.env.OMP_RUNTIME_MIN_APP_VERSION?.trim() : undefined) || appVersion),
+    minAppVersion: options.runtimeMinAppVersion ?? ((useEnvironment ? process.env.STEP_STUDIO_RUNTIME_MIN_APP_VERSION?.trim() : undefined) || appVersion),
     studioProtocol: rt.studioProtocol };
   // Reuse an immutable Runtime version only when its exact signed bytes match.
   const oldRuntime = previous.map(e => e.manifest.runtime).find(r => r?.version === runtime.version);
@@ -103,7 +103,7 @@ export async function buildUpdateAssetsV2(options = {}) {
   const envelope = { manifest, signature: { algorithm: "ed25519", keyId, value: sign(null, updateSigningBytes(manifest), signingKey).toString("base64url") } };
   verifyUpdateManifest(envelope, keys, repo, platform);
   await writeFile(join(out, `updates-${platform}.json`), JSON.stringify(envelope, null, 2) + "\n");
-  const previousPath = options.previousIndex ?? (useEnvironment ? process.env.OMP_PREVIOUS_UPDATE_INDEX : undefined);
+  const previousPath = options.previousIndex ?? (useEnvironment ? process.env.STEP_STUDIO_PREVIOUS_UPDATE_INDEX : undefined);
   if (!runtimeOnly && previousPath && legacyIndexName(platform) !== undefined) await buildMigrationIndex({ previousPath, out, arch, manifest, keys, signingKey, keyId });
   const notes = releaseNotes(manifest);
   await writeFile(join(out, "release-notes.md"), notes);
@@ -132,13 +132,13 @@ export async function buildMigrationIndex({ previousPath, out, arch, manifest, k
 export function releaseNotes(manifest) {
   if (manifest.platform.startsWith("darwin-")) return macReleaseNotes(manifest);
   const app = manifest.app, rt = manifest.runtime;
-  return `# ${app ? `OMP Studio ${app.version}` : `OMP Runtime ${rt.version}`}\n\n${app ? `## 安装\n\n[下载 Windows ${manifest.platform.slice(6)} 安装包](${app.file.url})\n\n首次安装或旧版迁移请使用此安装包。已迁移的用户在应用内等待下载完成后点击「重启更新」。\n\n` : "这是 Runtime 独立更新，不是桌面安装包。在 OMP Studio 中检查更新即可。\n\n"}## Runtime\n\n版本：${rt.version} · 通道：${rt.channel} · 最低桌面版本：${rt.minAppVersion}\n\n<details>\n<summary>自动更新附件说明（普通用户无需下载）</summary>\n\n- Runtime ZIP：签名运行时工件，供自动更新或离线导入。\n- blockmap：增量下载索引，不是可执行安装包。\n- updates-*.json：签名版本清单，供更新器使用。\n- update-index*.json：旧客户端迁移入口，请勿删除。\n\n</details>\n`;
+  return `# ${app ? `Step Studio ${app.version}` : `Step Runtime ${rt.version}`}\n\n${app ? `## 安装\n\n[下载 Windows ${manifest.platform.slice(6)} 安装包](${app.file.url})\n\n首次安装或旧版迁移请使用此安装包。已迁移的用户在应用内等待下载完成后点击「重启更新」。\n\n` : "这是 Runtime 独立更新，不是桌面安装包。在 Step Studio 中检查更新即可。\n\n"}## Runtime\n\n版本：${rt.version} · 通道：${rt.channel} · 最低桌面版本：${rt.minAppVersion}\n\n<details>\n<summary>自动更新附件说明（普通用户无需下载）</summary>\n\n- Runtime ZIP：签名运行时工件，供自动更新或离线导入。\n- blockmap：增量下载索引，不是可执行安装包。\n- updates-*.json：签名版本清单，供更新器使用。\n- update-index*.json：旧客户端迁移入口，请勿删除。\n\n</details>\n`;
 }
 function macReleaseNotes(manifest) {
   const app = manifest.app, rt = manifest.runtime;
   const install = app
-    ? `## 安装（macOS · Apple Silicon）\n\n[下载 dmg](${manifest.firstInstall?.url ?? app.file.url})\n\n打开 dmg，把 OMP Studio 拖进“应用程序”。此版本为 ad hoc 签名、尚未公证：首次打开会被 macOS 拦截，请到“系统设置 › 隐私与安全性”点击“仍要打开”。已安装的用户在应用内等待下载完成后点击「重启更新」。\n\n每次更新后，macOS 会重新询问麦克风、文件夹和本地网络权限，钥匙串也可能再次请求授权；公证版本会消除这些提示。\n\n`
-    : "这是 Runtime 独立更新，不是桌面安装包。在 OMP Studio 中检查更新即可。\n\n";
-  return `# ${app ? `OMP Studio ${app.version}` : `OMP Runtime ${rt.version}`}\n\n${install}## Runtime\n\n版本：${rt.version} · 通道：${rt.channel} · 最低桌面版本：${rt.minAppVersion}\n\n<details>\n<summary>自动更新附件说明（普通用户无需下载）</summary>\n\n${app ? "- 整包 ZIP（macos-arm64.zip）：已签名的 .app，供应用内更新使用；首次安装请用 dmg。\n" : ""}- Runtime ZIP：签名运行时工件，供自动更新或离线导入。\n- blockmap：增量下载索引，不是可执行安装包。\n- updates-*.json：签名版本清单，供更新器使用。\n\n</details>\n`;
+    ? `## 安装（macOS · Apple Silicon）\n\n[下载 dmg](${manifest.firstInstall?.url ?? app.file.url})\n\n打开 dmg，把 Step Studio 拖进“应用程序”。此版本为 ad hoc 签名、尚未公证：首次打开会被 macOS 拦截，请到“系统设置 › 隐私与安全性”点击“仍要打开”。已安装的用户在应用内等待下载完成后点击「重启更新」。\n\n每次更新后，macOS 会重新询问麦克风、文件夹和本地网络权限，钥匙串也可能再次请求授权；公证版本会消除这些提示。\n\n`
+    : "这是 Runtime 独立更新，不是桌面安装包。在 Step Studio 中检查更新即可。\n\n";
+  return `# ${app ? `Step Studio ${app.version}` : `Step Runtime ${rt.version}`}\n\n${install}## Runtime\n\n版本：${rt.version} · 通道：${rt.channel} · 最低桌面版本：${rt.minAppVersion}\n\n<details>\n<summary>自动更新附件说明（普通用户无需下载）</summary>\n\n${app ? "- 整包 ZIP（macos-arm64.zip）：已签名的 .app，供应用内更新使用；首次安装请用 dmg。\n" : ""}- Runtime ZIP：签名运行时工件，供自动更新或离线导入。\n- blockmap：增量下载索引，不是可执行安装包。\n- updates-*.json：签名版本清单，供更新器使用。\n\n</details>\n`;
 }
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) buildUpdateAssetsV2().then(r => console.log(`Built signed update catalog: ${r.out}`)).catch(e => { console.error(e.message); process.exitCode = 1; });

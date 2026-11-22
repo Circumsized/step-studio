@@ -149,7 +149,7 @@ node scripts/check.mjs --list          # 看有哪些组和包
 
 普通 PR / main CI 跑 `npm run check -- --production`：架构规则、类型、核心测试和生产包各一次；纯文档改动跳过。完整双平台与 Runtime 检查通过 CI 的 `full` 手动运行，性能 workflow 也只手动触发。发布负责打包和产物校验，不重复跑源码测试。
 
-运行时/补丁专项命令见根目录 `package.json`，包括 `runtime:verify-source` 和 `omp:verify:patches`，只在相关改动或升级上游时按需运行。
+运行时/补丁专项命令见根目录 `package.json`，包括 `runtime:verify-source` 和 `vendor:verify:patches`，只在相关改动或升级上游时按需运行。
 
 ## 改 omp-patch 里的上游 Runtime 源码
 
@@ -162,9 +162,9 @@ node scripts/check.mjs --list          # 看有哪些组和包
 工作流固定为：
 
 ```powershell
-npm run omp:overlay:apply    # 把 overlay 铺进 vendor 并套用接缝补丁（幂等）
+npm run vendor:overlay:apply    # 把 overlay 铺进 vendor 并套用接缝补丁（幂等）
 # 在 omp-patch/vendor/oh-my-pi 里改代码
-npm run omp:patches:regen    # 回收 overlay、重写接缝补丁、更新 series.json
+npm run vendor:patches:regen    # 回收 overlay、重写接缝补丁、更新 series.json
 ```
 
 不要手写或手改 `.patch`，一律用 regen 生成。新接触一个上游文件时，先把它加进 `scripts/omp-seam.mjs` 的分组，否则 regen 会报错而不是悄悄丢掉改动。

@@ -49,7 +49,7 @@ async function fixture(t) {
         ...process.env, BASH_ENV: startup.replaceAll("\\", "/"),
         GITHUB_OUTPUT: output, REQUEST_LOG: log, CACHE_HIT: cacheHit,
         GITHUB_REPOSITORY: "example/studio", PLATFORM: "win32-x64",
-        BUN_VERSION: "1.4.2", OMP_RUNTIME_CHANNEL: "stable", REBUILD: rebuild,
+        BUN_VERSION: "1.4.2", STEP_STUDIO_RUNTIME_CHANNEL: "stable", REBUILD: rebuild,
         ...extra,
       },
     });

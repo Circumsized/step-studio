@@ -128,7 +128,7 @@ export interface SessionBuildIdentity {
   branch?: string;
   /** Hash of the checkout's uncommitted diff; `unknown` when unread. */
   diff?: string;
-  /** `OMP_BUILD_LABEL`. */
+  /** `STEP_STUDIO_BUILD_LABEL`. */
   label?: string;
 }
 

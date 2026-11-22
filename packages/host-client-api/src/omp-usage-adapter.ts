@@ -159,7 +159,7 @@ function defaultSpawnDashboard(exe: string, options?: { readonly open?: boolean 
   const child = spawn(exe, ["stats"], {
     stdio: "ignore",
     windowsHide: true,
-    ...(options?.open === true ? {} : { env: { ...process.env, OMP_STATS_NO_OPEN: "1" } }),
+    ...(options?.open === true ? {} : { env: { ...process.env, STEP_STUDIO_STATS_NO_OPEN: "1" } }),
     // On Windows, `detached: true` allocates a new console window.
     ...(process.platform === "win32" ? {} : { detached: true }),
   });
@@ -346,7 +346,7 @@ export function createOmpUsageService(options: OmpUsageAdapterOptions = {}): Hos
       try {
         const exe = await locateOmp();
         if (exe === undefined) {
-          return { reason: "未找到 OMP Runtime，无法启动本机统计面板。" };
+          return { reason: "未找到 Step Runtime，无法启动本机统计面板。" };
         }
         spawnDashboard(exe);
         const deadline = now() + startTimeoutMs;

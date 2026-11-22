@@ -33,7 +33,7 @@ export class SessionDeleteServiceError extends Error {
 }
 
 export interface SessionDeleteServiceOptions {
-  /** OMP's sessions root. Defaults to `<agentDir>/sessions` (`OMP_AGENT_DIR` honored). */
+  /** OMP's sessions root. Defaults to `<agentDir>/sessions` (`STEP_STUDIO_AGENT_DIR` honored). */
   readonly sessionsRoot?: string;
   /** OMP's cold-archive root. Defaults to `<agentDir>/archive/sessions`, mirroring `omp gc`. */
   readonly archiveRoot?: string;

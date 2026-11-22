@@ -11,7 +11,7 @@
 //             upstream owns. Grouped by upstream subsystem so an upstream bump
 //             maps to a small, predictable set of patches to refresh.
 //
-// SEAM_GROUPS is the authoritative mapping. `npm run omp:patches:regen`
+// SEAM_GROUPS is the authoritative mapping. `npm run vendor:patches:regen`
 // regenerates each patch from the vendor working tree using these path lists,
 // and the group order defines the apply order recorded in series.json.
 //
@@ -54,7 +54,7 @@ export const SEAM_GROUPS = Object.freeze([
       "packages/coding-agent/src/cli.ts",
       "packages/coding-agent/src/cli/args.ts",
       "packages/coding-agent/src/cli/flag-tables.ts",
-      // `OMP_STATS_NO_OPEN`: Studio frames the dashboard, so no external browser.
+      // `STEP_STUDIO_STATS_NO_OPEN`: Studio frames the dashboard, so no external browser.
       "packages/coding-agent/src/cli/stats-cli.ts",
       "packages/coding-agent/test/stats-cli.test.ts",
       "packages/coding-agent/src/commands/launch-help.ts",

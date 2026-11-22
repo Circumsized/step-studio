@@ -6,7 +6,7 @@ This product is licensed under the MIT License. See LICENSE.
 Third-party notices
 ===================
 
-oh-my-pi (OMP Runtime)
+oh-my-pi (Step Runtime)
 ----------------------
 This repository vendors [oh-my-pi](https://github.com/can1357/oh-my-pi) as a
 Git submodule at `omp-patch/vendor/oh-my-pi`, pinned in `omp-patch/upstream.json`.

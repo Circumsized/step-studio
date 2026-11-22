@@ -41,7 +41,7 @@ export class SessionArchiveServiceError extends Error {
 }
 
 export interface SessionArchiveServiceOptions {
-  /** OMP's sessions root. Defaults to `<agentDir>/sessions` (`OMP_AGENT_DIR` honored). */
+  /** OMP's sessions root. Defaults to `<agentDir>/sessions` (`STEP_STUDIO_AGENT_DIR` honored). */
   readonly sessionsRoot?: string;
   /** OMP's cold-archive root. Defaults to `<agentDir>/archive/sessions`, mirroring `omp gc`. */
   readonly archiveRoot?: string;
@@ -77,7 +77,7 @@ interface LocatedSession {
  * with the sessions-relative layout and the artifacts directory preserved.
  * Moves stage the source under an undiscoverable name before the destination
  * lands, so no failure leaves one session visible in both trees; every move
- * is otherwise rolled back on failure. The OMP Runtime is never involved.
+ * is otherwise rolled back on failure. The Step Runtime is never involved.
  */
 export class StudioSessionArchiveService {
   readonly #sessionsRoot: string;

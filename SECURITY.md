@@ -7,7 +7,7 @@ Step Studio is in public preview (`0.1.0`). Only the latest `main` commit and th
 ## What this project trusts
 
 - The **Renderer never receives** bridge tokens, process handles, or native OMP session paths.
-- Runtime artifacts are **Ed25519-signed**. The repository does not contain production signing private keys. Local keys live under the Host profile (`%APPDATA%\step-studio\keys` on Windows) and are generated with `npm run omp:keys`.
+- Runtime artifacts are **Ed25519-signed**. The repository does not contain production signing private keys. Local keys live under the Host profile (`%APPDATA%\step-studio\keys` on Windows) and are generated with `npm run vendor:keys`.
 - Unknown mutations **fail closed**. `accepted` is not success; only a terminal receipt commits an outcome.
 - A lost Runtime fences the old epoch. Unresolved accepted work becomes `outcome_unknown`.
 - PTY / terminal output is **not** a semantic control channel.

@@ -683,23 +683,23 @@ export function createProcessProbe(options: ProcessProbeOptions = {}): RuntimePr
             // A compatibility probe must not leave empty/project-keyed
             // session directories in the user's real OMP profile. Keep every
             // probe artifact under the scratch workspace removed below.
-            OMP_AGENT_DIR: join(workspace, ".omp-agent"),
+            STEP_STUDIO_AGENT_DIR: join(workspace, ".omp-agent"),
             // ...and it must not *read* the operator's profile either. The
             // Runtime folds every command it can discover into the manifest it
             // reports, and `classifyManaged` compares that manifest's hash with
             // a value frozen and signed at packaging time; a probe that sees
             // one machine's skills, plugins, MCP prompts or user-level slash
             // commands therefore produces evidence that cannot match any other
-            // machine's. `OMP_AGENT_DIR` alone does not do this: it is this
+            // machine's. `STEP_STUDIO_AGENT_DIR` alone does not do this: it is this
             // repo's own convention (see `defaultOmpAgentDir`), while the
             // vendored Runtime resolves its profile from `PI_CODING_AGENT_DIR`,
-            // `PI_CONFIG_DIR` and `OMP_PROFILE`/`PI_PROFILE` — and everything
+            // `PI_CONFIG_DIR` and `STEP_STUDIO_PROFILE`/`PI_PROFILE` — and everything
             // under `~/.claude`, `~/.codex` and `~/.gemini` is reached through
             // `os.homedir()`, which only HOME/USERPROFILE can move.
             PI_CODING_AGENT_DIR: join(workspace, ".omp-agent"),
             PI_CONFIG_DIR: ".omp",
             PI_CONFIG_FILES: "",
-            OMP_PROFILE: "",
+            STEP_STUDIO_PROFILE: "",
             PI_PROFILE: "",
             HOME: workspace,
             USERPROFILE: workspace,
@@ -710,7 +710,7 @@ export function createProcessProbe(options: ProcessProbeOptions = {}): RuntimePr
             // Stream phase markers before a synchronous startup hang can hide them.
             ...(options.onOutput === undefined ? {} : { PI_DEBUG_STARTUP: "1" }),
             // A probe outlives a crashed Host only until its parent watchdog notices.
-            ...(context.platform === "darwin" ? { OMP_STUDIO_PARENT_PID: String(process.pid) } : {}),
+            ...(context.platform === "darwin" ? { STEP_STUDIO_PARENT_PID: String(process.pid) } : {}),
           },
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,

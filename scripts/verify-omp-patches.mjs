@@ -68,7 +68,7 @@ try {
   const bun = findBun();
   const env = toolingEnvironment();
   const npmCli = process.env.npm_execpath;
-  if (!npmCli) throw new Error("Run patch verification through npm run omp:verify:patches");
+  if (!npmCli) throw new Error("Run patch verification through npm run vendor:verify:patches");
 
   run("git", ["-C", ompSourceDirectory, "diff", "--check"]);
   // Workspace checks belong to `npm run check`; opt in only for standalone use.

@@ -35,7 +35,7 @@ async function assertRuntimeIdentityInSync() {
     const found = readPatchsetVersionConstant(await readFile(path, "utf8"));
     if (found !== expected) {
       throw new Error(
-        `PATCHSET_VERSION is ${found} in ${path} but series.json says ${expected}. Run npm run omp:patches:regen.`,
+        `PATCHSET_VERSION is ${found} in ${path} but series.json says ${expected}. Run npm run vendor:patches:regen.`,
       );
     }
   }
@@ -62,7 +62,7 @@ if (process.platform === "darwin") {
 await assertForkApplied();
 // Same reasoning for the version the Runtime will report: packaging refuses to
 // sign an artifact whose probed identity disagrees with series.json, and that
-// check lands only after the native build. `npm run omp:patches:regen` keeps the
+// check lands only after the native build. `npm run vendor:patches:regen` keeps the
 // two in sync; this catches a hand-edited constant before the build starts.
 await assertRuntimeIdentityInSync();
 run(process.execPath, [fileURLToPath(new URL("./verify-omp-source.mjs", import.meta.url))], { env });
@@ -107,9 +107,9 @@ const series = await readPatchSeries();
 const upstreamVersion = await readUpstreamVersion();
 const runtimeVersion = deriveRuntimeVersion(upstreamVersion, series);
 const artifactDirectory =
-  process.env.OMP_ARTIFACT_DIR ?? defaultArtifactDirectory(artifactPlatform, runtimeVersion);
-const envKeyPath = process.env.OMP_RUNTIME_SIGNING_KEY?.trim();
-const envKeyId = process.env.OMP_RUNTIME_SIGNING_KEY_ID?.trim();
+  process.env.STEP_STUDIO_ARTIFACT_DIR ?? defaultArtifactDirectory(artifactPlatform, runtimeVersion);
+const envKeyPath = process.env.STEP_STUDIO_RUNTIME_SIGNING_KEY?.trim();
+const envKeyId = process.env.STEP_STUDIO_RUNTIME_SIGNING_KEY_ID?.trim();
 let signingKey;
 let keyId;
 if (envKeyPath && envKeyId) {
@@ -122,7 +122,7 @@ if (envKeyPath && envKeyId) {
     keyId = local.keyId;
   } catch {
     throw new Error(
-      "OMP_RUNTIME_SIGNING_KEY and OMP_RUNTIME_SIGNING_KEY_ID are required to package a Runtime artifact. Run npm run omp:keys to create a local signing key.",
+      "STEP_STUDIO_RUNTIME_SIGNING_KEY and STEP_STUDIO_RUNTIME_SIGNING_KEY_ID are required to package a Runtime artifact. Run npm run vendor:keys to create a local signing key.",
     );
   }
 }
@@ -135,7 +135,7 @@ const { manifestPath, checksumsPath, signaturePath, manifest } = await generateR
   patchesDirectory: PATCHES_DIRECTORY,
   platform: artifactPlatform,
   entrypoint: runtimeEntrypointFor(artifactPlatform),
-  channel: process.env.OMP_RUNTIME_CHANNEL ?? "stable",
+  channel: process.env.STEP_STUDIO_RUNTIME_CHANNEL ?? "stable",
   signingKey,
   keyId,
   outDirectory: artifactDirectory,

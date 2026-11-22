@@ -75,7 +75,7 @@ Host 增量工具 replay、解析器自有对象复用、Mermaid 预算/队列�
 
 `npm run check` 已通过：构建、类型检查及 1,703 项测试全部成功；Runtime helper 经上游格式器整理后，镜像语法结构测试和协议测试再次通过。Runtime 单独的 `bun run check:ts`（格式/静态检查/所有包类型检查）通过。
 
-`npm run omp:verify:patches -- --skip-workspace-check` 已通过：85 个 overlay 文件、4 组接缝补丁完成应用、静态检查、Bun 回归和 smoke，vendor 恢复干净。`npm run omp:test:metadata` 的 47 项测试通过。源码 patchset 经规定的 regen 流程成为 `18.2.5-studio.9`。
+`npm run vendor:verify:patches -- --skip-workspace-check` 已通过：85 个 overlay 文件、4 组接缝补丁完成应用、静态检查、Bun 回归和 smoke，vendor 恢复干净。`npm run vendor:test:metadata` 的 47 项测试通过。源码 patchset 经规定的 regen 流程成为 `18.2.5-studio.9`。
 
 生产构建 `PERF_BUILD_MODE=production PERF_RUNS=1 PERF_TRACE=1 npm run perf:streaming` 通过全部原有门禁；这一轮按功能 smoke 记录，不替代上面的五次性能对照。原始日志为 `final-check.log`、`final-runtime-source.log`、`final-runtime-patches.log`、`final-runtime-metadata.log`，生产 smoke 为 `production-streaming-smoke.json`。汇总及阈值判定在 `outputs/perf/streaming-rebuild-2026-09-24/baseline.json`。
 

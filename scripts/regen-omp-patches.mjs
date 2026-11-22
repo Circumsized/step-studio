@@ -31,7 +31,7 @@ await assertOverlayPresent();
 const capture = await captureOverlay();
 if (capture.missing.length > 0) {
   throw new Error(
-    `Overlay files are missing from the vendor tree; run npm run omp:overlay:apply first:\n  ${capture.missing.join("\n  ")}`,
+    `Overlay files are missing from the vendor tree; run npm run vendor:overlay:apply first:\n  ${capture.missing.join("\n  ")}`,
   );
 }
 console.log(

@@ -10,7 +10,7 @@ On 2026-09-17, titles and descriptions of the five existing desktop releases wer
 
 - Repository: `the-snowpear/step-studio`.
 - GitHub Environment: `release`.
-- Environment secret: `OMP_RUNTIME_SIGNING_KEY`.
+- Environment secret: `STEP_STUDIO_RUNTIME_SIGNING_KEY`.
 - Active key ID: `step-studio-release-2026b`.
 - Algorithm: Ed25519.
 - Public key: `packaging/keys/step-studio-release-2026b.pem`.
@@ -50,8 +50,8 @@ Use the existing signing identity for local release builds without printing
 the private key:
 
 ```powershell
-$env:OMP_RUNTIME_SIGNING_KEY_ID = 'step-studio-release-2026b'
-$env:OMP_RUNTIME_SIGNING_KEY = Join-Path $env:APPDATA 'step-studio
+$env:STEP_STUDIO_RUNTIME_SIGNING_KEY_ID = 'step-studio-release-2026b'
+$env:STEP_STUDIO_RUNTIME_SIGNING_KEY = Join-Path $env:APPDATA 'step-studio
 elease-keysstep-studio-release-2026bsigning-private.pem'
 ```
 

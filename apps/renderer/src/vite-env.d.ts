@@ -10,13 +10,13 @@ declare global {
    * when absent, the Vite entry renders an explicit unavailable state
    * instead of crashing. The renderer never imports a transport.
    */
-  var OMP_STUDIO_CLIENT: StudioClient | undefined;
+  var STEP_STUDIO_CLIENT: StudioClient | undefined;
 
   /**
    * Desktop preload bridge exposed by the Electron shell (frozen
    * `OmpStudioDesktopApi`: bootstrap/query/command/subscribe/close only —
    * no generic invoke). Used by the Vite entry as a fallback: when
-   * `OMP_STUDIO_CLIENT` is absent but this is present, the entry wraps it
+   * `STEP_STUDIO_CLIENT` is absent but this is present, the entry wraps it
    * in a desktop transport + `StudioClientImpl` itself.
    */
   var stepStudio: OmpStudioDesktopApi | undefined;

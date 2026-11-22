@@ -52,9 +52,9 @@ test("macOS release names: update zip, first-install dmg, no v1 index", () => {
 });
 
 test("a release job targets macOS when asked, or on a Mac by default", () => {
-  assert.equal(releaseTargetsDarwin({ OMP_TARGET_PLATFORM: "darwin" }, "linux"), true);
+  assert.equal(releaseTargetsDarwin({ STEP_STUDIO_TARGET_PLATFORM: "darwin" }, "linux"), true);
   assert.equal(releaseTargetsDarwin({}, "darwin"), true);
-  assert.equal(releaseTargetsDarwin({ OMP_TARGET_PLATFORM: "win32" }, "darwin"), false);
+  assert.equal(releaseTargetsDarwin({ STEP_STUDIO_TARGET_PLATFORM: "win32" }, "darwin"), false);
   assert.equal(releaseTargetsDarwin({}, "win32"), false);
-  assert.equal(releaseTargetsDarwin({ OMP_TARGET_ARCH: "arm64" }, "win32"), false);
+  assert.equal(releaseTargetsDarwin({ STEP_STUDIO_TARGET_ARCH: "arm64" }, "win32"), false);
 });

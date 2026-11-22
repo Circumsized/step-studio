@@ -156,7 +156,7 @@ export async function assertForkApplied(targetDirectory = ompSourceDirectory, ro
   const missing = files.filter(file => !existsSync(join(targetDirectory, ...file.split("/"))));
   if (missing.length > 0) {
     throw new Error(
-      `The overlay is not present in the vendor tree; run npm run omp:overlay:apply. Missing ${missing.length} file(s), first: ${missing[0]}`,
+      `The overlay is not present in the vendor tree; run npm run vendor:overlay:apply. Missing ${missing.length} file(s), first: ${missing[0]}`,
     );
   }
 
@@ -173,7 +173,7 @@ export async function assertForkApplied(targetDirectory = ompSourceDirectory, ro
   }
   if (unapplied.length > 0) {
     throw new Error(
-      `Seam patch(es) are not applied to the vendor tree; run npm run omp:overlay:apply: ${unapplied.join(", ")}`,
+      `Seam patch(es) are not applied to the vendor tree; run npm run vendor:overlay:apply: ${unapplied.join(", ")}`,
     );
   }
   return files;

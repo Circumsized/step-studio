@@ -6,7 +6,7 @@
  * or a test) and never imports or constructs a transport itself.
  *
  * When this module is loaded directly by Vite (the auto-bootstrap entry),
- * the hosting page injects that client on `globalThis.OMP_STUDIO_CLIENT`
+ * the hosting page injects that client on `globalThis.STEP_STUDIO_CLIENT`
  * before the bundle runs. If it is absent but the desktop preload bridge
  * (`globalThis.stepStudio`) is present, the entry constructs the client
  * itself: `createDesktopTransport(stepStudio)` → `StudioClientImpl`. If
@@ -70,7 +70,7 @@ export function mountRenderer(element: Element, client: StudioClient): void {
 
 const host = document.getElementById("root");
 if (host !== null) {
-  let client: StudioClient | undefined = globalThis.OMP_STUDIO_CLIENT;
+  let client: StudioClient | undefined = globalThis.STEP_STUDIO_CLIENT;
   if (client === undefined) {
     const bridge = globalThis.stepStudio;
     if (bridge !== undefined) {

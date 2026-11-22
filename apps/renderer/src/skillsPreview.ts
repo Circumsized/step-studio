@@ -255,7 +255,7 @@ export function createPreviewDrawerItems(): DrawerItem[] {
       desc: "开源仓库发布前合规检查",
       src: "托管",
       scope: "builtin",
-      path: "omp:builtin/oss-audit",
+      path: "vendor:builtin/oss-audit",
       enabled: true,
       loaded: true,
       session: true,

@@ -135,7 +135,7 @@ test("session catalog reports an unavailable root without exposing it", async ()
   assert.deepEqual(result.sessions, []);
   assert.deepEqual(result.diagnostics, [{ code: "ROOT_UNAVAILABLE", count: 1 }]);
   assert.ok(!JSON.stringify(result).includes("missing-omp-session-root"));
-  assert.match(defaultOmpSessionsRoot({ OMP_AGENT_DIR: "C:\\omp-profile\\agent" }), /sessions$/u);
+  assert.match(defaultOmpSessionsRoot({ STEP_STUDIO_AGENT_DIR: "C:\\omp-profile\\agent" }), /sessions$/u);
 });
 
 test("session catalog reads global pins and degrades safely for missing, corrupt, and stale ids", async () => {

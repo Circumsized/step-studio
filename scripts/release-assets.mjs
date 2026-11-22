@@ -16,11 +16,11 @@ function archOf(platform) {
 }
 
 /**
- * A release job builds macOS when it asks for it (OMP_TARGET_PLATFORM=darwin)
+ * A release job builds macOS when it asks for it (STEP_STUDIO_TARGET_PLATFORM=darwin)
  * or runs on a Mac without saying otherwise; Windows otherwise, as before.
  */
 export function releaseTargetsDarwin(env = process.env, hostPlatform = process.platform) {
-  const requested = String(env.OMP_TARGET_PLATFORM ?? "").trim().toLowerCase();
+  const requested = String(env.STEP_STUDIO_TARGET_PLATFORM ?? "").trim().toLowerCase();
   return requested === "darwin" || (requested === "" && hostPlatform === "darwin");
 }
 

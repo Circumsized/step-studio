@@ -19,10 +19,10 @@ export function runtimeEntrypointFor(platform) {
   return RUNTIME_ENTRYPOINTS[runtimeOsOf(platform)];
 }
 
-/** `<os>-<arch>` of the artifact being built; OMP_TARGET_PLATFORM / OMP_TARGET_ARCH override the host. */
+/** `<os>-<arch>` of the artifact being built; STEP_STUDIO_TARGET_PLATFORM / STEP_STUDIO_TARGET_ARCH override the host. */
 export function resolveTargetPlatform(env = process.env, host = { platform: process.platform, arch: process.arch }) {
-  const os = String(env.OMP_TARGET_PLATFORM ?? host.platform).trim().toLowerCase();
-  const arch = String(env.OMP_TARGET_ARCH ?? host.arch).trim().toLowerCase();
+  const os = String(env.STEP_STUDIO_TARGET_PLATFORM ?? host.platform).trim().toLowerCase();
+  const arch = String(env.STEP_STUDIO_TARGET_ARCH ?? host.arch).trim().toLowerCase();
   const target = `${os}-${arch}`;
   if (!RUNTIME_PLATFORMS.includes(target)) throw new Error(`Unsupported target platform: ${target}`);
   return target;

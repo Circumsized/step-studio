@@ -82,7 +82,7 @@ export async function generateKey(keyId) {
   console.log(`[Release Keys] Public key saved to ${relative(rootDir, pemFilePath)}`);
   console.log(`[Release Keys] Updated ${relative(rootDir, trustedKeysPath)} (activeKeyId: ${keyId})`);
   console.log("--------------------------------------------------------------------------------");
-  console.log("⚠️  Copy the private key below to GitHub Secret OMP_RUNTIME_SIGNING_KEY.");
+  console.log("⚠️  Copy the private key below to GitHub Secret STEP_STUDIO_RUNTIME_SIGNING_KEY.");
   console.log("⚠️  DO NOT commit or save the private key to disk in the repository!");
   console.log("--------------------------------------------------------------------------------");
   console.log(privateKeyPem.trim());

@@ -1,10 +1,10 @@
 @echo off
 setlocal EnableExtensions
-title OMP Studio Preview
+title Step Studio Preview
 cd /d "%~dp0"
 
 echo.
-echo  OMP Studio - One-click Preview
+echo  Step Studio - One-click Preview
 echo  ==============================
 echo.
 
@@ -32,10 +32,10 @@ if not exist "node_modules\electron\package.json" (
   if errorlevel 1 goto :failed
 )
 
-echo [start] Building and opening OMP Studio. Please wait...
-set "OMP_NPM_CLI=%ProgramFiles%\nodejs\node_modules\npm\bin\npm-cli.js"
-if not exist "%OMP_NPM_CLI%" set "OMP_NPM_CLI=%ProgramFiles(x86)%\nodejs\node_modules\npm\bin\npm-cli.js"
-if not exist "%OMP_NPM_CLI%" (
+echo [start] Building and opening Step Studio. Please wait...
+set "STEP_STUDIO_NPM_CLI=%ProgramFiles%\nodejs\node_modules\npm\bin\npm-cli.js"
+if not exist "%STEP_STUDIO_NPM_CLI%" set "STEP_STUDIO_NPM_CLI=%ProgramFiles(x86)%\nodejs\node_modules\npm\bin\npm-cli.js"
+if not exist "%STEP_STUDIO_NPM_CLI%" (
   echo [ERROR] npm CLI was not found under the Node.js installation.
   echo Expected: "%ProgramFiles%\nodejs\node_modules\npm\bin\npm-cli.js"
   echo.

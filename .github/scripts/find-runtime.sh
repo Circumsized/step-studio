@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pick a previously signed Runtime whose inputs match this checkout.
-# Inputs: PLATFORM, BUN_VERSION, OMP_RUNTIME_CHANNEL, REBUILD, GH_TOKEN.
+# Inputs: PLATFORM, BUN_VERSION, STEP_STUDIO_RUNTIME_CHANNEL, REBUILD, GH_TOKEN.
 # Outputs: key (upload name), name (matching download name), run_id (empty = build).
 set -euo pipefail
 
@@ -15,7 +15,7 @@ inputs_hash="$(git ls-tree -r HEAD -- \
   scripts/runtime-signing-keys.mjs scripts/target-platform.mjs \
   scripts/windows-architecture.mjs scripts/mac-toolchain.mjs scripts/verify-omp-source.mjs \
   | sha256sum | cut -c1-16)"
-key="runtime-${PLATFORM}-${OMP_RUNTIME_CHANNEL}-${vendor}-bun${BUN_VERSION}-${inputs_hash}"
+key="runtime-${PLATFORM}-${STEP_STUDIO_RUNTIME_CHANNEL}-${vendor}-bun${BUN_VERSION}-${inputs_hash}"
 run_id=""
 name="$key"
 if [ "${REBUILD:-}" != "true" ]; then
@@ -36,7 +36,7 @@ if [ "${REBUILD:-}" != "true" ]; then
         scripts/omp-overlay.mjs scripts/omp-seam.mjs | sha256sum | cut -c1-16
     }
     source_hash="$(source_fingerprint HEAD)"
-    prefix="runtime-${PLATFORM}-${OMP_RUNTIME_CHANNEL}-${vendor}-bun${BUN_VERSION}-"
+    prefix="runtime-${PLATFORM}-${STEP_STUDIO_RUNTIME_CHANNEL}-${vendor}-bun${BUN_VERSION}-"
     candidates="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
       --jq ".artifacts[] | select((.expired | not) and (.name | startswith(\"${prefix}\"))) | [.name, .workflow_run.id, .workflow_run.head_sha] | @tsv" || true)"
     while IFS=$'\t' read -r candidate_name candidate_run candidate_sha; do

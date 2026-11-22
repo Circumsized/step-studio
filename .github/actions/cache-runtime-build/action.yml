@@ -12,6 +12,6 @@ runs:
       with:
         workspaces: omp-patch/vendor/oh-my-pi -> target
         shared-key: platform
-        key: natives-${{ env.OMP_TARGET_PLATFORM }}-${{ env.OMP_TARGET_ARCH }}
+        key: natives-${{ env.STEP_STUDIO_TARGET_PLATFORM }}-${{ env.STEP_STUDIO_TARGET_ARCH }}
         cache-workspace-crates: true
         cache-on-failure: "true"

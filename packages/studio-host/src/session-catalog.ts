@@ -82,7 +82,7 @@ export function defaultOmpSessionsRoot(environment: NodeJS.ProcessEnv = process.
 
 /** OMP's agent root, shared by sessions and the global session pin file. */
 export function defaultOmpAgentDir(environment: NodeJS.ProcessEnv = process.env): string {
-  const agentDirectory = environment.OMP_AGENT_DIR;
+  const agentDirectory = environment.STEP_STUDIO_AGENT_DIR;
   return resolve(agentDirectory === undefined || agentDirectory.length === 0 ? join(homedir(), ".omp", "agent") : agentDirectory);
 }
 

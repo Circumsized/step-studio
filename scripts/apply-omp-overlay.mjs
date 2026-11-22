@@ -1,8 +1,8 @@
 // Put the vendor tree into its working state: overlay copied in, seam patches
 // applied. This is the dev-loop entry point — edit inside the vendor tree, then
-// run `npm run omp:patches:regen` to capture the result back.
+// run `npm run vendor:patches:regen` to capture the result back.
 //
-// Unlike `omp:verify:patches` this leaves the tree patched instead of restoring
+// Unlike `vendor:verify:patches` this leaves the tree patched instead of restoring
 // it, and it is idempotent: an already-patched tree is reported and left alone.
 
 import { readFile } from "node:fs/promises";
@@ -36,7 +36,7 @@ for (const name of series.patches) {
       // usually a half-reverted file or a hand edit on a seam path. Say that
       // instead of surfacing two raw git rejects.
       throw new Error(
-        `${name} neither applies nor reverses cleanly; the vendor tree is partially forked. Capture it with npm run omp:patches:regen, or reset the submodule working tree and rerun.`,
+        `${name} neither applies nor reverses cleanly; the vendor tree is partially forked. Capture it with npm run vendor:patches:regen, or reset the submodule working tree and rerun.`,
         { cause: forward },
       );
     }

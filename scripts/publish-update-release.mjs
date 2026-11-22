@@ -18,12 +18,12 @@ for (const dir of await readdir("outputs/publish")) {
     const { manifest: m, signature: s } = JSON.parse(await readFile(join(root, name), "utf8"));
     const keyName = table.keys[s.keyId];
     if (!keyName || s.algorithm !== "ed25519" || !verify(null, Buffer.from(`step-studio-remote-environment-v1\n${canonical(m)}`), createPublicKey(await readFile(join("packaging/keys", keyName))), Buffer.from(s.value, "base64url"))) throw new Error("Invalid remote environment signature");
-    if (process.env.OMP_RELEASE_KIND === "runtime" || m.repo !== repo || m.platform !== platform || m.schema !== 1) throw new Error("Remote environment candidate identity mismatch");
+    if (process.env.STEP_STUDIO_RELEASE_KIND === "runtime" || m.repo !== repo || m.platform !== platform || m.schema !== 1) throw new Error("Remote environment candidate identity mismatch");
     const tag = `v${m.appVersion}`, file = m.archive;
     if (!/^[A-Za-z0-9._-]+$/u.test(file.asset) || file.url !== `https://github.com/${repo}/releases/download/${tag}/${file.asset}`) throw new Error("Invalid remote environment asset URL");
     const bytes = await readFile(join(root, file.asset));
     if (bytes.length !== file.size || createHash("sha256").update(bytes).digest("hex") !== file.sha256 || (await readdir(root)).length !== 2) throw new Error("Remote environment asset verification failed");
-    identities.push({ tag, title: `OMP Studio ${m.appVersion}`, prerelease: false, latest: true });
+    identities.push({ tag, title: `Step Studio ${m.appVersion}`, prerelease: false, latest: true });
     artifacts.push(join(root, name), join(root, file.asset));
     continue;
   }
@@ -36,10 +36,10 @@ for (const dir of await readdir("outputs/publish")) {
   const keyName = table.keys[s.keyId];
   if (!keyName || s.algorithm !== "ed25519" || !verify(null, Buffer.from(`step-studio-update-v2\n${canonical(m)}`), createPublicKey(await readFile(join("packaging/keys", keyName))), Buffer.from(s.value, "base64url"))) throw new Error("Invalid candidate signature");
   if (m.repo !== repo || m.platform !== platform || m.schema !== 2) throw new Error("Candidate identity mismatch");
-  const runtimeOnly = process.env.OMP_RELEASE_KIND === "runtime";
+  const runtimeOnly = process.env.STEP_STUDIO_RELEASE_KIND === "runtime";
   if (runtimeOnly === Boolean(m.app)) throw new Error("Release kind mismatch");
   const tag = runtimeOnly ? `runtime-v${m.runtime.version}` : `v${m.app.version}`;
-  identities.push({ tag, title: runtimeOnly ? `OMP Runtime ${m.runtime.version}` : `OMP Studio ${m.app.version}`, prerelease: m.runtime.channel === "canary", latest: !runtimeOnly });
+  identities.push({ tag, title: runtimeOnly ? `Step Runtime ${m.runtime.version}` : `Step Studio ${m.app.version}`, prerelease: m.runtime.channel === "canary", latest: !runtimeOnly });
   const allowed = new Set([name, "release-notes.md"]);
   for (const component of [m.app, m.runtime].filter(Boolean)) for (const file of [component.file, component.blockmap]) {
     const path = join(root, file.asset), bytes = await readFile(path);

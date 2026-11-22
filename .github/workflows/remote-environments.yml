@@ -22,7 +22,7 @@ permissions:
 
 env:
   BUN_VERSION: "1.4.4"
-  OMP_RUNTIME_CHANNEL: stable
+  STEP_STUDIO_RUNTIME_CHANNEL: stable
 
 jobs:
   build:
@@ -41,8 +41,8 @@ jobs:
     timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
-      OMP_TARGET_PLATFORM: ${{ startsWith(matrix.target, 'win32-') && 'win32' || startsWith(matrix.target, 'darwin-') && 'darwin' || 'linux' }}
-      OMP_TARGET_ARCH: ${{ endsWith(matrix.target, '-arm64') && 'arm64' || 'x64' }}
+      STEP_STUDIO_TARGET_PLATFORM: ${{ startsWith(matrix.target, 'win32-') && 'win32' || startsWith(matrix.target, 'darwin-') && 'darwin' || 'linux' }}
+      STEP_STUDIO_TARGET_ARCH: ${{ endsWith(matrix.target, '-arm64') && 'arm64' || 'x64' }}
     defaults:
       run:
         shell: bash
@@ -72,7 +72,7 @@ jobs:
           # Remote hosts use the bundled private Node, never Electron.
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
         run: npm ci --prefer-offline --no-audit --no-fund
-      - run: npm run omp:overlay:apply
+      - run: npm run vendor:overlay:apply
       - name: Reuse signed Runtime
         if: ${{ !inputs.prepared_runtime && steps.runtime.outputs.run_id != '' }}
         uses: actions/download-artifact@v4
@@ -92,17 +92,17 @@ jobs:
         run: npm run build:remote
       - name: Build signed native Runtime and complete remote environment
         env:
-          OMP_SIGNING_SECRET: ${{ secrets.OMP_RUNTIME_SIGNING_KEY }}
+          STEP_STUDIO_SIGNING_SECRET: ${{ secrets.OMP_RUNTIME_SIGNING_KEY }}
           TARGET: ${{ matrix.target }}
           PREPARED_RUNTIME: ${{ inputs.prepared_runtime }}
         run: |
           set -euo pipefail
-          node -e 'require("node:fs").writeFileSync(require("node:path").join(process.env.RUNNER_TEMP,"omp-remote-signing.pem"),process.env.OMP_SIGNING_SECRET,{mode:384})'
-          export OMP_RUNTIME_SIGNING_KEY="$RUNNER_TEMP/omp-remote-signing.pem"
-          trap 'rm -f "$OMP_RUNTIME_SIGNING_KEY"' EXIT
-          export OMP_RUNTIME_SIGNING_KEY_ID="$(node -p 'require("./packaging/keys/trusted-keys.json").activeKeyId')"
+          node -e 'require("node:fs").writeFileSync(require("node:path").join(process.env.RUNNER_TEMP,"step-studio-remote-signing.pem"),process.env.STEP_STUDIO_SIGNING_SECRET,{mode:384})'
+          export STEP_STUDIO_RUNTIME_SIGNING_KEY="$RUNNER_TEMP/step-studio-remote-signing.pem"
+          trap 'rm -f "$STEP_STUDIO_RUNTIME_SIGNING_KEY"' EXIT
+          export STEP_STUDIO_RUNTIME_SIGNING_KEY_ID="$(node -p 'require("./packaging/keys/trusted-keys.json").activeKeyId')"
           if [ "$PREPARED_RUNTIME" != true ] && [ -z "${{ steps.runtime.outputs.run_id }}" ]; then
-            npm run omp:build:host -- --skip-build
+            npm run vendor:build:host -- --skip-build
           fi
           node scripts/build-remote-environment.mjs
           node scripts/verify-remote-environment.mjs "outputs/remote-environments/$TARGET"

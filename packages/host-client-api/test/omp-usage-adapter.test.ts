@@ -209,7 +209,7 @@ describe("createOmpUsageService", () => {
     const result = await service.dashboard?.();
     assert.equal(result?.available, false);
     assert.equal(result?.url, undefined);
-    assert.match(result?.reason ?? "", /未找到 OMP Runtime/);
+    assert.match(result?.reason ?? "", /未找到 Step Runtime/);
   });
 
   test("dashboard gives up after the startup deadline instead of hanging the page", async () => {

@@ -7,7 +7,7 @@ import { MAC_TARGET_PLATFORM, legacyIndexName, releaseTargetsDarwin } from "./re
 
 const root = resolve("."), repo = process.env.GITHUB_REPOSITORY ?? "the-snowpear/step-studio";
 const darwin = releaseTargetsDarwin();
-const arch = process.env.OMP_TARGET_ARCH ?? "x64", platform = darwin ? MAC_TARGET_PLATFORM : `win32-${arch}`;
+const arch = process.env.STEP_STUDIO_TARGET_ARCH ?? "x64", platform = darwin ? MAC_TARGET_PLATFORM : `win32-${arch}`;
 const dest = join(process.env.RUNNER_TEMP ?? join(root, "outputs"), `update-history-${darwin ? platform : arch}`);
 await mkdir(dest, { recursive: true });
 const catalogs = join(dest, "catalogs");
@@ -33,5 +33,5 @@ for (const release of releases) {
     }
   }
 }
-if (process.env.GITHUB_ENV) await appendFile(process.env.GITHUB_ENV, `OMP_PREVIOUS_CATALOG_DIR=${catalogs}\n${legacy ? `OMP_PREVIOUS_UPDATE_INDEX=${legacy}\n` : ""}`);
+if (process.env.GITHUB_ENV) await appendFile(process.env.GITHUB_ENV, `STEP_STUDIO_PREVIOUS_CATALOG_DIR=${catalogs}\n${legacy ? `STEP_STUDIO_PREVIOUS_UPDATE_INDEX=${legacy}\n` : ""}`);
 console.log(`Verified ${releases.length} release records; history stored in ${dest}`);

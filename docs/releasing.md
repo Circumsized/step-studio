@@ -80,8 +80,8 @@ A desktop release cannot bundle an older Runtime than one already published
 for that channel and architecture.
 
 Signing uses the existing GitHub Environment `release` and its
-`OMP_RUNTIME_SIGNING_KEY`. The key must match the active public key in
-`packaging/keys/trusted-keys.json`. `omp:keys` creates development keys only;
+`STEP_STUDIO_RUNTIME_SIGNING_KEY`. The key must match the active public key in
+`packaging/keys/trusted-keys.json`. `vendor:keys` creates development keys only;
 it does not replace the release identity. Custody and recovery are documented
 in [release-operations.md](release-operations.md).
 
@@ -114,7 +114,7 @@ Update the root/workspace versions and lockfile together, record user-facing
 changes in the changelog, and keep `PREVIEW_MODE_SWITCH_ENABLED=false`.
 Run checks for the affected code before tagging: the daily command is
 `npm run check`; packaging/update changes use `npm run test:tooling`, and
-Runtime changes use `npm run omp:verify:patches`. Full tests and GUI acceptance
+Runtime changes use `npm run vendor:verify:patches`. Full tests and GUI acceptance
 are available on demand rather than mandatory on every release.
 
 For local packages, apply the overlay and run `npm run pack:win` or
@@ -124,7 +124,7 @@ automatically; it does not run source tests.
 
 To create public update assets locally, configure the release signing identity,
 collect verified previous catalogs with `scripts/collect-update-history.mjs`,
-set `OMP_PREVIOUS_CATALOG_DIR` and the Windows `OMP_PREVIOUS_UPDATE_INDEX` to
+set `STEP_STUDIO_PREVIOUS_CATALOG_DIR` and the Windows `STEP_STUDIO_PREVIOUS_UPDATE_INDEX` to
 the downloaded history, then run `npm run updates:build` and
 `npm run updates:verify`. The Actions workflow handles this history wiring.
 Never change a catalog after signing or include private keys, logs or backups.

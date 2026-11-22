@@ -6,9 +6,9 @@ channel metadata, and reference-safe retention.
 
 ## Artifact contract (WP-002)
 
-`scripts/runtime-artifact.mjs` (run by `npm run omp:build:host` after the
+`scripts/runtime-artifact.mjs` (run by `npm run vendor:build:host` after the
 `omp.exe` build and `--smoke-test` succeed, or standalone via
-`npm run omp:artifact`) emits a complete installable artifact per build into
+`npm run vendor:artifact`) emits a complete installable artifact per build into
 `packages/runtime-installer/dist/artifacts/<platform>/<runtimeVersion>/`:
 
 - the built entrypoint binary (`omp.exe`);
@@ -33,7 +33,7 @@ and the real built binary. `runtimeVersion` is
 `<upstreamVersion>-<patchsetVersion>`, where `patchsetVersion` is the
 `studio.<n>` value recorded in the series file. It is recorded rather than
 derived from the patch count so that consolidating patches cannot move the
-version backwards onto an already-installed directory name; `omp:patches:regen`
+version backwards onto an already-installed directory name; `vendor:patches:regen`
 advances it whenever the fork's content digest changes.
 Emitted JSON is deterministic: no timestamps, no absolute paths, fixed key
 order — two builds over identical inputs produce byte-identical files.
@@ -69,13 +69,13 @@ self-check fails:
 - the error is rethrown with the quarantine location.
 
 Tests inject fake runners/spawn functions and never execute untrusted files.
-An opt-in real end-to-end check is `npm run omp:e2e:install` (requires a
+An opt-in real end-to-end check is `npm run vendor:e2e:install` (requires a
 generated artifact and the built package; runs the real `omp.exe
 --smoke-test`).
 
-Artifact generation requires `OMP_RUNTIME_SIGNING_KEY` (a PEM/DER Ed25519
-private-key file) and `OMP_RUNTIME_SIGNING_KEY_ID`. Installation/E2E requires
-the matching `OMP_RUNTIME_TRUSTED_PUBLIC_KEY` plus the same key id. Private
+Artifact generation requires `STEP_STUDIO_RUNTIME_SIGNING_KEY` (a PEM/DER Ed25519
+private-key file) and `STEP_STUDIO_RUNTIME_SIGNING_KEY_ID`. Installation/E2E requires
+the matching `STEP_STUDIO_RUNTIME_TRUSTED_PUBLIC_KEY` plus the same key id. Private
 keys must remain outside the repository. `uninstall()` refuses current,
 previous, and active Thread-referenced versions; `prune()` retains at least
 the two newest stable versions and all referenced versions.
@@ -85,7 +85,7 @@ the two newest stable versions and all referenced versions.
 ```bash
 npm run typecheck -w @step-studio/runtime-installer
 npm test -w @step-studio/runtime-installer
-npm run omp:test:metadata        # light metadata tests for scripts/runtime-artifact.mjs
-npm run omp:build:host           # build omp.exe + smoke + generate artifact metadata
-npm run omp:e2e:install          # opt-in real E2E (install + activate + real self-check)
+npm run vendor:test:metadata        # light metadata tests for scripts/runtime-artifact.mjs
+npm run vendor:build:host           # build omp.exe + smoke + generate artifact metadata
+npm run vendor:e2e:install          # opt-in real E2E (install + activate + real self-check)
 ```

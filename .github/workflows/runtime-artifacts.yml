@@ -59,9 +59,9 @@ jobs:
     timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
-      OMP_TARGET_PLATFORM: ${{ startsWith(matrix.target, 'win32-') && 'win32' || startsWith(matrix.target, 'darwin-') && 'darwin' || 'linux' }}
-      OMP_TARGET_ARCH: ${{ endsWith(matrix.target, '-arm64') && 'arm64' || 'x64' }}
-      OMP_RUNTIME_CHANNEL: ${{ inputs.runtime_channel || 'stable' }}
+      STEP_STUDIO_TARGET_PLATFORM: ${{ startsWith(matrix.target, 'win32-') && 'win32' || startsWith(matrix.target, 'darwin-') && 'darwin' || 'linux' }}
+      STEP_STUDIO_TARGET_ARCH: ${{ endsWith(matrix.target, '-arm64') && 'arm64' || 'x64' }}
+      STEP_STUDIO_RUNTIME_CHANNEL: ${{ inputs.runtime_channel || 'stable' }}
     defaults:
       run:
         shell: bash
@@ -94,7 +94,7 @@ jobs:
         run: npm ci --prefer-offline --no-audit --no-fund
       - name: Apply Runtime sources
         if: steps.runtime.outputs.run_id == '' || inputs.warm_cache
-        run: npm run omp:overlay:apply
+        run: npm run vendor:overlay:apply
       - name: Reuse signed Runtime
         if: steps.runtime.outputs.run_id != ''
         uses: actions/download-artifact@v4
@@ -106,20 +106,20 @@ jobs:
       - name: Warm native compilation while preserving signed Runtime bytes
         if: inputs.warm_cache
         run: |
-          npm run omp:install-deps
-          npm run omp:build:natives
+          npm run vendor:install-deps
+          npm run vendor:build:natives
       - name: Build and sign Runtime once
         if: steps.runtime.outputs.run_id == '' && !inputs.warm_cache
         env:
-          OMP_SIGNING_SECRET: ${{ secrets.OMP_RUNTIME_SIGNING_KEY }}
+          STEP_STUDIO_SIGNING_SECRET: ${{ secrets.OMP_RUNTIME_SIGNING_KEY }}
         run: |
           set -euo pipefail
-          node -e 'require("node:fs").writeFileSync(require("node:path").join(process.env.RUNNER_TEMP,"omp-runtime-signing.pem"),process.env.OMP_SIGNING_SECRET,{mode:384})'
-          export OMP_RUNTIME_SIGNING_KEY="$RUNNER_TEMP/omp-runtime-signing.pem"
-          trap 'rm -f "$OMP_RUNTIME_SIGNING_KEY"' EXIT
-          export OMP_RUNTIME_SIGNING_KEY_ID="$(node -p 'require("./packaging/keys/trusted-keys.json").activeKeyId')"
+          node -e 'require("node:fs").writeFileSync(require("node:path").join(process.env.RUNNER_TEMP,"step-studio-runtime-signing.pem"),process.env.STEP_STUDIO_SIGNING_SECRET,{mode:384})'
+          export STEP_STUDIO_RUNTIME_SIGNING_KEY="$RUNNER_TEMP/step-studio-runtime-signing.pem"
+          trap 'rm -f "$STEP_STUDIO_RUNTIME_SIGNING_KEY"' EXIT
+          export STEP_STUDIO_RUNTIME_SIGNING_KEY_ID="$(node -p 'require("./packaging/keys/trusted-keys.json").activeKeyId')"
           npm run build:packages
-          npm run omp:build:host -- --skip-build
+          npm run vendor:build:host -- --skip-build
       - uses: actions/upload-artifact@v4
         if: steps.runtime.outputs.run_id != '' || !inputs.warm_cache
         with:

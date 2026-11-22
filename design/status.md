@@ -44,7 +44,7 @@ Renderer → @step-studio/client → transport-desktop → apps/desktop-tauri (T
 ```bash
 git submodule update --init omp-patch/vendor/oh-my-pi   # 首次
 npm install
-npm run omp:overlay:apply                                # 首次
+npm run vendor:overlay:apply                                # 首次
 npm run check                                            # 全量门禁
 
 # 只验证运行时链路（不需要 Electron / 显示器）
@@ -310,14 +310,16 @@ Step Studio，界面内全是 OMP。本次把**可见文案**里的 OMP 全部�
 共 207 处、51 个文件，外加 `index.html` 的 `<title>`。
 
 替换只针对**独立大写词** `\bOMP\b`，这一条限定就是安全性的来源：
-- `OMP_STUDIO_CLIENT` 不动——`_` 是词字符，`P` 后没有词边界；
+- 小写形态当时不动（`_` 是词字符，`P` 后没有词边界）；
 - `omp-studio`、`@omp-studio`、`ompStudio` 全小写，永不匹配；
 - 真实配置路径 `~/.omp/agent/config.yml` 全小写，也不会被误伤。
 
 **两个标识符故意不改**，都记录在案而不是默默跳过：
 - `tauri.conf.json` 的 `com.snowpear.omp-studio`。改它等于迁移安装目录与 app-data 目录，
   会让已有 profile 失效。它不是界面显示。
-- `OMP_STUDIO_CLIENT`，跨语言注入点。
+- 小写形态曾是跨语言注入点。**2026-11-22 已改**：`OMP_STUDIO_CLIENT` →
+  `STEP_STUDIO_CLIENT`（`apps/renderer/src/main.tsx` 与 `vite-env.d.ts` 两侧都在本仓；
+  Tauri 路径下它恒为 undefined，实际走 preload 注入的 `stepStudio` 回落）。
 
 44 条测试断言跟着改——它们钉的就是显示文案，文案动了它们必须动。
 

@@ -34,7 +34,7 @@ const identity = { commit: git("rev-parse", "HEAD"), dirty: git("status", "--por
   buildMode: production ? "production" : "development", cpuCount: cpus().length,
   cpuModel: cpus()[0]?.model, runs: RUNS, optimizations: {} };
 // Recording must retain its marks even when the dev cleanup module is loaded.
-process.env.VITE_OMP_PRESERVE_PERFORMANCE_TIMELINE = "1";
+process.env.VITE_STEP_STUDIO_PRESERVE_PERFORMANCE_TIMELINE = "1";
 
 /**
  * 历史越长、工具输出越多，单帧布局代价的允许放大倍数。

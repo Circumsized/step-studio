@@ -62,7 +62,7 @@ describe("performanceTimelineCleanup", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("VITE_OMP_PRESERVE_PERFORMANCE_TIMELINE=1（preserveTimeline）禁用清理", () => {
+  it("VITE_STEP_STUDIO_PRESERVE_PERFORMANCE_TIMELINE=1（preserveTimeline）禁用清理", () => {
     const api = fakePerformanceApi();
     initPerformanceTimelineCleanup({
       env: { dev: true, preserveTimeline: true },

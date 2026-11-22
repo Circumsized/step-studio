@@ -1,6 +1,6 @@
 # 流式性能维护
 
-OMP Studio 的流式管线继续使用 Runtime Bridge、Host conversation 事件、Renderer 有界 Store 和现有 Markdown 扫描器。优化不改变持久 transcript，也不删除 IPC 校验或 Renderer transport 的克隆隔离。
+Step Studio 的流式管线继续使用 Runtime Bridge、Host conversation 事件、Renderer 有界 Store 和现有 Markdown 扫描器。优化不改变持久 transcript，也不删除 IPC 校验或 Renderer transport 的克隆隔离。
 
 ## 数据路径与所有权
 
@@ -35,10 +35,10 @@ Host 仅拼接相邻、目标及块身份一致的 ASCII 文本或工具 append�
 | `OMP_INCREMENTAL_REPLAY` | Desktop 开 | 恢复累计字符串 replay |
 | `OMP_CONVERSATION_PARSER_REUSE` | 开 | 每次完整解析；边界校验始终保留 |
 | `OMP_BACKGROUND_COALESCING` | Desktop 开 | Host 恢复立即交付 |
-| `VITE_OMP_BOUNDED_MERMAID` | 开 | 使用原 Mermaid 组件 |
-| `VITE_OMP_HIGHLIGHT_WORKER` | production 开，dev 关；`1` 可显式启用 | 使用原主线程高亮路径 |
-| `VITE_OMP_BACKGROUND_PUBLISHING` | 开 | Store 恢复原 RAF 调度 |
-| `VITE_OMP_PRESERVE_PERFORMANCE_TIMELINE` | 未设 | `1` 禁用开发态每 10 秒 marks/measures 清理；生产始终不启动清理器 |
+| `VITE_STEP_STUDIO_BOUNDED_MERMAID` | 开 | 使用原 Mermaid 组件 |
+| `VITE_STEP_STUDIO_HIGHLIGHT_WORKER` | production 开，dev 关；`1` 可显式启用 | 使用原主线程高亮路径 |
+| `VITE_STEP_STUDIO_BACKGROUND_PUBLISHING` | 开 | Store 恢复原 RAF 调度 |
+| `VITE_STEP_STUDIO_PRESERVE_PERFORMANCE_TIMELINE` | 未设 | `1` 禁用开发态每 10 秒 marks/measures 清理；生产始终不启动清理器 |
 
 `OMP_*` 在启动 Main 前设置；`VITE_*` 需要在 dev 启动或 build 前设置。Engine 正确释放、校验和诊断字段限制属于正确性要求，不提供使泄漏复现的产品开关。某优化正确性失败必须修复；性能不达标时关闭对应开关，不放宽预算。
 
@@ -77,6 +77,6 @@ PERF_BUILD_MODE=file PERF_REPORT=outputs/perf/file-smoke.json node scripts/rende
 
 性能 workflow 只手动触发，日常 CI 与发布不运行基准。需要比较性能时使用上述命令，阈值和采样方式保持一致。
 
-Runtime 修改仍按 `npm run omp:overlay:apply` → vendor 编辑 → `npm run omp:patches:regen`。`npm run omp:verify:patches` 要求 vendor 干净，会应用并在 finally 清理补丁/overlay；它是 Runtime 专项验证，独立于日常 `npm run check`。不要在未回收的 vendor 改动上运行清理。
+Runtime 修改仍按 `npm run vendor:overlay:apply` → vendor 编辑 → `npm run vendor:patches:regen`。`npm run vendor:verify:patches` 要求 vendor 干净，会应用并在 finally 清理补丁/overlay；它是 Runtime 专项验证，独立于日常 `npm run check`。不要在未回收的 vendor 改动上运行清理。
 
 验收数据及未覆盖范围见 [本次性能报告](performance-report-2026-09-24.md)。RSS 未马上下降不单独判失败；以 provider/listener/pending/Worker 计数及三批操作后的 retained heap 为准。若计数稳定而 RSS 持续上涨，另做诊断，不自动增加强制 GC 或杀进程策略。

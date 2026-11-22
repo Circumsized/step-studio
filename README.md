@@ -122,7 +122,7 @@ adapter 从 `PATH` 找 `step` CLI，也可以用 `STEP_STUDIO_STEP_CMD` 指向�
 没有它，daemon 与 adapter 照样起、握手照样完成，只有真正调 CLI 的那一步失败。
 模型与登录沿用 Step Code 自己的配置。本仓库不内置任何供应商密钥。
 
-`npm run omp:*` 那一套（install-deps / overlay:apply / keys / build:host）是
+`npm run vendor:*` 那一套（install-deps / overlay:apply / keys / build:host）是
 `omp-patch/` 遗留层的构建路径，与上面的 step 链路无关，见
 [omp-patch/README.md](omp-patch/README.md)。
 

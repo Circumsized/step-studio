@@ -98,5 +98,5 @@ jobs:
       - name: Publish complete immutable release
         env:
           GH_TOKEN: ${{ github.token }}
-          OMP_RELEASE_KIND: ${{ needs.prepare.outputs.kind }}
+          STEP_STUDIO_RELEASE_KIND: ${{ needs.prepare.outputs.kind }}
         run: node scripts/publish-update-release.mjs

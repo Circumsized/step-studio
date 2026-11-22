@@ -24,7 +24,7 @@ v0.1.11 保留的 v1 `update-index.json` 与分离签名验证通过，目标仍
 审查报告的 R1–R7 已完成代码修复，详见 `docs/reviews/incremental-updates-fixes-2026-09-18.md`。
 
 - 重新运行 `npm run check` 通过：Renderer 573 项、Desktop 362 项，其他 workspace 全部通过。日志 `outputs/review-fixes-check-20260918.log`。
-- `npm run omp:test:metadata` 45 项通过，包含旧 Runtime 遮蔽独立发布的拒绝测试和直接编译生产 C# 维护类的迁移结果测试。日志 `outputs/review-fixes-metadata-20260918.log`。
+- `npm run vendor:test:metadata` 45 项通过，包含旧 Runtime 遮蔽独立发布的拒绝测试和直接编译生产 C# 维护类的迁移结果测试。日志 `outputs/review-fixes-metadata-20260918.log`。
 - Runtime 事务回归覆盖激活前、激活后、最终 journal 保存后三个中断检查点，以及分次准备、部分准备失败、外部桌面版本变化后的最终兼容性校验。
 - 桌面回滚覆盖准备与应用分离、跨启动保留、后台准备不可覆盖；Renderer 覆盖真实两步操作、失败/忙碌重试、无旧版本禁用及不调用桌面 API 的预览。
 - Composer 覆盖创建期间连续发送互斥、同帧重复进入及失败后重试；Runtime-only 弹窗隐藏不支持的跳过按钮。
@@ -35,7 +35,7 @@ v0.1.11 保留的 v1 `update-index.json` 与分离签名验证通过，目标仍
 ## 已完成
 
 - `npm run check`：全部 workspace 编译、类型检查和测试通过；Renderer 560 项、Desktop 355 项，其他包测试也全部通过。
-- `npm run omp:test:metadata`：43 项通过，包括 v2 发布文件集合、独立 Runtime 发版和旧索引迁移兼容。
+- `npm run vendor:test:metadata`：43 项通过，包括 v2 发布文件集合、独立 Runtime 发版和旧索引迁移兼容。
 - Runtime installer：54 项通过，包括签名身份、工件损坏、确定性 ZIP、目录越界和归档格式拒绝。
 - 更新专项测试覆盖差分失败后单次全量回退、取消不回退、独立组件发现、防回退序号、跨启动保留待更新、忙碌会话阻止应用、执行前再次校验、Runtime 启动失败恢复和旧安装迁移验签。
 - 居民会话重启测试保存并恢复两个工作区的原会话 ID，重启关闭阶段拒绝新会话操作。
@@ -70,7 +70,7 @@ v0.1.11 保留的 v1 `update-index.json` 与分离签名验证通过，目标仍
 - 真正安装两个新格式版本，验证静默更新完成后重新拉起桌面；安装中断/文件占用恢复。
 - ARM64 原生 runner 构建与 ARM64 实机运行。
 - GitHub Actions 新工作流的完整实跑；本次只做 YAML/脚本检查，没有创建新 tag 或触发发布。
-- 本地 `omp:verify:patches` 未执行，因为 vendor 有任务开始前就存在的未提交改动，该检查会反向应用接缝。更新没有修改 Runtime overlay 或接缝。
+- 本地 `vendor:verify:patches` 未执行，因为 vendor 有任务开始前就存在的未提交改动，该检查会反向应用接缝。更新没有修改 Runtime overlay 或接缝。
 
 P5 的 `productionWindowsCleanRun` 保持 `manual-required`。本次未安装或卸载用户现有应用，未发布新的二进制，也未更改发行版本号。
 

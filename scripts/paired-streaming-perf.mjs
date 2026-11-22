@@ -18,8 +18,8 @@ for (let pair = 0; pair < 5; pair++) {
   for (const variant of pair % 2 === 0 ? ["before", "after"] : ["after", "before"]) {
     const path = join(out, `${pair}-${variant}.json`);
     const env = { ...process.env, PERF_RUNS: "1", PERF_TRACE: "1", PERF_REPORT: path,
-      VITE_OMP_BOUNDED_MERMAID: variant === "before" ? "0" : "1",
-      VITE_OMP_HIGHLIGHT_WORKER: "0", VITE_OMP_BACKGROUND_PUBLISHING: variant === "before" ? "0" : "1" };
+      VITE_STEP_STUDIO_BOUNDED_MERMAID: variant === "before" ? "0" : "1",
+      VITE_STEP_STUDIO_HIGHLIGHT_WORKER: "0", VITE_STEP_STUDIO_BACKGROUND_PUBLISHING: variant === "before" ? "0" : "1" };
     const result = await run(["scripts/streaming-perf-gate.mjs"], env);
     await writeFile(join(out, `${pair}-${variant}.log`), result.output);
     const report = JSON.parse(await readFile(path, "utf8"));

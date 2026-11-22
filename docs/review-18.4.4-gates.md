@@ -26,7 +26,7 @@ Runtime 导出图片后删除队列项，返回 `removed: true`。Host 随后执
 
 - 根 `check` / `test`：构建所有 workspace 一次，再运行各包 `test:built` 一次。原流程约 27 次 TypeScript 调用降至 14 次；生产 Renderer 构建继续保留。包内单独运行 `test` 仍保留原有构建前置。
 - 根 `typecheck`：复用已经检查全部 TypeScript 的 build，不额外重复 Renderer 和 Desktop 编译。
-- `omp:verify:patches`：默认只检查补丁和原生 Runtime；不再隐式重跑根 `check`。`--with-workspace-check` 可显式串联；旧 `--skip-workspace-check` 调用保持兼容。
+- `vendor:verify:patches`：默认只检查补丁和原生 Runtime；不再隐式重跑根 `check`。`--with-workspace-check` 可显式串联；旧 `--skip-workspace-check` 调用保持兼容。
 - 删除 34 条重复维护的原生 Studio 测试路径，统一由 overlay 自动发现。逐一验证被删除的路径均在自动发现范围，实际测试集合未减少；保留 Bun 单文件进程隔离。
 - CI：普通 GUI 改动不再安装上游依赖、跑完整原生补丁门禁；Runtime、公共契约和构建脚本变动触发相应检查。发布/安装相关改动触发元数据检查。手动 CI 仍运行所有门禁；Bun 固定为 1.4.2。
 - `p5:gate`：只检查候选工件签名与私密材料，不再重复运行 Host、安装器和元数据测试。删掉从单元测试通过推断“真实安装/回滚已经验证”的报告字段。发布工作流仍先运行 `check`、元数据和原生补丁验证。
@@ -35,7 +35,7 @@ Runtime 导出图片后删除队列项，返回 `removed: true`。Host 随后执
 ## 验证
 
 - 新的 `npm run check`：通过，14 个 workspace 各构建一次；Renderer 111 文件 / 707 用例、Desktop 390 用例及其余包全部通过。
-- `npm run omp:test:metadata`：48 / 48 通过。
+- `npm run vendor:test:metadata`：48 / 48 通过。
 - CI YAML 解析与 6 类路径选择样例通过。
 - 补丁测试选择等价检查通过；两个修改后的门禁脚本语法检查通过；`git diff --check` 通过。
 - 本轮没有改 Runtime 源码，因此没有重编 Runtime 或再次执行原生全套门禁；dirty vendor 未被清理或重放。本轮也未重复 Electron、性能、签名安装验收，前次结果仅代表前次工件。

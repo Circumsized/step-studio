@@ -124,7 +124,7 @@ daemon and adapter still start and the handshake still completes — only the ca
 into the CLI fails. Models and login use Step Code's own configuration. This
 repository does not ship provider secrets.
 
-The `npm run omp:*` family (install-deps / overlay:apply / keys / build:host)
+The `npm run vendor:*` family (install-deps / overlay:apply / keys / build:host)
 belongs to the legacy `omp-patch/` layer and is unrelated to the step chain
 above; see [omp-patch/README.md](omp-patch/README.md).
 

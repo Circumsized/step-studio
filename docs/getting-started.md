@@ -13,10 +13,10 @@ exist in this checkout.
 - Node.js 22 or newer, with npm
 - Git (clone with submodules)
 - [Bun](https://bun.sh) (OMP vendor workspace)
-- For a real Runtime: MSVC Build Tools + Rust, via `npm run omp:install-deps`
+- For a real Runtime: MSVC Build Tools + Rust, via `npm run vendor:install-deps`
 - On macOS instead: the Xcode Command Line Tools (`xcode-select --install`),
   Rust from rustup (host `aarch64-apple-darwin`), Bun 1.4.2 or newer and a
-  native arm64 Node, not one running under Rosetta. `npm run omp:install-deps`
+  native arm64 Node, not one running under Rosetta. `npm run vendor:install-deps`
   checks all of these before it builds anything.
 
 You still need an OMP-compatible model provider. Studio reads the same
@@ -60,16 +60,16 @@ when one is running.
 
 ```powershell
 npm install
-npm run omp:install-deps
-npm run omp:overlay:apply
-npm run omp:keys              # once per machine; writes keys under %APPDATA%\step-studio\keys
+npm run vendor:install-deps
+npm run vendor:overlay:apply
+npm run vendor:keys              # once per machine; writes keys under %APPDATA%\step-studio\keys
                               # (macOS: ~/Library/Application Support/step-studio/keys)
-npm run omp:build:host
+npm run vendor:build:host
 cd apps\desktop-tauri
 npm run tauri:dev
 ```
 
-`omp:overlay:apply` copies Studio’s overlay and seam patches into the
+`vendor:overlay:apply` copies Studio’s overlay and seam patches into the
 submodule working tree. That **will** show as modified content inside
 `omp-patch/vendor/oh-my-pi`. Do not `git add` that dirty vendor tree. The
 source of truth is `omp-patch/overlay/` plus `omp-patch/patches/`.
@@ -130,7 +130,7 @@ npm run check                 # build + core regression tests
 ```
 
 Full workspace tests (`npm test`), packaging tests (`npm run test:tooling`),
-and Runtime patch verification (`npm run omp:verify:patches`) are available
+and Runtime patch verification (`npm run vendor:verify:patches`) are available
 when those areas change. They are not required just to run the app.
 
 ## Next

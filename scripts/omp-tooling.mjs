@@ -53,7 +53,7 @@ export function npmInvocation() {
     return { command: "npm", prefix: [] };
   }
   const npmCli =
-    process.env.OMP_NPM_CLI ?? join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+    process.env.STEP_STUDIO_NPM_CLI ?? join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
   if (!existsSync(npmCli)) {
     throw new Error(`npm CLI was not found at ${npmCli}`);
   }

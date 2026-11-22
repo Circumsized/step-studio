@@ -4,7 +4,7 @@
  * Lives under the Host profile (`%APPDATA%\step-studio\keys` on Windows),
  * never in the git repository. Env vars still win when both are set.
  *
- *   npm run omp:keys
+ *   npm run vendor:keys
  */
 
 import { generateKeyPairSync } from "node:crypto";

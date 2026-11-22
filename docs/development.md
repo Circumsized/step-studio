@@ -25,7 +25,7 @@ in a pull request.
 
 ```powershell
 npm install
-npm run omp:overlay:apply # once after cloning or changing the upstream pin
+npm run vendor:overlay:apply # once after cloning or changing the upstream pin
 npm run check          # architecture rules, compile, core regression tests
 npm run preview        # Electron from source
 ```
@@ -92,10 +92,10 @@ Two layers, never mixed:
    grouped by subsystem in `scripts/omp-seam.mjs`.
 
 ```powershell
-npm run omp:overlay:apply     # idempotent: overlay + seam into vendor
+npm run vendor:overlay:apply     # idempotent: overlay + seam into vendor
 # edit omp-patch/vendor/oh-my-pi if you need the full tree
-npm run omp:patches:regen     # capture overlay, rewrite seam, bump series.json
-npm run omp:verify:patches
+npm run vendor:patches:regen     # capture overlay, rewrite seam, bump series.json
+npm run vendor:verify:patches
 ```
 
 Never hand-edit a `.patch`. Never `git submodule update` while the fork is

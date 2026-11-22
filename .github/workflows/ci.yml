@@ -41,7 +41,7 @@ jobs:
           cache: npm
       - run: npm ci
       # The renderer imports chart sources from the patched vendor tree.
-      - run: npm run omp:overlay:apply
+      - run: npm run vendor:overlay:apply
       # Architecture rules, selector rules, compile, core suites, then the
       # production bundles. One entry point, same code path as a local run.
       - run: npm run check -- --production
@@ -63,13 +63,13 @@ jobs:
           shared-key: platform
           key: natives-${{ matrix.native }}
           cache-on-failure: "true"
-      - run: npm run omp:install-deps
+      - run: npm run vendor:install-deps
         if: inputs.scope == 'full'
       - run: node scripts/unapply-release-overlay.mjs
         if: inputs.scope == 'full'
-      - run: npm run omp:build:natives
+      - run: npm run vendor:build:natives
         if: inputs.scope == 'full'
-      - run: npm run omp:verify:patches
+      - run: npm run vendor:verify:patches
         if: inputs.scope == 'full'
 
   rust:
