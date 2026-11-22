@@ -603,7 +603,11 @@ fn spawn_daemon(
         eprintln!("[bridge] no step-studio-host binary found");
         return false;
     };
-    let log = std::fs::File::create(session_dir.join("daemon.log")).unwrap_or_else(|_| {
+    // Appends, rotates, and resolves the fallback — all of it shared with the
+    // diagnostics page's export and reveal, which used to keep their own copy of
+    // the path and so looked somewhere the daemon never wrote.
+    let log = crate::chrome::open_daemon_log().unwrap_or_else(|error| {
+        eprintln!("[bridge] could not open the daemon log: {error}");
         std::fs::File::create(std::env::temp_dir().join("step-studio-daemon.log"))
             .expect("a log file")
     });

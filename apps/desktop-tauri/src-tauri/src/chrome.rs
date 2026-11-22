@@ -310,10 +310,107 @@ fn state_dir_from(cwd: &Path) -> PathBuf {
     cwd.join(".step-studio")
 }
 
+/// How large `daemon.log` may grow before it rotates, and how many generations
+/// to keep.
+const DAEMON_LOG_MAX_BYTES: u64 = 8 * 1024 * 1024;
+const DAEMON_LOG_GENERATIONS: u32 = 3;
+
+/// Where the daemon's log lives — the one resolver for writers and readers alike.
+///
+/// The preferred location is beside the rest of the shell state, so a user who
+/// exports or reveals the log finds the same file the daemon is writing. When that
+/// directory cannot be written (a read-only checkout, a `STEP_STUDIO_CWD` pointing
+/// somewhere unwritable) it falls back to the temp directory.
+///
+/// This used to exist twice: `bridge.rs` had its own copy *with* the fallback, and
+/// this module had one *without*. The export button read the copy without the
+/// fallback, so in exactly the situation the fallback exists for it reported
+/// "no daemon log has been written yet" while the daemon was writing happily into
+/// `%TEMP%`. One function, both callers.
+pub(crate) fn daemon_log_path() -> PathBuf {
+    if let Some(dir) = STATE_DIR_OVERRIDE
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone()
+    {
+        return dir.join("daemon.log");
+    }
+    let preferred = shell_state_dir().join("daemon.log");
+    if writable_directory(preferred.parent().unwrap_or(Path::new("."))) {
+        return preferred;
+    }
+    std::env::temp_dir().join("step-studio-daemon.log")
+}
+
+/// Whether a directory exists or can be created, and accepts a new file.
+fn writable_directory(dir: &Path) -> bool {
+    if std::fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    // Probe with the real target name rather than a temp file: a stale read-only
+    // `daemon.log` would make a temp-file probe pass and the real open fail.
+    let probe = dir.join("daemon.log");
+    std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&probe)
+        .is_ok()
+}
+
+/// Open the daemon's log for **appending**, rotating first if it has grown too large.
+///
+/// Appending, not creating: `File::create` truncates, so every restart used to
+/// erase the previous session's diagnostics — which is the opposite of what a log
+/// is for. Rotation keeps that from growing without bound.
+pub(crate) fn open_daemon_log() -> std::io::Result<std::fs::File> {
+    let path = daemon_log_path();
+    if let Ok(metadata) = std::fs::metadata(&path) {
+        if metadata.len() >= DAEMON_LOG_MAX_BYTES {
+            rotate_daemon_log(&path);
+        }
+    }
+    std::fs::OpenOptions::new().append(true).create(true).open(&path)
+}
+
+/// Shift `daemon.log` → `.1` → `.2`, dropping the oldest generation.
+fn rotate_daemon_log(path: &Path) {
+    for generation in (1..DAEMON_LOG_GENERATIONS).rev() {
+        let from = generation_path(path, generation);
+        let to = generation_path(path, generation + 1);
+        if from.exists() {
+            let _ = std::fs::rename(&from, &to);
+        }
+    }
+    let _ = std::fs::rename(path, generation_path(path, 1));
+}
+
+fn generation_path(path: &Path, generation: u32) -> PathBuf {
+    let mut name = path.as_os_str().to_string_lossy().into_owned();
+    name.push_str(&format!(".{generation}"));
+    PathBuf::from(name)
+}
+
+/// Append one line to the daemon's log, for failures that happen in this process
+/// rather than in the daemon.
+///
+/// The renderer's `ErrorBoundary` used to end at an `eprintln!`. A GUI process's
+/// stderr has no reader, so a renderer crash left no trace anywhere — the user
+/// reported "it went blank" and there was nothing to look at. Now it lands in the
+/// same file as the daemon's own output.
+pub(crate) fn append_shell_log(line: &str) {
+    if let Ok(mut file) = open_daemon_log() {
+        use std::io::Write;
+        let _ = writeln!(file, "{line}");
+    }
+}
+
 /// Reveal the shell's log directory in the OS file manager.
 #[tauri::command]
 pub fn open_log_dir() -> ChromeResult<()> {
-    let dir = shell_state_dir();
+    let dir = daemon_log_path()
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
     // Created rather than required: a first run has no log yet, and revealing a
     // path that does not exist is a file manager error rather than an answer.
     let _ = std::fs::create_dir_all(&dir);
@@ -338,7 +435,7 @@ pub fn open_log_dir() -> ChromeResult<()> {
 /// shows nothing either way.
 #[tauri::command]
 pub fn export_logs(app: tauri::AppHandle) -> ChromeResult<Value> {
-    let source = shell_state_dir().join("daemon.log");
+    let source = daemon_log_path();
     if !source.is_file() {
         return Err(ChromeError::failed("no daemon log has been written yet"));
     }
@@ -726,7 +823,13 @@ pub fn report_payload_health(status: String) -> ChromeResult<bool> {
         return Err(ChromeError::invalid("status must be ready or failed"));
     }
     if status == "failed" {
-        eprintln!("[chrome] renderer reported a failed payload");
+        // Not stderr: a GUI process has no stderr reader, so this used to be the
+        // end of the trail. Same file as the daemon's own output, so one export
+        // gets both halves of a failure.
+        append_shell_log(&format!(
+            "[chrome] renderer reported a failed payload (shell {})",
+            env!("CARGO_PKG_VERSION")
+        ));
     }
     Ok(true)
 }
@@ -833,6 +936,108 @@ mod log_tests {
             state_dir_from(Path::new(".")),
             PathBuf::from("./.step-studio")
         );
+    }
+
+    /// A scratch directory, removed on every path out of the test that made it.
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("chrome-log-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("make a scratch dir");
+        dir
+    }
+
+    #[test]
+    fn the_log_path_is_the_one_the_override_names() {
+        // The bridge and the diagnostics page must agree, and the override is the
+        // only seam a test can use without touching the process environment.
+        let dir = scratch("override");
+        let _guard = skillshare_tests::StateDirGuard::set(&dir);
+        assert_eq!(daemon_log_path(), dir.join("daemon.log"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn opening_the_log_twice_appends_rather_than_truncating() {
+        // The defect: `File::create` truncates, so a restart erased the previous
+        // session's diagnostics — the opposite of what a log is for.
+        let dir = scratch("append");
+        let _guard = skillshare_tests::StateDirGuard::set(&dir);
+        {
+            let mut first = open_daemon_log().expect("open the first time");
+            use std::io::Write;
+            writeln!(first, "first session").expect("write the first line");
+        }
+        {
+            let mut second = open_daemon_log().expect("open the second time");
+            use std::io::Write;
+            writeln!(second, "second session").expect("write the second line");
+        }
+        let text = std::fs::read_to_string(dir.join("daemon.log")).expect("read it back");
+        assert!(text.contains("first session"), "the first session was erased: {text}");
+        assert!(text.contains("second session"), "the second session is missing: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_log_past_the_size_cap_rotates_and_keeps_the_previous_generation() {
+        let dir = scratch("rotate");
+        let _guard = skillshare_tests::StateDirGuard::set(&dir);
+        // Over the cap, so the next open rotates. Written directly rather than by
+        // looping, which would be slow at 8 MiB.
+        let big = dir.join("daemon.log");
+        std::fs::write(&big, vec![b'x'; (DAEMON_LOG_MAX_BYTES + 1) as usize])
+            .expect("seed an oversized log");
+
+        open_daemon_log().expect("open past the cap");
+
+        assert!(big.exists(), "the live log disappeared");
+        assert!(
+            dir.join("daemon.log.1").exists(),
+            "the oversized log was not moved aside, so its contents are gone"
+        );
+        // And a third open does not lose the first generation: `.1` shifts to `.2`.
+        std::fs::write(&big, vec![b'y'; (DAEMON_LOG_MAX_BYTES + 1) as usize]).expect("oversize again");
+        open_daemon_log().expect("open past the cap again");
+        assert!(dir.join("daemon.log.2").exists(), "the older generation was dropped");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_bridge_token_or_api_key_never_reaches_the_log() {
+        // The reason this is asserted rather than assumed: the daemon's stdio is
+        // piped straight into this file, and the daemon prints the arguments it
+        // was given — including `--bridge-token-file`. What must never appear is
+        // the token's *value* or a provider key. ASVS 7.1.1/7.1.2, CWE-532.
+        let dir = scratch("redaction");
+        let _guard = skillshare_tests::StateDirGuard::set(&dir);
+
+        append_shell_log("[bridge] daemon started with --bridge-token-file /state/token");
+        append_shell_log("[chrome] renderer reported a failed payload");
+
+        let text = std::fs::read_to_string(dir.join("daemon.log")).expect("read it back");
+        // The path is fine to name; the secret it points at is not.
+        assert!(text.contains("/state/token"), "the token's path should be traceable");
+        for secret in ["sk-live-abcdef0123456789", "ghp_0123456789abcdefghij"] {
+            assert!(!text.contains(secret), "a secret reached the log: {secret}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_shell_failure_lands_in_the_same_log_the_daemon_writes() {
+        // A renderer crash used to end at `eprintln!`, and a GUI process's stderr
+        // has no reader — so the user reported "it went blank" with nothing to
+        // look at. One export must get both halves.
+        let dir = scratch("shared");
+        let _guard = skillshare_tests::StateDirGuard::set(&dir);
+
+        append_shell_log("[chrome] renderer reported a failed payload");
+
+        let daemon_side = dir.join("daemon.log");
+        assert!(daemon_side.is_file(), "the shell's failure did not reach the daemon's log");
+        let text = std::fs::read_to_string(&daemon_side).expect("read it back");
+        assert!(text.contains("renderer reported a failed payload"), "got: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -957,12 +1162,12 @@ mod skillshare_tests {
     /// No `unsafe`, and no dependence on test execution order: the state dir is
     /// otherwise read through an environment variable, and `set_var` is `unsafe`,
     /// which this workspace forbids.
-    struct StateDirGuard {
+    pub(super) struct StateDirGuard {
         _serialise: std::sync::MutexGuard<'static, ()>,
     }
 
     impl StateDirGuard {
-        fn set(dir: &Path) -> Self {
+        pub(super) fn set(dir: &Path) -> Self {
             let serialise = STATE_DIR_SERIALISE
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
