@@ -9,6 +9,8 @@
 | [`status.md`](status.md) | 实现状态：已可用能力、实测数字、跑起来的方法、尚未完成清单、与上游的结构差异 | 想知道「现在代码到什么程度」；改完代码后更新它 |
 | [`comparison-checklist.md`](comparison-checklist.md) | 九基准面人工比对清单（M1.4）：逐面对照 `docs/images/` 九张官方截图，一条一条过；三态判定（齐 / 空 / 缺）+ 未验证清单 | 验收像素级复刻进度；每修好一项就改一次态 |
 | [`reference/rust-ts-architecture.md`](reference/rust-ts-architecture.md) | 参考资料：用户提供的 Rust + TypeScript 架构参考文档正文（选型与复刻的输入材料之一） | 选型存疑、需要回溯原始参考时 |
+| [`review/fix-plan-2026-11-22.md`](review/fix-plan-2026-11-22.md) | 生产就绪整改执行设计（[#12](https://github.com/Circumsized/step-studio/issues/12) 的 11 个子 issue）：逐项追踪结论、波次划分、根因/修法/验证/回滚、未验证清单 | 动手整改任何一项前；每波开始与收口时 |
+| [`review/plan-2026-11-15.md`](review/plan-2026-11-15.md) | 安全评审交付物：七项发现的六 gate 审查、13 条假阳性清单、§22 Windows 真机清单 | 回溯某项安全发现的判定依据时 |
 | [`progress/`](progress/README.md) | **完成态台账**：一个里程碑一个文件，一条验收条件一行证据；`summary.md` 是总览，`blockers.md` 是跨里程碑阻塞，`audit-*.md` 是只读评估快照 | 想知道「某条验收到底过了没有、卡什么」 |
 
 不在本目录的相邻文件：
