@@ -30,9 +30,9 @@
 
 ## 远程验证与合并状态
 
-- [Windows 源码完整门禁](https://github.com/the-snowpear/step-studio/actions/runs/36727807334/job/109929536342)：通过。
-- [macOS arm64 源码完整门禁](https://github.com/the-snowpear/step-studio/actions/runs/36727807334/job/109929536681)：通过。包含修正后的扩展取消测试。
-- [Mac `.38` 实包 GUI 验收](https://github.com/the-snowpear/step-studio/actions/runs/36739408991)：19 项通过，包含原生 PTY 创建/释放；报告位于 `outputs/macos-ci-final/report.json`。Windows 真实 Electron 18 项通过。两平台均以 1024×684、侧栏与底部面板开启验收，截图已检查。
+- [Windows 源码完整门禁](https://github.com/Circumsized/step-studio/actions/runs/36727807334/job/109929536342)：通过。
+- [macOS arm64 源码完整门禁](https://github.com/Circumsized/step-studio/actions/runs/36727807334/job/109929536681)：通过。包含修正后的扩展取消测试。
+- [Mac `.38` 实包 GUI 验收](https://github.com/Circumsized/step-studio/actions/runs/36739408991)：19 项通过，包含原生 PTY 创建/释放；报告位于 `outputs/macos-ci-final/report.json`。Windows 真实 Electron 18 项通过。两平台均以 1024×684、侧栏与底部面板开启验收，截图已检查。
 - 两个分支整合后快进合入 main；未发布。
 
 ## 验证边界

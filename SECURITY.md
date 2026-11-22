@@ -16,8 +16,8 @@ Step Studio is in public preview (`0.1.0`). Only the latest `main` commit and th
 
 **Do not open a public issue** for a security vulnerability.
 
-1. Open a [private GitHub security advisory](https://github.com/the-snowpear/step-studio/security/advisories/new), or
-2. Contact the maintainer through GitHub (@the-snowpear) with a brief description and a request for a private channel.
+1. Open a [private GitHub security advisory](https://github.com/Circumsized/step-studio/security/advisories/new), or
+2. Contact the maintainer through GitHub (@Circumsized) with a brief description and a request for a private channel.
 
 Please include:
 

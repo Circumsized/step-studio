@@ -11,7 +11,7 @@ const names = await readdir(root);
 const manifestFile = names.find(name => /^remote-environment-[\w-]+\.json$/u.test(name));
 if (!manifestFile) throw new Error("Remote environment manifest missing");
 const value = JSON.parse(await readFile(join(root, manifestFile), "utf8"));
-const { manifest } = verifyRemoteEnvironment(value, keys, process.env.GITHUB_REPOSITORY ?? "the-snowpear/step-studio", value.manifest.platform, JSON.parse(await readFile("package.json", "utf8")).version);
+const { manifest } = verifyRemoteEnvironment(value, keys, process.env.GITHUB_REPOSITORY ?? "Circumsized/step-studio", value.manifest.platform, JSON.parse(await readFile("package.json", "utf8")).version);
 if (names.length !== 2 || !names.includes(manifest.archive.asset)) throw new Error("Remote environment archive missing or unexpected output files");
 const bytes = await readFile(join(root, manifest.archive.asset));
 if (bytes.length !== manifest.archive.size || createHash("sha256").update(bytes).digest("hex") !== manifest.archive.sha256) throw new Error("Remote environment archive checksum mismatch");

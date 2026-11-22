@@ -803,7 +803,7 @@
     const h = new Date().getHours();
     const part = h < 5 ? '夜深了' : h < 12 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
     const nameEl = document.querySelector('.sb-user .u-name');
-    const name = (nameEl && nameEl.textContent.trim()) || 'snowpear';
+    const name = (nameEl && nameEl.textContent.trim()) || 'circumsized';
     return part + '，' + name;
   }
 

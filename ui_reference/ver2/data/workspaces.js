@@ -46,7 +46,7 @@
     {
       id: 'ws-scratch',
       name: 'scratch-mcp-probe',
-      path: 'C:\\Users\\the_snowpear\\AppData\\Local\\Temp\\omp-scratch-8f21',
+      path: 'C:\\Users\\circumsized\\AppData\\Local\\Temp\\omp-scratch-8f21',
       kind: 'temp',
       branch: null,
       dirty: false,

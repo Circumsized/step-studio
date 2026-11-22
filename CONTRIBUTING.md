@@ -7,7 +7,7 @@ point. Agent / IDE collaborators should also read [`AGENTS.md`](AGENTS.md).
 
 ## Before you start
 
-1. Search [existing issues](https://github.com/the-snowpear/step-studio/issues)
+1. Search [existing issues](https://github.com/Circumsized/step-studio/issues)
    and discussions. Open an issue for anything larger than a typo.
 2. Do not report security issues in public. Follow [`SECURITY.md`](SECURITY.md).
 3. This is **not** a fork of the OMP CLI. Changes to upstream behaviour that
@@ -19,7 +19,7 @@ point. Agent / IDE collaborators should also read [`AGENTS.md`](AGENTS.md).
 See [`docs/development.md`](docs/development.md). Short version:
 
 ```powershell
-git clone --recurse-submodules https://github.com/the-snowpear/step-studio.git
+git clone --recurse-submodules https://github.com/Circumsized/step-studio.git
 cd step-studio
 npm install
 npm run vendor:install-deps

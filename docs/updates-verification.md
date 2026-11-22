@@ -4,7 +4,7 @@
 
 本轮将自动检查和自动下载移至「设置 → 常规 → 软件更新」，默认均开启；镜像、Runtime 通道与版本恢复保留在高级设置。修复后台检查期间关闭自动开关后仍可能开始下载的问题，下载前重新读取偏好。旧配置缺少 `autoDownload` 时默认开启，保存的关闭状态不被迁移覆盖。预览开关只改演示状态。
 
-使用项目发行公钥验签线上 v0.1.6～v0.1.11 的全部 15 份 v2 清单；对应 Release 中的桌面、Runtime 和 blockmap 附件名称与大小均匹配。Windows x64 / ARM64 的序号分别从 1 递增至 6；macOS ARM64 的 v0.1.8、v0.1.10、v0.1.11 序号从 1 递增至 3。当前目标是 [v0.1.11](https://github.com/the-snowpear/step-studio/releases/tag/v0.1.11)，Runtime 为 `18.12.6-studio.1`，最低桌面为 `0.1.11`，协议范围为 `1..1`。
+使用项目发行公钥验签线上 v0.1.6～v0.1.11 的全部 15 份 v2 清单；对应 Release 中的桌面、Runtime 和 blockmap 附件名称与大小均匹配。Windows x64 / ARM64 的序号分别从 1 递增至 6；macOS ARM64 的 v0.1.8、v0.1.10、v0.1.11 序号从 1 递增至 3。当前目标是 [v0.1.11](https://github.com/Circumsized/step-studio/releases/tag/v0.1.11)，Runtime 为 `18.12.6-studio.1`，最低桌面为 `0.1.11`，协议范围为 `1..1`。
 
 v0.1.11 保留的 v1 `update-index.json` 与分离签名验证通过，目标仍为 v0.1.6 的迁移安装包，`releaseNotesUrl` 含 `#update-v2-migration`。这是固定迁移入口：v0.1.4 / v0.1.5 先迁移至 v0.1.6，再通过 v2 更新到当前版本。v2 以最高签名序号直接选目标，不要求安装中间版本；差分缺少可用基线时全量回退。
 

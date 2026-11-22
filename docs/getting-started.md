@@ -25,7 +25,7 @@ You still need an OMP-compatible model provider. Studio reads the same
 ## Clone
 
 ```powershell
-git clone --recurse-submodules https://github.com/the-snowpear/step-studio.git
+git clone --recurse-submodules https://github.com/Circumsized/step-studio.git
 cd step-studio
 ```
 

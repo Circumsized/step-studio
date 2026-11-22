@@ -495,7 +495,7 @@
 
   /* ---------- 诊断中心 ---------- */
   D.diagnostics = {
-    ompPath: 'C:\\Users\\snowpear\\AppData\\Local\\Programs\\omp\\omp.exe',
+    ompPath: 'C:\\Users\\circumsized\\AppData\\Local\\Programs\\omp\\omp.exe',
     version: 'v0.82.1', rpc: 'omp-rpc/2.1', bridge: 'connected · pid 21480',
     processes: [
       { name: 'omp bridge', pid: 21480, role: 'Bridge', mem: '84 MB' },
@@ -505,7 +505,7 @@
       { name: 'chokidar watcher', pid: '—', role: '文件 Watcher', mem: '—' }
     ],
     cwd: 'C:\\Aspace\\Tools\\omp-web',
-    configDir: 'C:\\Users\\snowpear\\.omp',
+    configDir: 'C:\\Users\\circumsized\\.omp',
     capabilities: ['agent.run', 'agent.steer', 'fs.read', 'fs.write', 'bash.exec', 'preview.open', 'preview.dom', 'mcp.proxy', 'checkpoint.create', 'checkpoint.restore'],
     errors: [
       { time: '13:58:12', src: 'MCP · playwright', msg: 'transport closed unexpectedly (code 1006)' },

@@ -25,7 +25,7 @@ export async function buildUpdateAssetsV2(options = {}) {
   // Windows keeps its arch-only interface; macOS is a platform of its own.
   const platform = options.platform ?? (options.arch === undefined && releaseTargetsDarwin() ? MAC_TARGET_PLATFORM : `win32-${options.arch ?? resolveTargetArch()}`);
   const arch = platform.slice(platform.indexOf("-") + 1), darwin = platform.startsWith("darwin-");
-  const repo = options.repo ?? process.env.GITHUB_REPOSITORY ?? "the-snowpear/step-studio";
+  const repo = options.repo ?? process.env.GITHUB_REPOSITORY ?? "Circumsized/step-studio";
   const appVersion = options.appVersion ?? JSON.parse(await readFile(join(root, "package.json"), "utf8")).version;
   const runtimeOnly = options.runtimeOnly ?? (useEnvironment && process.env.STEP_STUDIO_RELEASE_KIND === "runtime");
   const out = options.out ?? releaseOutputDirectory(root, platform);

@@ -59,6 +59,6 @@ export async function verifyUpdateAssets(directory, keys, repo, platform) {
 }
 if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   const root = resolve("."), platform = releaseTargetsDarwin() ? MAC_TARGET_PLATFORM : `win32-${process.env.STEP_STUDIO_TARGET_ARCH ?? "x64"}`;
-  await verifyUpdateAssets(process.argv[2] ?? releaseOutputDirectory(root, platform), await releaseKeys(root), process.env.GITHUB_REPOSITORY ?? "the-snowpear/step-studio", platform);
+  await verifyUpdateAssets(process.argv[2] ?? releaseOutputDirectory(root, platform), await releaseKeys(root), process.env.GITHUB_REPOSITORY ?? "Circumsized/step-studio", platform);
   console.log("Signed release assets verified");
 }

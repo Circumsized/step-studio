@@ -8,7 +8,7 @@ On 2026-09-17, titles and descriptions of the five existing desktop releases wer
 
 ## Signing Identity Established on 2026-09-06
 
-- Repository: `the-snowpear/step-studio`.
+- Repository: `Circumsized/step-studio`.
 - GitHub Environment: `release`.
 - Environment secret: `STEP_STUDIO_RUNTIME_SIGNING_KEY`.
 - Active key ID: `step-studio-release-2026b`.
@@ -77,8 +77,8 @@ trust a replacement: a manually installed full Setup is required again.
 
 Published on 2026-10-28:
 
-- Release: https://github.com/the-snowpear/step-studio/releases/tag/v0.1.12
-- Successful workflow: https://github.com/the-snowpear/step-studio/actions/runs/40539480400
+- Release: https://github.com/Circumsized/step-studio/releases/tag/v0.1.12
+- Successful workflow: https://github.com/Circumsized/step-studio/actions/runs/40539480400
 - Release source/tag: `a72f7f4bd79e84be695932909ebdc206cfbedee1`.
 - Desktop: `0.1.12` for Windows x64/ARM64 and macOS arm64; Runtime: `18.12.6-studio.9`, upstream `45c35e40c46166dc726ccc52f5d27f40f2449f99`; minimum desktop version `0.1.12`.
 - All three desktop candidates and six SSH environment candidates passed on native runners. Thirty public assets were uploaded and the stable release became Latest. Release notes include the curated changelog in `docs/releases/v0.1.12.md`.
@@ -86,13 +86,13 @@ Published on 2026-10-28:
 - Local production checks, all workspace suites, 85 tooling tests and Runtime patch replay passed. Runtime verification ran 854 passing tests and restored the scratch vendor checkout clean. Browser checks covered width selection, preview preference isolation, narrow-window overflow and sidebar focus/escape; no console errors were reported. Initial all-suite performance/timeout failures passed after concurrency was limited; the first patch replay exposed formatting issues that were corrected before the successful run.
 - Post-publication verification in `outputs/published-v0.1.12/verification.json` (not committed) passed 41 checks: signed desktop and remote manifests, all 30 assets' recorded sizes/digests, the legacy migration signature, and a downloaded x64 Runtime archive's signature, coverage, checksums and source identity. This does not claim clean-machine installation, reporter-machine reproduction, or a live SSH/model/OAuth acceptance run.
 - First workflow `40536208522` exposed a remote packager lookup of the platform directory instead of its Runtime-version subdirectory. Its three desktop candidates passed; the superseded run was cancelled after retaining their signed Runtime artifacts. The corrected workflow reused matching desktop Runtime artifacts and rebuilt all remote environments before publishing.
-- Issue #6 reply was posted and read back: https://github.com/the-snowpear/step-studio/issues/6#issuecomment-6448947177 . The issue remains open for reporter retesting; the one-shot reply todo was removed after verification.
-- Issue #7 reply was posted and read back, and the issue was closed as completed: https://github.com/the-snowpear/step-studio/issues/7#issuecomment-6448813166 .
+- Issue #6 reply was posted and read back: https://github.com/Circumsized/step-studio/issues/6#issuecomment-6448947177 . The issue remains open for reporter retesting; the one-shot reply todo was removed after verification.
+- Issue #7 reply was posted and read back, and the issue was closed as completed: https://github.com/Circumsized/step-studio/issues/7#issuecomment-6448813166 .
 
 Published on 2026-09-06:
 
-- Release: https://github.com/the-snowpear/step-studio/releases/tag/v0.1.4
-- Successful workflow: https://github.com/the-snowpear/step-studio/actions/runs/34030531515
+- Release: https://github.com/Circumsized/step-studio/releases/tag/v0.1.4
+- Successful workflow: https://github.com/Circumsized/step-studio/actions/runs/34030531515
 - Release source/tag: `d068e47d9f0275f8b386b5f6a11aa869fa6ef3d5`.
 - Windows x64 application: `0.1.4`; Runtime: `18.1.10-studio.2`.
 - Index sequence: `1`; signing key: `step-studio-release-2026b`.
@@ -120,8 +120,8 @@ manual check; the automated Runtime install test does not claim to cover it.
 
 Published on 2026-09-13:
 
-- Release: https://github.com/the-snowpear/step-studio/releases/tag/v0.1.5
-- Successful workflow: https://github.com/the-snowpear/step-studio/actions/runs/34705770704
+- Release: https://github.com/Circumsized/step-studio/releases/tag/v0.1.5
+- Successful workflow: https://github.com/Circumsized/step-studio/actions/runs/34705770704
 - Release source/tag: `b60accb2a7b51ac5147fe7b3706747aadd6ecd54` (tag `v0.1.5`).
 - Windows x64 application: `0.1.5`; Runtime: `18.1.18-studio.5` (upstream pin `00085d4e7dfdcfbf302c122fa2682b410a0f43d1`).
 - Index sequence: `2`; signing key: `step-studio-release-2026b`.
@@ -131,8 +131,8 @@ Published on 2026-09-13:
 
 Published on 2026-09-20:
 
-- Release: https://github.com/the-snowpear/step-studio/releases/tag/v0.1.6
-- Successful workflow: https://github.com/the-snowpear/step-studio/actions/runs/35494692656
+- Release: https://github.com/Circumsized/step-studio/releases/tag/v0.1.6
+- Successful workflow: https://github.com/Circumsized/step-studio/actions/runs/35494692656
 - Release source/tag: `2de617d77d83c6c91a39cbea157a5eb81d7b962b` (tag `v0.1.6`).
 - Windows x64 + ARM64 application: `0.1.6`; Runtime: `18.2.5-studio.6` (upstream pin `37273117021129e96bd05d8277b140ec3fd61990`).
 - First v2 desktop release: app sequence `1` and Runtime sequence `1` per channel/architecture; signing key `step-studio-release-2026b`.

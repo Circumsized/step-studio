@@ -734,7 +734,7 @@
 
       /* ----- 认证 ----- */
       case 'auth-type': d.auth.type = t.dataset.v; S.oauthExpired = false; render(); break;
-      case 'oauth-login': d.auth.account = 'snowpear@' + (d.id || 'provider') + '.com'; S.oauthExpired = false; toast('OMP Login 授权成功', 'check'); render(); break;
+      case 'oauth-login': d.auth.account = 'circumsized@' + (d.id || 'provider') + '.com'; S.oauthExpired = false; toast('OMP Login 授权成功', 'check'); render(); break;
       case 'oauth-logout': d.auth.account = null; render(); break;
       case 'key-toggle-save': d.auth.save = !d.auth.save; render(); break;
 
@@ -905,7 +905,7 @@
       'auth-apikey': () => ed(null, 'openai', {}),
       'auth-env': () => { ed(null, 'openai'); S.draft.auth.type = 'env'; S.draft.auth.envName = 'OPENAI_API_KEY'; },
       'auth-command': () => { ed(null, 'openai'); S.draft.auth.type = 'command'; S.draft.auth.command = '!op read op://dev/openai/api-key'; },
-      'oauth-ok': () => { ed(null, 'anthropic'); S.draft.auth.account = 'snowpear@anthropic.com'; },
+      'oauth-ok': () => { ed(null, 'anthropic'); S.draft.auth.account = 'circumsized@anthropic.com'; },
       'oauth-out': () => { ed(null, 'anthropic'); S.draft.auth.account = null; },
       'test-ok': () => { ed(null, 'openai'); S.draft.auth = { type: 'api-key', key: 'sk-proj-••••••••3fA2', save: true, envName: '', command: '', account: null }; S.testResult = { ok: true, lines: ['连接成功 · 认证成功', '发现 4 个模型 · 3 个可用', '延迟 168ms · OpenAI Responses'] }; },
       'test-401': () => { ed(null, 'openai'); S.draft.auth = { type: 'api-key', key: 'sk-proj-invalid', save: true, envName: '', command: '', account: null }; S.testResult = { ok: false, lines: ['HTTP 401 Unauthorized', 'API Key Invalid — 请检查凭据', 'POST https://api.openai.com/v1/responses'] }; },

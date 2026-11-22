@@ -615,16 +615,16 @@
     if (!$('#envList')) return;
     let ok = true;
     const checks = [
-      ['OMP CLI', 'C:\\Users\\snowpear\\AppData\\Local\\Programs\\omp\\omp.exe', true],
+      ['OMP CLI', 'C:\\Users\\circumsized\\AppData\\Local\\Programs\\omp\\omp.exe', true],
       ['OMP 版本', 'v0.82.1（要求 ≥ v0.80.0）', true],
       ['RPC 协议', 'omp-rpc/2.1 · 握手成功', true],
       ['Capability', '14 项已协商（agent.run / fs.write / preview.dom …）', true],
-      ['模型认证', 'Google · 已登录（snowpear）', true],
+      ['模型认证', 'Google · 已登录（circumsized）', true],
       ['Provider 状态', 'gemini · 延迟 182ms', true],
       ['Git', 'git version 2.47.0.windows.1', true],
       ['Node', 'v22.22.2（Preview 依赖）', true],
       ['Bun', '未安装（可选，部分脚本不可用）', 'warn'],
-      ['OMP 配置目录', 'C:\\Users\\snowpear\\.omp · 可写', true],
+      ['OMP 配置目录', 'C:\\Users\\circumsized\\.omp · 可写', true],
       ['文件权限', '工作区读写正常', true],
       ['Preview 运行依赖', 'vite · playwright chromium 已就绪', true]
     ];

@@ -1,6 +1,6 @@
 # Step Studio
 
-在 [`the-snowpear/step-studio`](https://github.com/the-snowpear/step-studio) 基础上把
+在 [`Circumsized/step-studio`](https://github.com/Circumsized/step-studio) 基础上把
 运行时从 OMP 换成 **Step Code**（[`stepfun-ai/Step-Code`](https://github.com/stepfun-ai/Step-Code)）
 的可视化智能体平台。OMP 的 Studio Bridge 协议、host、客户端、Electron 壳全部复用；
 换掉的只有"runtime 进程"这一层。

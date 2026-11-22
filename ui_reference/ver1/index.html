@@ -152,10 +152,10 @@
 
     <!-- 左下用户与 OMP 状态 -->
     <footer class="sb-footer">
-      <button class="sb-user" id="btnOmpMenu" aria-label="snowpear · OMP 状态与环境菜单">
+      <button class="sb-user" id="btnOmpMenu" aria-label="circumsized · OMP 状态与环境菜单">
         <span class="avatar" aria-hidden="true">S</span>
         <span>
-          <span class="u-name">snowpear</span>
+          <span class="u-name">circumsized</span>
           <!-- OMP connection state changes on its own (reconnect, run start), so
                it is announced politely rather than only repainted. -->
           <span class="u-status ok" id="ompStatusLine" role="status" aria-live="polite">
@@ -466,7 +466,7 @@
 <template id="tpl-home">
   <div class="page-wide">
     <div class="home-hero">
-      <h1>下午好，snowpear</h1>
+      <h1>下午好，circumsized</h1>
       <p class="muted">2 个任务正在运行 · 1 个 Agent 等待你的处理 · Preview 运行中（127.0.0.1:30141）</p>
       <div class="home-quick">
         <button class="btn primary"><svg class="icon sm" data-icon="folder-open"></svg>打开本地文件夹</button>
@@ -657,7 +657,7 @@
         <h3>Advanced</h3>
         <p class="desc">OMP 路径、RPC / Bridge 与实验性能力。修改前请确认你了解其影响。</p>
         <div class="set-row"><div><div class="sr-label">OMP 路径</div><div class="sr-desc">留空则自动检测</div></div><div class="sr-control"><input class="input mono" value="自动检测（omp.exe）"></div></div>
-        <div class="set-row"><div><div class="sr-label">配置目录</div><div class="sr-desc">OMP 配置与会话存储位置</div></div><div class="sr-control"><span class="mono small muted">C:\Users\snowpear\.omp</span><button class="btn small outline">打开</button></div></div>
+        <div class="set-row"><div><div class="sr-label">配置目录</div><div class="sr-desc">OMP 配置与会话存储位置</div></div><div class="sr-control"><span class="mono small muted">C:\Users\circumsized\.omp</span><button class="btn small outline">打开</button></div></div>
         <div class="set-row"><div><div class="sr-label">日志级别</div><div class="sr-desc">OMP Logs 输出详细程度</div></div><div class="sr-control"><select class="select"><option>info</option><option>debug</option><option>warn</option></select></div></div>
         <div class="set-row"><div><div class="sr-label">RPC 超时</div><div class="sr-desc">单次调用超时时间（毫秒）</div></div><div class="sr-control"><input class="input mono" value="30000"></div></div>
         <div class="set-row"><div><div class="sr-label">Bridge 自动重启</div><div class="sr-desc">连接中断后自动重启 Bridge 进程</div></div><div class="sr-control"><button type="button" class="switch on" role="switch" aria-checked="true"></button></div></div>

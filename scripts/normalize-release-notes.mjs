@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-const repo = "the-snowpear/step-studio";
+const repo = "Circumsized/step-studio";
 const gh = (...args) => execFileSync("gh", [...args, "--repo", repo], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
 if (process.argv.includes("--apply")) {
   const planPath = resolve(process.argv[process.argv.indexOf("--apply") + 1] ?? "");

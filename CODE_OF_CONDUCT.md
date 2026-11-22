@@ -55,8 +55,8 @@ an individual is officially representing the community in public spaces.
 ## Enforcement
 
 Report incidents to the maintainers via a
-[private GitHub security advisory](https://github.com/the-snowpear/step-studio/security/advisories/new)
-or by contacting [@the-snowpear](https://github.com/the-snowpear). All complaints
+[private GitHub security advisory](https://github.com/Circumsized/step-studio/security/advisories/new)
+or by contacting [@Circumsized](https://github.com/Circumsized). All complaints
 will be reviewed and investigated promptly and fairly.
 
 All project maintainers are obligated to respect the privacy and security of the

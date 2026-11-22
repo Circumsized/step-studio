@@ -5,7 +5,7 @@ import { releaseKeys } from "./build-update-assets-v2.mjs";
 import { verifyUpdateManifest } from "@step-studio/runtime-installer";
 import { MAC_TARGET_PLATFORM, legacyIndexName, releaseTargetsDarwin } from "./release-assets.mjs";
 
-const root = resolve("."), repo = process.env.GITHUB_REPOSITORY ?? "the-snowpear/step-studio";
+const root = resolve("."), repo = process.env.GITHUB_REPOSITORY ?? "Circumsized/step-studio";
 const darwin = releaseTargetsDarwin();
 const arch = process.env.STEP_STUDIO_TARGET_ARCH ?? "x64", platform = darwin ? MAC_TARGET_PLATFORM : `win32-${arch}`;
 const dest = join(process.env.RUNNER_TEMP ?? join(root, "outputs"), `update-history-${darwin ? platform : arch}`);

@@ -489,7 +489,7 @@
       footer.append(
         h('span', { class: 'sidebar-footer-avatar' }, 'N'),
         h('div', { class: 'sidebar-footer-info' },
-          h('div', { class: 'sidebar-footer-name' }, 'the_snowpear'),
+          h('div', { class: 'sidebar-footer-name' }, 'circumsized'),
           /* Only the global OMP state lives here — never session data. */
           h('div', { class: 'sidebar-footer-status' }, info.text),
         ),

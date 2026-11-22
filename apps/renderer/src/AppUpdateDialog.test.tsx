@@ -28,7 +28,7 @@ it("offers skipping for desktop updates but not for Runtime-only updates", () =>
 });
 
 it("exposes the GitHub release link as an icon without a visible label", () => {
-  render(<AppUpdateDialog isDownloading update={{ currentVersion: "0.1.5", version: "0.1.6", htmlUrl: "https://github.com/the-snowpear/step-studio/releases" }} onClose={vi.fn()} onCancel={vi.fn()} onSkip={vi.fn()} />);
+  render(<AppUpdateDialog isDownloading update={{ currentVersion: "0.1.5", version: "0.1.6", htmlUrl: "https://github.com/Circumsized/step-studio/releases" }} onClose={vi.fn()} onCancel={vi.fn()} onSkip={vi.fn()} />);
   const link = screen.getByRole("link", { name: "前往 GitHub 查看" });
   expect(link.textContent).toBe("");
   expect(link.getAttribute("data-tip")).toBe("前往 GitHub 查看");
