@@ -21,11 +21,10 @@
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { CORE_NODE_SUITES, CORE_RENDERER_SUITES } from "./core-suites.mjs";
+import { byKey, closure, levels, root, units } from "./package-graph.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The fork adds its own scope for Step-specific packages; both are workspace-local.
 const scopes = ["@step-studio/", "@step-studio/"];
 const tscBin = join(root, "node_modules", "typescript", "bin", "tsc");
@@ -33,56 +32,6 @@ const vitestBin = join(root, "node_modules", "vitest", "vitest.mjs");
 const viteBin = join(root, "node_modules", "vite", "bin", "vite.js");
 const tailLines = 40;
 const concurrency = Math.max(1, Math.min(4, availableParallelism() - 1));
-
-const units = readUnits();
-const byKey = new Map(units.map(unit => [unit.key, unit]));
-
-function readUnits() {
-  const found = [];
-  for (const parent of ["packages", "apps"]) {
-    if (!existsSync(join(root, parent))) continue;
-    for (const name of readdirSync(join(root, parent))) {
-      const dir = `${parent}/${name}`;
-      const manifest = join(root, dir, "package.json");
-      if (!existsSync(manifest)) continue;
-      const pkg = JSON.parse(readFileSync(manifest, "utf8"));
-      const scope = scopes.find(prefix => pkg.name?.startsWith(prefix));
-      if (scope === undefined) continue;
-      const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })
-        .filter(dep => dep.startsWith(scope))
-        .map(dep => dep.slice(scope.length));
-      found.push({ key: pkg.name.slice(scope.length), dir, deps });
-    }
-  }
-  return found.sort((left, right) => left.key.localeCompare(right.key));
-}
-
-// Transitive internal dependencies, so `--only studio-host` does not need a full build.
-function closure(keys) {
-  const needed = new Set();
-  const visit = key => {
-    if (needed.has(key) || !byKey.has(key)) return;
-    needed.add(key);
-    for (const dep of byKey.get(key).deps) visit(dep);
-  };
-  for (const key of keys) visit(key);
-  return needed;
-}
-
-// Dependency levels inside a subset. Packages on the same level have no edges
-// between them, so they can compile in parallel; each level waits for the one above.
-function levels(keys) {
-  const pending = new Map([...keys].map(key => [key, new Set(byKey.get(key).deps.filter(dep => keys.has(dep)))]));
-  const ordered = [];
-  while (pending.size) {
-    const ready = [...pending].filter(([, deps]) => deps.size === 0).map(([key]) => key).sort();
-    if (!ready.length) throw new Error(`dependency cycle between: ${[...pending.keys()].sort().join(", ")}`);
-    ordered.push(ready);
-    for (const key of ready) pending.delete(key);
-    for (const deps of pending.values()) for (const key of ready) deps.delete(key);
-  }
-  return ordered;
-}
 
 function buildStep(key) {
   const unit = byKey.get(key);
@@ -270,15 +219,13 @@ if (plan.arch) {
   if (!result.ok) failures.push(result.name);
 }
 
-// The generated contract. Regenerates `contracts/generated/` and fails if the
-// checked-in copy moved, which is what makes `git diff --exit-code` on that
-// directory a gate rather than a no-op. Runs after the builds because it reads
-// the protocol from its built output.
-if (plan.arch || plan.types) {
+// Cross-process environment-variable contracts. A pure source scan — no build
+// output needed — so it belongs with `arch`, not with the compile-dependent steps.
+if (plan.arch) {
   const result = await runStep({
-    name: "contracts",
+    name: "cross-process-contracts",
     command: process.execPath,
-    args: ["--test", join(root, "test", "contracts.test.mjs")],
+    args: ["--test", join(root, "scripts", "cross-process-contracts.test.mjs")],
   });
   report(result);
   if (!result.ok) failures.push(result.name);
@@ -309,6 +256,24 @@ if (plan.build.size) {
       break;
     }
   }
+}
+
+// The generated contract. Regenerates `contracts/generated/` and fails if the
+// checked-in copy moved, which is what makes `git diff --exit-code` on that
+// directory a gate rather than a no-op. Runs after the builds because it reads
+// the protocol from its built output.
+// It needs the protocol's built output, so it runs only when this invocation
+// compiled something or a previous one left the output on disk. Without that guard
+// `--only arch` on a clean tree fails the same way the old ordering did.
+const protocolBuilt = existsSync(join(root, "packages", "studio-protocol", "dist", "src", "index.js"));
+if ((plan.arch || plan.types) && (plan.build.size > 0 || protocolBuilt)) {
+  const result = await runStep({
+    name: "contracts",
+    command: process.execPath,
+    args: ["--test", join(root, "test", "contracts.test.mjs")],
+  });
+  report(result);
+  if (!result.ok) failures.push(result.name);
 }
 
 const suites = [];

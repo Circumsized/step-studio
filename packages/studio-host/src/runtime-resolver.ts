@@ -710,7 +710,15 @@ export function createProcessProbe(options: ProcessProbeOptions = {}): RuntimePr
             // Stream phase markers before a synchronous startup hang can hide them.
             ...(options.onOutput === undefined ? {} : { PI_DEBUG_STARTUP: "1" }),
             // A probe outlives a crashed Host only until its parent watchdog notices.
-            ...(context.platform === "darwin" ? { STEP_STUDIO_PARENT_PID: String(process.pid) } : {}),
+            //
+            // The name is `OMP_STUDIO_PARENT_PID` — the OMP_ spelling, not this package's
+            // own STEP_STUDIO_ prefix — and that is load-bearing: the reader is
+            // `parent-watchdog.ts` in the Runtime overlay,
+            // compiled into `step` and versioned independently of this package. Renaming the
+            // host side alone silently disables the watchdog — the Runtime never sees a parent
+            // pid and never exits when the Host dies. Do not "clean this up" without changing
+            // both sides in the same release.
+            ...(context.platform === "darwin" ? { OMP_STUDIO_PARENT_PID: String(process.pid) } : {}),
           },
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,

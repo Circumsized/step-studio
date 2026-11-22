@@ -10,8 +10,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { CLIENT_CONTRACT_VERSION } from "@step-studio/client-contract";
-import { STUDIO_PROTOCOL_VERSION } from "@step-studio/studio-protocol";
+import { CLIENT_CONTRACT_VERSION, STUDIO_PROTOCOL_VERSION } from "@step-studio/studio-protocol";
 import {
   assertSafeVersion,
   createTrustedKeyVerifier,

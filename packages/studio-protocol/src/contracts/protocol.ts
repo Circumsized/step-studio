@@ -22,6 +22,17 @@ import type { SessionTelemetryEvent } from "./telemetry";
 export const STUDIO_PROTOCOL_NAME = "step-studio" as const;
 export const STUDIO_PROTOCOL_VERSION = 1 as const;
 
+/**
+ * Version of the client contract that sits on top of this protocol; bumped on
+ * incompatible contract changes.
+ *
+ * It lives here rather than in `client-contract` because the update pipeline
+ * (`runtime-installer`) has to validate an incoming payload's declared contract
+ * version, and that package is only allowed to depend on this one.
+ * `client-contract` re-exports it so its own consumers see no change.
+ */
+export const CLIENT_CONTRACT_VERSION = 2 as const;
+
 export interface StudioHelloRequest {
   type: "studio.hello";
   requestId: RequestId;

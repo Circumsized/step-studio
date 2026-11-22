@@ -159,7 +159,9 @@ function defaultSpawnDashboard(exe: string, options?: { readonly open?: boolean 
   const child = spawn(exe, ["stats"], {
     stdio: "ignore",
     windowsHide: true,
-    ...(options?.open === true ? {} : { env: { ...process.env, STEP_STUDIO_STATS_NO_OPEN: "1" } }),
+    // `OMP_STATS_NO_OPEN` is the spelling the Runtime reads (stats-cli.ts). The name is the
+    // compatibility contract — see the comment above — so the host side must match it exactly.
+    ...(options?.open === true ? {} : { env: { ...process.env, OMP_STATS_NO_OPEN: "1" } }),
     // On Windows, `detached: true` allocates a new console window.
     ...(process.platform === "win32" ? {} : { detached: true }),
   });

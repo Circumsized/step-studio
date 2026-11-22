@@ -11,6 +11,7 @@
  * endpoints, PIDs, process handles or session/workspace paths.
  */
 
+import { CLIENT_CONTRACT_VERSION } from "@step-studio/studio-protocol";
 import type {
   CapabilityManifest,
   OperatorStateSnapshot,
@@ -51,8 +52,12 @@ import type {
   Unsubscribe,
 } from "./lifecycle.js";
 
-/** Version of this client contract; bumped on incompatible contract changes. */
-export const CLIENT_CONTRACT_VERSION = 2 as const;
+/// Version of this client contract; bumped on incompatible contract changes.
+///
+/// Defined in `studio-protocol` so the update pipeline can validate it without
+/// depending on this package; re-exported here because this is where consumers
+/// have always read it.
+export { CLIENT_CONTRACT_VERSION };
 export type { ArtifactKind, ArtifactRecord, ArtifactListInput, ArtifactPage, ArtifactStorageState } from "@step-studio/studio-protocol";
 
 export { MODEL_KINDS, BUILTIN_MODEL_ROLES, parseModelKind, modelAcceptsRole, type ModelKind } from "./model-kinds.js";
