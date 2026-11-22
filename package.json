@@ -4,14 +4,14 @@
   "private": true,
   "description": "Desktop console for the step CLI (Step Code) — typed Studio Bridge, Tauri workbench, Windows installer and macOS app",
   "license": "MIT",
-  "author": "snowpear",
-  "homepage": "https://github.com/the-snowpear/step-studio",
+  "author": "Circumsized",
+  "homepage": "https://github.com/Circumsized/step-studio",
   "bugs": {
-    "url": "https://github.com/the-snowpear/step-studio/issues"
+    "url": "https://github.com/Circumsized/step-studio/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/the-snowpear/step-studio.git"
+    "url": "git+https://github.com/Circumsized/step-studio.git"
   },
   "keywords": [
     "omp",
