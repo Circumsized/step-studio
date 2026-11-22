@@ -3,7 +3,7 @@
   "version": "0.1.17",
   "private": true,
   "type": "module",
-  "description": "Shared OMP Studio renderer: pure-browser React surface over the semantic StudioClient contract",
+  "description": "Shared Step Studio renderer: pure-browser React surface over the semantic StudioClient contract",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

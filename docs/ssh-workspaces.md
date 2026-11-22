@@ -1,6 +1,6 @@
 # SSH 工作区
 
-当前为开发预览功能。界面在本机，项目文件、Git、OMP Runtime 和模型执行在远端；不创建整个项目的本机镜像。0.1.12 起提供匹配远端系统的签名环境包，首次连接可自动准备私有运行环境。
+当前为开发预览功能。界面在本机，项目文件、Git、Step Runtime 和模型执行在远端；不创建整个项目的本机镜像。0.1.12 起提供匹配远端系统的签名环境包，首次连接可自动准备私有运行环境。
 
 ## 连接
 
@@ -10,7 +10,7 @@
 
 账密模式当前仅支持服务器的 SSH `password` 认证，不支持 keyboard-interactive、OTP/MFA、登录时改密码或跳板机。密钥/agent 模式继续支持系统 config 中的跳板配置。Windows 构建会使用 .NET Framework 4.x 的 `csc.exe` 生成无窗口 askpass 辅助程序；macOS 构建复制可执行脚本到应用资源目录。Windows helper 和隔离认证回归已通过；真实密码登录仍未验收，两台授权服务器均禁用密码认证，未修改服务器配置。独立验收记录见 [验收报告](../doc/ssh-workspace-test-report.md)。
 
-首次连接会确认是否在远端用户目录准备 OMP Studio Host。需要：
+首次连接会确认是否在远端用户目录准备 Step Studio Host。需要：
 
 - 本机系统 OpenSSH Client；Windows 使用系统自带 `ssh.exe`。
 - 已在系统 SSH 完成主机密钥信任。密钥模式需可使用密钥或 ssh-agent 非交互登录；账密模式由应用密码框提供本次连接的凭证。应用不保存 SSH 密码，不关闭主机密钥验证，不转发 agent。

@@ -93,9 +93,9 @@ test("appDataDirectory rejects relative, drive-relative, and empty directories",
 });
 
 test("appDataDirectory uses the current-user directory without assuming elevation", async () => {
-  const { services, calls } = recordingServices({}, "C:\\Users\\测试 用户\\AppData\\Local\\OMP Studio");
+  const { services, calls } = recordingServices({}, "C:\\Users\\测试 用户\\AppData\\Local\\Step Studio");
   const port = new Win32PlatformPort(services);
-  assert.equal(await port.appDataDirectory(), "C:\\Users\\测试 用户\\AppData\\Local\\OMP Studio");
+  assert.equal(await port.appDataDirectory(), "C:\\Users\\测试 用户\\AppData\\Local\\Step Studio");
   // Only the directory lookup happens: no identity, privilege, or elevation probes.
   assert.deepEqual(calls, [{ method: "appDataDirectory", args: [] }]);
 });
@@ -114,7 +114,7 @@ test("createPrivateEndpoint wraps the service authority as an opaque named-pipe 
 test("createPrivateEndpoint passes a Unicode/space profile directory through unchanged", async () => {
   const { services, calls } = recordingServices();
   const port = new Win32PlatformPort(services);
-  const profile = "C:\\Users\\测试 用户\\AppData\\Local\\OMP Studio\\profiles\\我的 工作区";
+  const profile = "C:\\Users\\测试 用户\\AppData\\Local\\Step Studio\\profiles\\我的 工作区";
   const endpoint = await port.createPrivateEndpoint(profile);
   assert.equal(endpoint.kind, "named-pipe");
   assert.deepEqual(calls, [{ method: "createCurrentUserOnlyEndpoint", args: [profile] }]);

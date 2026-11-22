@@ -1,6 +1,6 @@
 # Packaging Public Verification Keys
 
-此目录存放 OMP Studio 签名验证用的 **Ed25519 SPKI 公钥** 及多密钥信任表 `trusted-keys.json`。
+此目录存放 Step Studio 签名验证用的 **Ed25519 SPKI 公钥** 及多密钥信任表 `trusted-keys.json`。
 
 ## 安全约定
 

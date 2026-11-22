@@ -30,7 +30,7 @@
 
 ## 存储和迁移
 
-- 当前用户默认安装目录：`%LOCALAPPDATA%\Programs\OMP Studio`，程序以普通用户权限启动。发布打包会在复制 Runtime 后立即使用 `packaging/keys/trusted-keys.json` 验证 Runtime manifest、checksums、signature 和 EXE 摘要；开发密钥或错误发行密钥会让打包失败。
+- 当前用户默认安装目录：`%LOCALAPPDATA%\Programs\Step Studio`，程序以普通用户权限启动。发布打包会在复制 Runtime 后立即使用 `packaging/keys/trusted-keys.json` 验证 Runtime manifest、checksums、signature 和 EXE 摘要；开发密钥或错误发行密钥会让打包失败。
 - 活跃 Runtime：`%LOCALAPPDATA%\step-studio\runtimes`。
 - 更新缓存与事务：`%LOCALAPPDATA%\step-studio\updates-v2`。
 - 原有会话、设置、工作区记录和头像位置保持不变；不迁移用户项目。

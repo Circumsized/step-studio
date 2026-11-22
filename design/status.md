@@ -5,8 +5,9 @@
 的可视化智能体平台。OMP 的 Studio Bridge 协议、host、客户端、Electron 壳全部复用；
 换掉的只有"runtime 进程"这一层。
 
-`README.md` 仍然是 OMP Studio 的说明书——它描述的复用部分依然准确。本文件只写这个
-fork 的状态与差异。
+`README.md` 曾是 OMP Studio 的说明书。2026-11-22 已改写为 Step Studio 自己的
+门面（产品名、能力列表、仓库结构、架构图、安装与打包入口），其中与上游 oh-my-pi
+相关的署名按 MIT 要求保留。本文件只写这个 fork 的状态与差异。
 
 > **本文件是历史档案，不是当前台账。** 逐条验收的完成态看
 > [`progress/`](progress/README.md)（一个里程碑一个文件）。下文「尚未完成」等节停留在

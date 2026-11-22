@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="icon.png" width="96" height="96" alt="OMP Studio">
+  <img src="icon.png" width="96" height="96" alt="Step Studio">
 </p>
 
-<h1 align="center">OMP Studio</h1>
+<h1 align="center">Step Studio</h1>
 
 <p align="center">
-  <strong>OMP Runtime 的桌面控制台</strong><br>
+  <strong>step CLI（Step Code）的桌面控制台</strong><br>
   类型化 Studio Bridge · Tauri 工作台 · Windows / macOS
 </p>
 
@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/the-snowpear/step-studio/actions/workflows/ci.yml"><img src="https://github.com/the-snowpear/step-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Circumsized/step-studio/actions/workflows/ci.yml"><img src="https://github.com/Circumsized/step-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.17-informational.svg" alt="0.1.17"></a>
   <a href="docs/getting-started.md"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4.svg" alt="Windows | macOS"></a>
@@ -28,13 +28,13 @@
   <a href="https://linux.do/"><img src="https://img.shields.io/badge/LINUX%20DO-Community-FFB003.svg" alt="LINUX DO"></a>
 </p>
 
-OMP Studio 是 [oh-my-pi](https://github.com/can1357/oh-my-pi)（OMP）的桌面壳。它把会话、审批、Agent Hub 和工作区接到类型化的 Studio Bridge 上，而不是去解析 TUI 文本、ANSI 或按键宏。
+Step Studio 是 Step Code 的 `step` CLI 的桌面壳。它把会话、审批、Agent Hub 和工作区接到类型化的 Studio Bridge 上，而不是去解析 TUI 文本、ANSI 或按键宏。
 
 <p align="center">
-  <img src="docs/images/workbench.png" alt="OMP Studio 工作台：新建对话欢迎页、活动热力图与 Composer" width="920">
+  <img src="docs/images/workbench.png" alt="Step Studio 工作台：新建对话欢迎页、活动热力图与 Composer" width="920">
 </p>
 
-0.1.10 适配 OMP 18.10.4，新增会话迁移、Worktree、存储压缩和模型配置能力。查看 [发行说明](docs/releases/v0.1.10.md) 与 [迁移及验收记录](docs/migrations/omp-18.10.4.md)。
+桌面壳为 Tauri（Rust）+ React renderer，Runtime 侧是 Rust daemon 与适配 `step --mode rpc` 的 adapter。查看 [更新日志](CHANGELOG.md)。
 
 ## 工作台亮点
 
@@ -87,9 +87,9 @@ Skills、Plugins、MCP、Slash Commands 同一页开关、探测和打开目录�
 </p>
 
 > [!TIP]
-> **安装与运行：** 前往 [GitHub Releases](https://github.com/the-snowpear/step-studio/releases) 下载 Windows x64 / ARM64 安装包或 macOS Apple Silicon DMG，或参考下方说明从源码构建运行。macOS 包为 ad hoc 签名，首次打开可能需要在「系统设置 → 隐私与安全性」确认。如遇问题欢迎提交 [Issue](https://github.com/the-snowpear/step-studio/issues)。
+> **安装与运行：** 前往 [GitHub Releases](https://github.com/Circumsized/step-studio/releases) 下载 Windows x64 / ARM64 安装包或 macOS Apple Silicon DMG，或参考下方说明从源码构建运行。macOS 包为 ad hoc 签名，首次打开可能需要在「系统设置 → 隐私与安全性」确认。如遇问题欢迎提交 [Issue](https://github.com/Circumsized/step-studio/issues)。
 >
-> **macOS（Apple Silicon，macOS 13+）：** 发布附带 `Step-Studio-<版本>-macos-arm64.dmg` 时，打开 dmg，把 OMP Studio 拖进“应用程序”。目前是 ad hoc 签名、尚未公证的预览版：首次打开会被拦截，请到“系统设置 › 隐私与安全性”点“仍要打开”，或执行 `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`。也可以按 [docs/getting-started.md](docs/getting-started.md) 从源码构建。
+> **macOS（Apple Silicon，macOS 13+）：** 发布附带 `Step-Studio-<版本>-macos-arm64.dmg` 时，打开 dmg，把 Step Studio 拖进“应用程序”。目前是 ad hoc 签名、尚未公证的预览版：首次打开会被拦截，请到“系统设置 › 隐私与安全性”点“仍要打开”，或执行 `xattr -dr com.apple.quarantine "/Applications/Step Studio.app"`。也可以按 [docs/getting-started.md](docs/getting-started.md) 从源码构建。
 
 ## 能做什么
 
@@ -97,7 +97,7 @@ Skills、Plugins、MCP、Slash Commands 同一页开关、探测和打开目录�
 - **会话与项目** — 本地工作区注册表、历史、归档；Renderer 只见到不透明 id，看不到本机绝对路径。
 - **Agent Hub / Skills / 模型** — 库存与配置走 Host；没有 read model 的表面保持禁用，不用假数据填满。
 - **本机能力** — Git、文件树、终端 PTY、系统通知、浏览器打开；控制面仍是语义 command，不是 shell 脚本拼装。
-- **托管 Runtime** — 钉住的 oh-my-pi 子模块 + overlay + 四组接缝补丁；`omp --mode studio-host`。工件走 Ed25519 校验。
+- **托管 Runtime** — Rust daemon + 适配 `step --mode rpc` 的 adapter；工件走 Ed25519 校验。
 - **SSH 工作区（开发预览）** — 在项目/分支栏选择本机或远端工作，支持系统密钥和账密连接的源码实现；兼容性与未验收边界见 [SSH 使用说明](docs/ssh-workspaces.md)。
 
 ## 快速开始
@@ -105,7 +105,7 @@ Skills、Plugins、MCP、Slash Commands 同一页开关、探测和打开目录�
 需要 Node.js 22+。完整步骤见 [docs/getting-started.md](docs/getting-started.md)。
 
 ```powershell
-git clone --recurse-submodules https://github.com/the-snowpear/step-studio.git
+git clone --recurse-submodules https://github.com/Circumsized/step-studio.git
 cd step-studio
 npm install
 cd apps\desktop-tauri
@@ -116,18 +116,15 @@ npm run tauri:dev
 要的是可分发的安装包时，把最后一行换成 `npm run tauri:build`；拿到 Windows 上要跑什么、
 抓什么，见 [docs/windows-real-machine-test.md](docs/windows-real-machine-test.md)。
 
-接上真实 Runtime（首次较慢）：
+壳起来后会自己拉 daemon（`step-studio-host`），daemon 再拉 adapter
+（`step-studio-runtime`）——三个可执行文件必须在同一个目录，装机版天然满足。
+adapter 从 `PATH` 找 `step` CLI，也可以用 `STEP_STUDIO_STEP_CMD` 指向别处；
+没有它，daemon 与 adapter 照样起、握手照样完成，只有真正调 CLI 的那一步失败。
+模型与登录沿用 Step Code 自己的配置。本仓库不内置任何供应商密钥。
 
-```powershell
-npm run omp:install-deps
-npm run omp:overlay:apply
-npm run omp:keys
-npm run omp:build:host
-cd apps\desktop-tauri
-npm run tauri:dev
-```
-
-模型与登录沿用 OMP 的 `models.yml` / `omp login`。本仓库不内置任何供应商密钥。
+`npm run omp:*` 那一套（install-deps / overlay:apply / keys / build:host）是
+`omp-patch/` 遗留层的构建路径，与上面的 step 链路无关，见
+[omp-patch/README.md](omp-patch/README.md)。
 
 ## 仓库结构
 
@@ -136,9 +133,8 @@ apps/desktop-tauri      Tauri 壳（Rust）+ preload 桥
 apps/desktop-tui       终端界面
 apps/renderer          Vite + React 工作台
 packages/             协议、Host、客户端、传输、平台
-omp-patch/overlay     Studio 自有 Runtime 源码
-omp-patch/patches     对上游文件的接缝补丁（不要手改）
-omp-patch/vendor      oh-my-pi 子模块（只提交 gitlink）
+omp-patch/            遗留层：oh-my-pi 上游子模块 + overlay + 接缝补丁（当前 runtime 走 step）
+crates/               Rust：studio-bridge / studio-host / step-studio-runtime 等
 packaging/            发布签名密钥与说明
 ui_reference/ver1     视觉参考，不是产品代码
 docs/                 使用与开发文档
@@ -151,13 +147,13 @@ docs/                 使用与开发文档
 ```
 Renderer → StudioClient → Desktop IPC → Host facade
                                     ├─ 本机：会话目录 / Git / 工作区
-                                    └─ Bridge → omp --mode studio-host
+                                    └─ Bridge → step-studio-runtime → step --mode rpc
 ```
 
 不变量（详见 [docs/architecture.md](docs/architecture.md)）：
 
 - 类型与散文冲突时，以 `packages/studio-protocol` 与 `client-contract` 为准。
-- Renderer 不得拿到 Bridge token、进程句柄或 OMP 会话路径。
+- Renderer 不得拿到 Bridge token、进程句柄或 Step 会话路径。
 - 未知 mutation 失败关闭；`accepted` 不等于成功。
 - Runtime 丢失会封旧 epoch，未完成的 accepted 变为 `outcome_unknown`。
 
@@ -182,7 +178,7 @@ Renderer → StudioClient → Desktop IPC → Host facade
 
 中文交流、建议与反馈欢迎来 [LINUX DO](https://linux.do/) 社区，感谢佬友们的支持。
 
-上游 OMP 本身的缺陷请提到 [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi)。本仓库只维护 overlay 与四组接缝补丁。
+上游 oh-my-pi 本身的缺陷请提到 [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi)；本仓库只在 `omp-patch/` 保留对它的 overlay 与接缝补丁，其余部分（Tauri 壳、Rust daemon 与 adapter、renderer、协议包）是独立工作。
 
 ## 许可证
 

@@ -2,7 +2,7 @@
   "name": "@step-studio/host-client-api",
   "version": "0.1.17",
   "private": true,
-  "description": "Presentation-neutral Host semantic facade for the OMP Studio product client (P1)",
+  "description": "Presentation-neutral Host semantic facade for the Step Studio product client (P1)",
   "type": "module",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",

@@ -1,6 +1,6 @@
 # Docs
 
-Public documentation for OMP Studio.
+Public documentation for Step Studio.
 
 | Document | Audience |
 |---|---|

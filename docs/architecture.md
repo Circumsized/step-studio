@@ -1,8 +1,11 @@
 # Architecture
 
-OMP Studio is a desktop console in front of a **patched OMP Runtime**. The
-GUI does not parse TUI text, ANSI, or key macros. Control goes through a
-typed Studio Bridge.
+Step Studio is a desktop console for Step Code's `step` CLI. The GUI does not
+parse TUI text, ANSI, or key macros. Control goes through a typed Studio Bridge.
+
+The chain is Rust end to end: the Tauri shell starts `step-studio-host` (daemon),
+which starts `step-studio-runtime` (adapter), which speaks JSONL to `step` over
+stdio. The three executables must sit in one directory.
 
 ```
 Renderer (apps/renderer)
@@ -49,13 +52,17 @@ Authoritative lists:
   `outcome_unknown`.
 - PTY bytes are not a control protocol.
 
-## Runtime pin
+## Legacy layer: `omp-patch/`
 
-`omp-patch/upstream.json` pins [oh-my-pi](https://github.com/can1357/oh-my-pi).
-Studio-owned code lives in `omp-patch/overlay/`. Edits to upstream files are
-four seam patches. See [`omp-patch/README.md`](../omp-patch/README.md).
+`omp-patch/upstream.json` pins [oh-my-pi](https://github.com/can1357/oh-my-pi),
+and `omp-patch/overlay/` plus four seam patches still modify that tree. This is
+**not** on the live path: the runtime is `step`, driven over JSONL stdio by
+`crates/step-studio-runtime`. See [`omp-patch/README.md`](../omp-patch/README.md)
+for what remains there and why.
 
-`omp.exe` is the patched CLI/Runtime. `OMP Studio.exe` is the Electron app.
+The `step` binary is resolved from `PATH`, or from `STEP_STUDIO_STEP_CMD`. Without
+it the daemon and adapter still start and the handshake still completes; only the
+call into the CLI fails.
 
 ## Historical notes
 

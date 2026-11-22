@@ -118,7 +118,7 @@ Output in `target/release/bundle/`: `dmg/Step Studio_<version>_aarch64.dmg` and
 
 When it is signed ad hoc and not notarized, the first launch is blocked.
 Choose "Open Anyway" in System Settings › Privacy & Security, or run
-`xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`. Every update
+`xattr -dr com.apple.quarantine "/Applications/Step Studio.app"`. Every update
 changes the ad hoc signature, so macOS asks again for microphone, folder and
 local network access, and the Keychain may ask to allow access once more.
 

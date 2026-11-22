@@ -1,5 +1,5 @@
-OMP Studio
-Copyright (c) 2026 snowpear and OMP Studio contributors
+Step Studio
+Copyright (c) 2026 snowpear and Step Studio contributors
 
 This product is licensed under the MIT License. See LICENSE.
 
@@ -10,8 +10,9 @@ oh-my-pi (OMP Runtime)
 ----------------------
 This repository vendors [oh-my-pi](https://github.com/can1357/oh-my-pi) as a
 Git submodule at `omp-patch/vendor/oh-my-pi`, pinned in `omp-patch/upstream.json`.
-Studio applies an overlay and a small set of seam patches to that tree in order
-to expose a typed Studio Bridge (`omp --mode studio-host`).
+It is a legacy layer: the live runtime is Step Code's `step` CLI, driven over
+JSONL stdio by the Rust adapter in `crates/step-studio-runtime`. The overlay and
+seam patches remain for that vendored tree.
 
 oh-my-pi is a fork of Pi by Mario Zechner.
 
@@ -25,6 +26,5 @@ original Studio work, also under the MIT License of this repository.
 
 Other dependencies
 ------------------
-npm packages used by this workspace (Electron, React, TypeScript, and others)
-remain under their own licenses. See each package's LICENSE file after
-`npm install`.
+npm packages used by this workspace (React, TypeScript, and others) remain under
+their own licenses. See each package's LICENSE file after `npm install`.

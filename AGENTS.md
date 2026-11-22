@@ -151,9 +151,10 @@ node scripts/check.mjs --list          # 看有哪些组和包
 
 运行时/补丁专项命令见根目录 `package.json`，包括 `runtime:verify-source` 和 `omp:verify:patches`，只在相关改动或升级上游时按需运行。
 
-## 改 OMP Runtime 源码
+## 改 omp-patch 里的上游 Runtime 源码
 
-Runtime 侧分两层，详见 `omp-patch/README.md`：
+这一节只涉及 `omp-patch/` 遗留层。当前活的 runtime 是 `step`，由
+`crates/step-studio-runtime` 适配，不走这里。Runtime 侧分两层，详见 `omp-patch/README.md`：
 
 - **overlay**（`omp-patch/overlay/`）：Studio 自有文件，上游不存在。普通编辑、普通 diff，升级上游时不会冲突。
 - **接缝补丁**（`omp-patch/patches/*.patch`）：仅对上游已有文件的改动，按上游子系统分成 4 组。

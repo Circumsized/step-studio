@@ -62,7 +62,7 @@ and never replace the release public key with a development key.
 
 ## Recovery and Rotation
 
-An application payload failure can be bypassed using `OMP Studio.exe
+An application payload failure can be bypassed using `Step Studio.exe
 --omp-baseline`. A failed Runtime session startup attempts to reactivate
 the previous verified Runtime; diagnostics also provides explicit rollback.
 Keep the previous Setup available for recovery.

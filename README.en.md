@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="icon.png" width="96" height="96" alt="OMP Studio">
+  <img src="icon.png" width="96" height="96" alt="Step Studio">
 </p>
 
-<h1 align="center">OMP Studio</h1>
+<h1 align="center">Step Studio</h1>
 
 <p align="center">
-  <strong>Desktop console for OMP Runtime</strong><br>
+  <strong>Desktop console for the step CLI (Step Code)</strong><br>
   Typed Studio Bridge · Tauri workbench · Windows / macOS
 </p>
 
@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/the-snowpear/step-studio/actions/workflows/ci.yml"><img src="https://github.com/the-snowpear/step-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/Circumsized/step-studio/actions/workflows/ci.yml"><img src="https://github.com/Circumsized/step-studio/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT"></a>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.17-informational.svg" alt="0.1.17"></a>
   <a href="docs/getting-started.md"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0078D4.svg" alt="Windows | macOS"></a>
@@ -28,13 +28,13 @@
   <a href="https://linux.do/"><img src="https://img.shields.io/badge/LINUX%20DO-Community-FFB003.svg" alt="LINUX DO"></a>
 </p>
 
-OMP Studio is a desktop shell for [oh-my-pi](https://github.com/can1357/oh-my-pi) (OMP). Sessions, approvals, Agent Hub, and the workspace are driven through a typed Studio Bridge — not by scraping TUI text, ANSI, or key macros.
+Step Studio is a desktop shell for Step Code's `step` CLI. Sessions, approvals, Agent Hub, and the workspace are driven through a typed Studio Bridge — not by scraping TUI text, ANSI, or key macros.
 
 <p align="center">
-  <img src="docs/images/workbench.png" alt="OMP Studio workbench: new conversation welcome, activity heatmap, and composer" width="920">
+  <img src="docs/images/workbench.png" alt="Step Studio workbench: new conversation welcome, activity heatmap, and composer" width="920">
 </p>
 
-Version 0.1.10 targets OMP 18.10.4, adding session transfer, worktrees, storage compression and model controls. See the [release notes](docs/releases/v0.1.10.md) and [migration report](docs/migrations/omp-18.10.4.md). Windows x64 / ARM64 and macOS Apple Silicon downloads are available from [GitHub Releases](https://github.com/the-snowpear/step-studio/releases). The Mac application is ad hoc signed and not notarized.
+The shell is Tauri (Rust) over a React renderer; the runtime side is a Rust daemon plus an adapter for `step --mode rpc`. See the [changelog](CHANGELOG.md). Windows x64 / ARM64 and macOS Apple Silicon downloads are available from [GitHub Releases](https://github.com/Circumsized/step-studio/releases). The Mac application is ad hoc signed and not notarized.
 
 ## Why this workbench
 
@@ -87,9 +87,9 @@ The right-hand Git panel stages, diffs, and commits next to the conversation. Fe
 </p>
 
 > [!TIP]
-> **Installation & Getting Started:** Windows users can download the latest installer directly from [GitHub Releases](https://github.com/the-snowpear/step-studio/releases), or run from source following the instructions below. Please file any bugs or suggestions as [Issues](https://github.com/the-snowpear/step-studio/issues).
+> **Installation & Getting Started:** Windows users can download the latest installer directly from [GitHub Releases](https://github.com/Circumsized/step-studio/releases), or run from source following the instructions below. Please file any bugs or suggestions as [Issues](https://github.com/Circumsized/step-studio/issues).
 >
-> **macOS (Apple Silicon, macOS 13+):** when a release ships `Step-Studio-<version>-macos-arm64.dmg`, open it and drag OMP Studio into Applications. It is an ad hoc signed, not yet notarized preview: macOS blocks the first launch, so choose "Open Anyway" in System Settings › Privacy & Security, or run `xattr -dr com.apple.quarantine "/Applications/OMP Studio.app"`. You can also run from source, see [docs/getting-started.md](docs/getting-started.md).
+> **macOS (Apple Silicon, macOS 13+):** when a release ships `Step-Studio-<version>-macos-arm64.dmg`, open it and drag Step Studio into Applications. It is an ad hoc signed, not yet notarized preview: macOS blocks the first launch, so choose "Open Anyway" in System Settings › Privacy & Security, or run `xattr -dr com.apple.quarantine "/Applications/Step Studio.app"`. You can also run from source, see [docs/getting-started.md](docs/getting-started.md).
 
 ## What it does
 
@@ -97,14 +97,14 @@ The right-hand Git panel stages, diffs, and commits next to the conversation. Fe
 - **Sessions and projects** — local workspace registry, history, archive. The renderer sees opaque ids, never native absolute paths.
 - **Agent Hub / Skills / models** — inventory and config go through the Host. Surfaces without a read model stay disabled instead of filling with fake data.
 - **Desktop capabilities** — Git, file tree, terminal PTY, notifications, open-in-browser. The control plane stays semantic commands, not glued-together shell.
-- **Managed Runtime** — pinned oh-my-pi submodule + overlay + four seam patches; `omp --mode studio-host`. Artifacts are Ed25519-verified.
+- **Managed Runtime** — a Rust daemon plus an adapter speaking `step --mode rpc`. Artifacts are Ed25519-verified.
 
 ## Quick start
 
 Node.js 22+ is required. Full steps: [docs/getting-started.md](docs/getting-started.md).
 
 ```powershell
-git clone --recurse-submodules https://github.com/the-snowpear/step-studio.git
+git clone --recurse-submodules https://github.com/Circumsized/step-studio.git
 cd step-studio
 npm install
 cd apps/desktop-tauri
@@ -116,18 +116,17 @@ window. The first run takes a few minutes. For a distributable installer, swap
 the last line for `npm run tauri:build`; for what to run and capture on a Windows
 machine, see [docs/windows-real-machine-test.md](docs/windows-real-machine-test.md).
 
-Attach a real Runtime (slow the first time):
+Once the shell is up it starts the daemon (`step-studio-host`) itself, and the
+daemon starts the adapter (`step-studio-runtime`). The three executables must sit
+in one directory, which an installed copy satisfies. The adapter looks for the
+`step` CLI on `PATH`, or wherever `STEP_STUDIO_STEP_CMD` points; without it the
+daemon and adapter still start and the handshake still completes — only the call
+into the CLI fails. Models and login use Step Code's own configuration. This
+repository does not ship provider secrets.
 
-```powershell
-npm run omp:install-deps
-npm run omp:overlay:apply
-npm run omp:keys
-npm run omp:build:host
-cd apps/desktop-tauri
-npm run tauri:dev
-```
-
-Models and login use OMP’s `models.yml` / `omp login`. This repository does not ship provider secrets.
+The `npm run omp:*` family (install-deps / overlay:apply / keys / build:host)
+belongs to the legacy `omp-patch/` layer and is unrelated to the step chain
+above; see [omp-patch/README.md](omp-patch/README.md).
 
 ## Layout
 
@@ -136,9 +135,8 @@ apps/desktop-tauri      Tauri shell (Rust) + preload bridge
 apps/desktop-tui       Terminal interface
 apps/renderer          Vite + React workbench
 packages/             protocol, Host, client, transports, platform
-omp-patch/overlay     Studio-owned Runtime sources
-omp-patch/patches     seam patches on upstream files (do not hand-edit)
-omp-patch/vendor      oh-my-pi submodule (commit the gitlink only)
+omp-patch/            legacy layer: oh-my-pi submodule + overlay + seam patches (the live runtime is step)
+crates/               Rust: studio-bridge / studio-host / step-studio-runtime and friends
 packaging/            Release signing keys and notes
 ui_reference/ver1     visual reference, not product code
 docs/                 user and contributor docs
@@ -151,13 +149,13 @@ When changing a product surface, jump from [doc/feature-index.md](doc/feature-in
 ```
 Renderer → StudioClient → Desktop IPC → Host facade
                                     ├─ local: session catalog / Git / workspace
-                                    └─ Bridge → omp --mode studio-host
+                                    └─ Bridge → step-studio-runtime → step --mode rpc
 ```
 
 Invariants (see [docs/architecture.md](docs/architecture.md)):
 
 - When prose and types disagree, `studio-protocol` and `client-contract` win.
-- The renderer must never receive bridge tokens, process handles, or OMP session paths.
+- The renderer must never receive bridge tokens, process handles, or Step session paths.
 - Unknown mutations fail closed; `accepted` is not success.
 - Runtime loss fences the old epoch and maps unresolved accepted work to `outcome_unknown`.
 
@@ -182,7 +180,7 @@ Do not file security issues publicly. Follow [SECURITY.md](SECURITY.md).
 
 Chinese-language discussion and feedback happen on the [LINUX DO](https://linux.do/) community — thanks to everyone there for their support.
 
-Defects in upstream OMP belong in [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi). This repository only maintains the overlay and four seam patches.
+Defects in upstream oh-my-pi belong in [can1357/oh-my-pi](https://github.com/can1357/oh-my-pi); this repository keeps only its overlay and seam patches under `omp-patch/`. Everything else — the Tauri shell, the Rust daemon and adapter, the renderer and the protocol packages — is independent work.
 
 ## License
 

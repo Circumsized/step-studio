@@ -1,4 +1,4 @@
-# Contributing to OMP Studio
+# Contributing to Step Studio
 
 Thank you for considering a contribution. This document is the human entry
 point. Agent / IDE collaborators should also read [`AGENTS.md`](AGENTS.md).
