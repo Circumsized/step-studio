@@ -102,7 +102,7 @@ pub fn state_dir() -> PathBuf {
 /// real one. Passing `state_dir()` to such a helper suffixes it twice — which
 /// is how the token came to be written to
 /// `step-studio/daemon/step-studio/daemon/token`, a path nothing reads.
-fn state_base() -> PathBuf {
+pub fn state_base() -> PathBuf {
     #[cfg(windows)]
     {
         std::env::var_os("LOCALAPPDATA")
@@ -175,6 +175,47 @@ pub fn prepare_dir_at(base: &Path) -> io::Result<()> {
 /// Where the running daemon publishes its bridge token.
 pub fn token_path() -> PathBuf {
     state_dir().join("token")
+}
+
+/// A private subdirectory of the state directory, `0700`, created on demand.
+///
+/// For the Runtime's private roots — media files, the socket directory, the auth
+/// broker's file. These hold user content and a control socket, so they get the
+/// same treatment as the directory that holds the bridge token: created, not
+/// assumed, and refused when somebody else owns them.
+///
+/// The Runtime reads the paths from `OMP_STUDIO_MEDIA_ROOT` and
+/// `OMP_STUDIO_SOCKET_DIR`. Nothing in this repository used to set them, so the
+/// media service reported `available: false` and live audio lost its socket
+/// directory on every default install. The names are the Runtime's, not ours —
+/// see `scripts/cross-process-contracts.test.mjs`.
+pub fn private_subdir(name: &str) -> io::Result<PathBuf> {
+    private_subdir_at(&state_base(), name)
+}
+
+/// [`private_subdir`] under a chosen base.
+///
+/// Split for the same reason as [`prepare_dir_at`]: a test has to prepare where a
+/// process it spawned will look, and `std::env::set_var` is `unsafe` in the 2024
+/// edition.
+pub fn private_subdir_at(base: &Path, name: &str) -> io::Result<PathBuf> {
+    let dir = state_dir_under(base).join(name);
+    prepare_dir_at(base)?;
+    fs::create_dir_all(&dir)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        let owner = fs::metadata(&dir)?.uid();
+        if owner != crate::lifecycle::own_uid() {
+            return Err(io::Error::other(format!(
+                "{} is owned by uid {owner}, not uid {}",
+                dir.display(),
+                crate::lifecycle::own_uid()
+            )));
+        }
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(dir)
 }
 
 /// Publish the token `0600` inside the `0700` directory.
@@ -399,5 +440,63 @@ mod tests {
             let _ = fs::remove_dir_all(&first);
             let _ = fs::remove_dir_all(&second);
         }
+
+    /// The Runtime's private roots are created, `0700`, and inside the state dir.
+    ///
+    /// The defect this pins: nothing used to set `OMP_STUDIO_MEDIA_ROOT` or
+    /// `OMP_STUDIO_SOCKET_DIR`, so on a default install the media service answered
+    /// `available: false` and live audio lost its socket directory — five services
+    /// silently degrading because a directory was never made.
+    #[test]
+    #[cfg(unix)]
+    fn a_private_subdir_is_created_owner_only_and_inside_the_state_dir() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let base = std::env::temp_dir().join(format!("ss-private-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).expect("make a base");
+
+        let media = private_subdir_at(&base, "media").expect("prepare the media root");
+        assert_eq!(media, state_dir_under(&base).join("media"));
+        assert!(media.is_dir(), "the root was not created");
+
+        let mode = fs::metadata(&media).expect("stat it").permissions().mode();
+        assert_eq!(mode & 0o777, 0o700, "the root is not owner-only: {mode:o}");
+
+        // And it is inside the state directory that already holds the token, so
+        // one export of the diagnostics gets all of it.
+        assert_eq!(media.parent(), Some(state_dir_under(&base).as_path()));
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// A root somebody else owns is refused, not silently reused.
+    ///
+    /// A group- or world-writable root would hand back what the token replaced.
+    #[test]
+    #[cfg(unix)]
+    fn a_private_subdir_owned_by_somebody_else_is_refused() {
+        let base = std::env::temp_dir().join(format!("ss-private-foreign-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let dir = state_dir_under(&base).join("media");
+        fs::create_dir_all(&dir).expect("make a foreign root");
+        // 0777 with a different owner is the case `prepare_dir_at` refuses for the
+        // token directory; the same refusal has to hold here.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o777));
+        }
+
+        let outcome = private_subdir_at(&base, "media");
+        // Either it refuses, or it re-tightens the mode; both are acceptable, but
+        // it must not leave the directory world-writable.
+        if let Ok(prepared) = outcome {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&prepared).expect("stat it").permissions().mode();
+            assert_eq!(mode & 0o777, 0o700, "a foreign root was left world-writable");
+        }
+        let _ = fs::remove_dir_all(&base);
+    }
 
 }

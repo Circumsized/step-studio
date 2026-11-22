@@ -320,6 +320,53 @@ fn supervise(daemon: Arc<Daemon>) {
 }
 
 /// Spawn the adapter and complete the handshake.
+/// The Runtime's private roots, as environment variables.
+///
+/// The names are the Runtime's spelling, not this crate's — they are a
+/// cross-process contract, asserted by
+/// `scripts/cross-process-contracts.test.mjs`. Until this existed nothing set
+/// them, so on a default install the media service answered `available: false`,
+/// live audio and prediction lost their socket directory, and the auth broker
+/// closed on a missing file. All five services then silently degraded.
+///
+/// A directory that cannot be prepared is skipped rather than fatal: the daemon
+/// has already authenticated this adapter by this point, and refusing to start
+/// because a scratch directory is unwritable would take the whole session down
+/// for a capability that is optional. The failure is reported on stderr, which
+/// lands in the daemon log the diagnostics page exports.
+fn runtime_private_dirs() -> Vec<(String, String)> {
+    runtime_private_dirs_at(&step_studio_host::state::state_base())
+}
+
+/// [`runtime_private_dirs`] under a chosen base, so a test can assert the whole
+/// contract without touching the real state directory.
+///
+/// This is also the half the grep-based gate cannot see: that gate catches a
+/// rename, but not a helper that is defined and never called. Asserting the
+/// returned vector has all three names is what closes that.
+fn runtime_private_dirs_at(base: &std::path::Path) -> Vec<(String, String)> {
+    let mut vars = Vec::new();
+    for (name, env) in [
+        ("media", "OMP_STUDIO_MEDIA_ROOT"),
+        ("sockets", "OMP_STUDIO_SOCKET_DIR"),
+    ] {
+        match step_studio_host::state::private_subdir_at(base, name) {
+            Ok(dir) => vars.push((env.to_string(), dir.to_string_lossy().to_string())),
+            Err(error) => eprintln!(
+                "step-studio-host: could not prepare the private {name} directory: {error}"
+            ),
+        }
+    }
+    // A file, not a directory: the broker opens it and closes itself when it is
+    // absent. Its parent is the state directory, already `0700`.
+    let broker = step_studio_host::state::state_dir_under(base).join("auth-broker.json");
+    vars.push((
+        "OMP_STUDIO_AUTH_BROKER_FILE".to_string(),
+        broker.to_string_lossy().to_string(),
+    ));
+    vars
+}
+
 fn bring_up(daemon: &Daemon) -> Result<(AdapterHandle, transport::Stream), adapter::AdapterError> {
     let launch = AdapterLaunch {
         // Empty: the daemon spawns the adapter itself, so `node` is only used
@@ -355,7 +402,10 @@ fn bring_up(daemon: &Daemon) -> Result<(AdapterHandle, transport::Stream), adapt
                 "STEP_STUDIO_EXIT_ON_DISCONNECT".to_string(),
                 "1".to_string(),
             ),
-        ],
+        ]
+        .into_iter()
+        .chain(runtime_private_dirs())
+        .collect(),
         // The daemon's own token, the one it published: the adapter proves it
         // knows this value, and `hello_result` re-signs with it for surfaces.
         token: Some(daemon.token.clone()),
@@ -1517,4 +1567,73 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
+    /// The Runtime's three private roots are all exported, with real directories
+    /// behind them.
+    ///
+    /// The grep-based gate in `scripts/cross-process-contracts.test.mjs` catches a
+    /// rename, but it cannot catch a helper that is defined and never called — the
+    /// name is still sitting right there in the source. This asserts the vector
+    /// `bring_up` actually chains, which is the half the grep cannot see.
+    #[test]
+    fn every_private_root_is_exported_with_a_directory_behind_it() {
+        let base = std::env::temp_dir().join(format!("ss-privars-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).expect("make a base");
+
+        let vars = runtime_private_dirs_at(&base);
+        let names: Vec<&str> = vars.iter().map(|(name, _)| name.as_str()).collect();
+
+        for expected in [
+            "OMP_STUDIO_MEDIA_ROOT",
+            "OMP_STUDIO_SOCKET_DIR",
+            "OMP_STUDIO_AUTH_BROKER_FILE",
+        ] {
+            assert!(names.contains(&expected), "{expected} is not exported: {names:?}");
+        }
+        assert_eq!(names.len(), 3, "unexpected extras: {names:?}");
+
+        // The two directory roots must exist, not merely be named — a path that
+        // was never created is the same user-visible failure as no variable at all.
+        for (name, value) in &vars {
+            if name == "OMP_STUDIO_AUTH_BROKER_FILE" {
+                continue;
+            }
+            assert!(
+                std::path::Path::new(value).is_dir(),
+                "{name} points at {value}, which is not a directory"
+            );
+        }
+        // And the broker file lives inside the state directory, which is 0700.
+        let broker = vars
+            .iter()
+            .find(|(name, _)| name == "OMP_STUDIO_AUTH_BROKER_FILE")
+            .map(|(_, value)| std::path::PathBuf::from(value))
+            .expect("the broker variable is exported");
+        assert_eq!(
+            broker,
+            step_studio_host::state::state_dir_under(&base).join("auth-broker.json")
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Removing the chain must fail here, not in front of a user.
+    ///
+    /// The regression this suite exists for: `bring_up` stopped chaining
+    /// `runtime_private_dirs()`, so five services silently degraded on a default
+    /// install while every test stayed green — the helper was still there, still
+    /// correct, still uncalled.
+    #[test]
+    fn bring_up_chains_the_private_roots() {
+        // `include_str!` embeds this whole file, including the assertion below, so
+        // checking for the bare call would be satisfied by the test itself. The
+        // call site is the only place the chain is followed by `.collect()`.
+        let source = include_str!("studio-host.rs");
+        assert!(
+            source.contains(".chain(runtime_private_dirs())\n        .collect()"),
+            "bring_up no longer chains the private roots, so media, live audio, \
+             prediction, browser observation and the auth broker all degrade silently"
+        );
+    }
+
 }

@@ -45,30 +45,30 @@ const CONTRACTS = [
     why: "`omp stats` decides it has no embedding host and opens the system browser " +
          "on every visit, duplicating the in-app dashboard",
   },
-  // The three below are tracked but not wired: the Runtime reads them and nothing in
-  // this repository sets them, which is issue #5. They stay in the table so the gap is
-  // visible from the gate instead of only from the issue tracker, and so the reader
-  // half is still asserted — if the Runtime renames its side, that is a failure even
-  // though the feature was already broken. Flip `wired` to true in the same commit
-  // that adds the setter, never before.
+  // The three below were unwired when this suite was written: the Runtime read them
+  // and nothing in this repository set them, which was issue #5. They are wired now —
+  // `studio-host`'s `bring_up` prepares a `0700` root under the state directory for
+  // each and exports the path. They stay in the table because a rename on either side
+  // is still a silent regression, and because the next person to "tidy" the env names
+  // should have to edit this file to do it.
   {
     name: "OMP_STUDIO_MEDIA_ROOT",
     readers: ["omp-patch/overlay"],
-    wired: false,
+    wired: true,
     why: "the media service reports available: false and the generation queue stays " +
          "empty, with no reason shown to the user",
   },
   {
     name: "OMP_STUDIO_SOCKET_DIR",
     readers: ["omp-patch/overlay"],
-    wired: false,
+    wired: true,
     why: "live audio and prediction lose their socket directory and degrade to " +
          "no persistence",
   },
   {
     name: "OMP_STUDIO_AUTH_BROKER_FILE",
     readers: ["omp-patch/overlay"],
-    wired: false,
+    wired: true,
     why: "the auth broker closes on a missing file and ships an empty implementation",
   },
 ];
