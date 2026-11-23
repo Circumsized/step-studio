@@ -28,7 +28,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.scope == 'full' && '[{"name":"Windows","os":"windows-latest","native":"win32-x64"},{"name":"macOS (arm64)","os":"macos-15","native":"darwin-arm64"}]' || '[{"name":"Windows","os":"windows-latest","native":"win32-x64"}]') }}
+        # macOS runs on every push, not only on a manual `full` dispatch: it is a
+        # shipping platform, and a gate that only covers it when somebody remembers
+        # to ask is not a gate. The npm-side suites are platform-neutral, so this
+        # is cheap; what it costs is a runner minute per push.
+        include: ${{ fromJSON('[{"name":"Windows","os":"windows-latest","native":"win32-x64"},{"name":"macOS (arm64)","os":"macos-15","native":"darwin-arm64"}]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -102,6 +106,38 @@ jobs:
         with:
           command: check
           arguments: --all-features=false
+
+  # macOS has never compiled or run a line of Rust here. The `platform` job does
+  # cover it, but only with `scope: full` — a manual dispatch — and it runs
+  # `npm run check`, not cargo. So the shell's macOS branches are compiled on
+  # Linux and Windows and their `else` arms are the only ones that ever execute.
+  #
+  # They are written as `cfg!(target_os = "macos")` — runtime branches, not
+  # `#[cfg]` — which is why they compile everywhere and are tested nowhere:
+  # `open` and `osascript` for links and permissions, the microphone and TCC
+  # prompt, the tray menu shape, WKWebView's behaviour, and the ad-hoc-signed
+  # launch path. This job is what makes at least the compile and the platform-neutral
+  # tests real on the platform that ships.
+  rust-macos:
+    name: Rust crates (macOS arm64)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+          components: clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.8.0
+        with:
+          key: studio-crates-macos
+      # Same crate set as the Linux `rust` job. The shell is still excluded: it
+      # links GTK on Linux and WebKit on macOS, and neither brings test coverage
+      # the crates do not already have — what this job adds is the *host* target,
+      # so `#[cfg(target_os)]` inside the crates resolves the way it will on a
+      # user's machine instead of the way it resolves on the build server.
+      - run: cargo test -p step-studio-bridge -p step-studio-runtime -p step-studio-host -p step-studio-sessions -p step-studio-tui
+      - run: cargo clippy -p step-studio-bridge -p step-studio-runtime -p step-studio-host -p step-studio-sessions -p step-studio-tui --all-targets -- -D warnings
 
   rust-shell:
     # The shell was excluded from `rust` because it links wry and needed the GTK
