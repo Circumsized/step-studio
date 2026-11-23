@@ -1,0 +1,40 @@
+# OpenSSF Scorecard, weekly.
+#
+# The supply-chain items in #7 that this project can actually act on:
+# Pinned-Dependencies (every `uses:` is a commit SHA, enforced by
+# scripts/mutable-action-tags.test.mjs), Dependency-Update-Tool (dependabot.yml),
+# Maintained (the weekly schedule itself), and Branch-Protection once the default
+# branch requires review.
+#
+# `publish_results: public` is what makes the badge mean anything — a private
+# score nobody can read is not a score. The results land on the OpenSSF REST API,
+# not in this repository.
+name: scorecard
+on:
+  schedule:
+    - cron: "30 1 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@05b42c624433fc40578a4040d5cf5e36ddca8cde # v2.4.2
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true

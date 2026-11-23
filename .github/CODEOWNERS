@@ -1,0 +1,26 @@
+# Ownership by surface, not by person.
+#
+# This is a single-maintainer project, so naming a person would make the file
+# wrong the moment somebody else contributes. These are role hats: whoever is
+# wearing one owns that surface's review. The point is that a change to the Rust
+# daemon gets a different reader than a change to the renderer, which is the part
+# a single-reviewer repo usually loses.
+
+# Default: anything unlisted.
+*                                   @Circumsized
+
+# The Rust daemon and the protocol it speaks.
+/crates/studio-host/                @Circumsized
+/crates/studio-bridge/              @Circumsized
+/crates/step-studio-runtime/        @Circumsized
+
+# The renderer and the typed client.
+/apps/renderer/                      @Circumsized
+/packages/client/                    @Circumsized
+/packages/client-contract/           @Circumsized
+/packages/studio-protocol/           @Circumsized
+
+# CI, release and supply chain.
+/.github/                            @Circumsized
+/scripts/                            @Circumsized
+/packaging/                          @Circumsized

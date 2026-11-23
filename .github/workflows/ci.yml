@@ -32,10 +32,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
           submodules: recursive
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
         with:
           node-version: 24
           cache: npm
@@ -52,11 +52,11 @@ jobs:
         run: node --test scripts/*.test.mjs
 
       # Native builds and the full Runtime suite are explicitly requested work.
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.0.1
         if: inputs.scope == 'full'
         with:
           bun-version: "1.4.4"
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.8.0
         if: inputs.scope == 'full'
         with:
           workspaces: omp-patch/vendor/oh-my-pi -> target
@@ -80,11 +80,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.8.0
         with:
           key: studio-crates
       # `step-studio-sessions` and `step-studio-tui` are here rather than in
@@ -98,7 +98,7 @@ jobs:
       # publishing this shell's source. Runs here rather than in a separate job
       # so the registry cache `Swatinem/rust-cache` already warmed is reused —
       # `cargo deny` resolves the same graph.
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: EmbarkStudios/cargo-deny-action@17aeb3c839e42274e2b8adf721c8c65edfdc74dd # v2.0.12
         with:
           command: check
           arguments: --all-features=false
@@ -114,11 +114,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.8.0
         with:
           key: studio-shell
       # wry renders through webkit2gtk, so the shell does not build without
@@ -138,12 +138,12 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
           targets: x86_64-pc-windows-msvc
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.8.0
         with:
           key: studio-crates-windows
       # Clippy first, for the same reason as before: `step-studio-host`'s

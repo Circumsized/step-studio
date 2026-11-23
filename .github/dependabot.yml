@@ -1,0 +1,52 @@
+# Dependency updates, batched weekly.
+#
+# Pinning every `uses:` to a commit SHA (see the supply-chain note in
+# scripts/mutable-action-tags.test.mjs) only holds if something moves the pins,
+# and that something is this file. Without it the pins freeze and a security
+# release in an action never arrives.
+version: 2
+
+updates:
+  # Actions: weekly, one PR per ecosystem rather than one per action, so a pin
+  # refresh is a single reviewable diff.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(ci)
+    labels: [dependencies, ci]
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # npm: the workspace root sees every workspace package, so one directory entry
+  # covers all eleven.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(deps)
+    labels: [dependencies, javascript]
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # Cargo: cargo-deny already gates licenses and advisories locally; this keeps
+  # the versions moving.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(deps)
+    labels: [dependencies, rust]
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

@@ -219,6 +219,23 @@ if (plan.arch) {
   if (!result.ok) failures.push(result.name);
 }
 
+// Supply chain: no mutable action tags, and the JS licences stay on the
+// allow-list. Both are pure source scans, so they belong with `arch`.
+if (plan.arch) {
+  for (const [name, script] of [
+    ["action-pins", "mutable-action-tags.test.mjs"],
+    ["js-licences", "check-js-licenses.mjs"],
+  ]) {
+    const result = await runStep({
+      name,
+      command: process.execPath,
+      args: [join(root, "scripts", script)],
+    });
+    report(result);
+    if (!result.ok) failures.push(result.name);
+  }
+}
+
 // Cross-process environment-variable contracts. A pure source scan — no build
 // output needed — so it belongs with `arch`, not with the compile-dependent steps.
 if (plan.arch) {

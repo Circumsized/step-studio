@@ -40,8 +40,8 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.runtime_matrix }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
         with:
           node-version: 24
       - id: plan
@@ -66,7 +66,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
           submodules: recursive
       - name: Find reusable Runtime
@@ -75,13 +75,13 @@ jobs:
           PLATFORM: ${{ matrix.target }}
           REBUILD: ${{ inputs.rebuild_runtime }}
         run: bash .github/scripts/find-runtime.sh
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
         if: steps.runtime.outputs.run_id == '' || inputs.warm_cache
         with:
           node-version: 24
       - uses: ./.github/actions/cache-release-downloads
         if: steps.runtime.outputs.run_id == '' || inputs.warm_cache
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.0.1
         if: steps.runtime.outputs.run_id == '' || inputs.warm_cache
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -97,7 +97,7 @@ jobs:
         run: npm run vendor:overlay:apply
       - name: Reuse signed Runtime
         if: steps.runtime.outputs.run_id != ''
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: ${{ steps.runtime.outputs.name }}
           path: packages/runtime-installer/dist/artifacts/${{ matrix.target }}/
@@ -120,7 +120,7 @@ jobs:
           export STEP_STUDIO_RUNTIME_SIGNING_KEY_ID="$(node -p 'require("./packaging/keys/trusted-keys.json").activeKeyId')"
           npm run build:packages
           npm run vendor:build:host -- --skip-build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: steps.runtime.outputs.run_id != '' || !inputs.warm_cache
         with:
           name: ${{ steps.runtime.outputs.key }}

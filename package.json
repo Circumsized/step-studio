@@ -2,7 +2,7 @@
   "name": "step-studio",
   "version": "0.1.17",
   "private": true,
-  "description": "Desktop console for the step CLI (Step Code) — typed Studio Bridge, Tauri workbench, Windows installer and macOS app",
+  "description": "Desktop console for the step CLI (Step Code) \u2014 typed Studio Bridge, Tauri workbench, Windows installer and macOS app",
   "license": "MIT",
   "author": "Circumsized",
   "homepage": "https://github.com/Circumsized/step-studio",
@@ -61,7 +61,8 @@
     "test:built": "npm run test:built --workspaces --if-present",
     "build:packages": "node scripts/build-packages.mjs",
     "test:core": "node scripts/test-core.mjs",
-    "test:tooling": "npm run build:packages && node --test scripts/*.test.mjs"
+    "test:tooling": "npm run build:packages && node --test scripts/*.test.mjs",
+    "audit:deps": "npm audit --omit=dev --registry=https://registry.npmjs.org"
   },
   "engines": {
     "node": ">=22"
