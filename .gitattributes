@@ -1,3 +1,19 @@
-*.patch text eol=lf whitespace=-trailing-space,-space-before-tab
-omp-patch/overlay/** text=auto eol=lf
-*.sh text eol=lf
+# Normalize line endings on commit, and never convert them on checkout.
+#
+# The Windows runner checks out with `core.autocrlf=true` by default, so a file
+# committed with LF arrives as CRLF. `test/contracts.test.mjs` regenerates
+# `contracts/generated/protocol-names.json` and byte-compares it against the
+# checked-in copy — the generator writes LF, the working copy held CRLF, and the
+# gate failed on Windows only. Reproduced locally by converting the file.
+#
+# `eol=lf` is the load-bearing half: `text=auto` alone still converts on
+# checkout where the platform default says to.
+* text=auto eol=lf
+
+# Binary assets must never be touched by the text machinery.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.wasm binary
+*.pem binary
