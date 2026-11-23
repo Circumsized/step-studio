@@ -25,8 +25,10 @@ Host 诊断日志：`%APPDATA%\step-studio\logs\host-YYYY-MM-DD.log`；macOS：`
 `status.md` 记实现状态与实测数字，`reference/` 存参考资料。改动设计前先读 `design/README.md`
 里的阅读顺序；改完代码后按 `design/plan.md` 第 24 节把设计与代码放进同一个提交。
 
-**Step Studio 是机密项目**：未经项目负责人明确许可，不得向任何外部仓库提交 PR / issue /
-fork / 公开分支，也不得把本仓设计内容外发。
+**本仓库是公开的**（`Circumsized/step-studio`）。设计文档、评审记录与代码一同可见，
+所以写进 `design/` 的任何内容都按「会被人读到」的标准写：不写未发布的产品计划、人员安排、
+排期承诺，也不写密钥或内部系统的可达地址。签名私钥不进版本库——`scripts/private-material.mjs`
+在发布物校验时拦私钥字样。
 
 ## 功能代码索引
 

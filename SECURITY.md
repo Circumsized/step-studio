@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Step Studio is in public preview (`0.1.0`). Only the latest `main` commit and the latest tagged release receive security attention.
+Step Studio is in public preview. Only the latest commit on `main` and the latest tagged release receive security attention.
 
 ## What this project trusts
 
