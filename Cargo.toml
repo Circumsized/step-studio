@@ -31,7 +31,7 @@ serde = { version = "1", features = ["derive"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 serde_json = "1"
 hmac = "0.12"
-sha2 = "0.10"
+sha2 = "0.11"
 base64 = "0.22"
 # Already in the lock three times over (via rand_core, ed25519-dalek and
 # others), so the bridge token costs no new package.
