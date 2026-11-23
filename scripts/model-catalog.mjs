@@ -60,7 +60,26 @@ export async function generateModelCatalog(check = false) {
   return catalog;
 }
 
+/**
+ * The digest `model-adaptation.ts` pins must match the catalog on disk.
+ *
+ * Without this, changing the catalog without changing the constant is a commit
+ * that lies: every install would refuse its own refresh with a digest mismatch,
+ * and nothing in the gate would have said so. This is the check that makes the
+ * pin a fact rather than a hope.
+ */
+async function checkCatalogDigest() {
+  const source = await readFile(resolve(root, "packages/host-client-api/src/model-adaptation.ts"), "utf8");
+  const pinned = source.match(/MODEL_CATALOG_SHA256 = "([0-9a-f]{64})"/);
+  if (!pinned) throw new Error("MODEL_CATALOG_SHA256 is missing from model-adaptation.ts");
+  const actual = createHash("sha256").update(await readFile(resolve(root, "catalog/model-catalog-v1.json"), "utf8")).digest("hex");
+  if (pinned[1] !== actual) {
+    throw new Error(`MODEL_CATALOG_SHA256 is ${pinned[1]} but catalog/model-catalog-v1.json hashes to ${actual}; update the constant in the same commit as the catalog`);
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const catalog = await generateModelCatalog(process.argv.includes("--check"));
+  if (process.argv.includes("--check")) await checkCatalogDigest();
   console.log(`Model catalog ${catalog.version}: ${catalog.entries.length} models, OMP ${catalog.upstreamCommit}`);
 }

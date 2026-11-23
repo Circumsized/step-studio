@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
@@ -10,6 +11,22 @@ import {
 import { BUILTIN_MODEL_CATALOG } from "./model-catalog.generated.js";
 
 export const MODEL_CATALOG_URL = "https://raw.githubusercontent.com/Circumsized/step-studio/main/catalog/model-catalog-v1.json";
+
+/**
+ * SHA-256 of the catalog this build ships with.
+ *
+ * The catalog is a repository file, so its digest is a repository fact: changing
+ * the catalog without changing this constant is a commit that lies. The gate
+ * `npm run models:catalog:check` fails when the two disagree.
+ *
+ * Why verify at all, when the fetch is HTTPS from this very repository: the check
+ * is not about the transport, it is about the content. Without it, anything that
+ * can answer for that URL — a compromised CDN edge, a fork that wins a DNS race,
+ * a caching layer serving somebody else's response — can put an arbitrary model
+ * catalog into every install that refreshes. The digest makes the accepted set
+ * exactly "what this repository shipped".
+ */
+export const MODEL_CATALOG_SHA256 = "e65289617c95a775e62715f0960b9a32b977a581e2a1cd18c0a9b6a3c6578a89";
 
 export function normalizeModelName(name: string): string {
   return name.normalize("NFKC").toLowerCase().trim().replace(/[\s._]+/g, "-").replace(/-+/g, "-");
@@ -97,7 +114,16 @@ export function createModelCatalogService(options: { cachePath: string; fetch: t
       await load();
       const response = await options.fetch(MODEL_CATALOG_URL, { signal: AbortSignal.timeout(10_000) });
       if (!response.ok) throw new Error(`Model catalog update failed: HTTP ${response.status}`);
-      const next = decodeModelCatalog(await response.json());
+      const body = await response.text();
+      const actual = createHash("sha256").update(body, "utf8").digest("hex");
+      if (actual !== MODEL_CATALOG_SHA256) {
+        throw new Error(
+          "Model catalog digest mismatch: expected " + MODEL_CATALOG_SHA256 +
+            ", got " + actual + ". The file at " + MODEL_CATALOG_URL +
+            " is not the one this build shipped with.",
+        );
+      }
+      const next = decodeModelCatalog(JSON.parse(body));
       if (next.version === current.version) return { updated: false, catalog: status(), message: "模型目录已是最新版本" };
       await mkdir(dirname(options.cachePath), { recursive: true });
       await writeFile(`${options.cachePath}.tmp`, JSON.stringify(next), "utf8");
