@@ -143,7 +143,13 @@ pub fn read_model() -> Value {
         "totalRssBytes": total,
         // Where the platform could not describe a process, its rss is absent and
         // the total is short. Saying so is better than a total that looks exact.
-        "complete": cfg!(unix),
+        //
+        // `is_exact()`, not an inline `cfg!(unix)`: this literal was the second
+        // copy of the same mistake. macOS is `cfg(unix)` and has no `/proc`, so
+        // the total is short there and this flag said otherwise — the model
+        // claimed a completeness it did not have, which is worse than a short
+        // total because a short total at least looks short.
+        "complete": is_exact(),
     })
 }
 
