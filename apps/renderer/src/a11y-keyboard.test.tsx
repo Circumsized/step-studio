@@ -49,7 +49,6 @@ function readTag(source: string, from: number): string | undefined {
     }
     position += 1;
   }
-  undefined
 }
 
 describe("菜单原语的键盘可达性", () => {

@@ -597,7 +597,7 @@ function stringifyFrontmatter(fields: Record<string, unknown>): string {
       return value.flatMap((item) => {
         if (item !== null && typeof item === "object") {
           const nested = dumpValue(item, indent + 1);
-          return [`${pad}-`, ...nested.map((line, index) => (index === 0 ? line.replace(/^  /, "    ") : line))];
+          return [`${pad}-`, ...nested.map((line, index) => (index === 0 ? line.replace(/^ {2}/, "    ") : line))];
         }
         return [`${pad}- ${dumpValue(item, 0)[0]?.trim() ?? ""}`];
       });

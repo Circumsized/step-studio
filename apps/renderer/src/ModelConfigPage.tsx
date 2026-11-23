@@ -3914,7 +3914,7 @@ export function ModelConfigPage({ client, sessionId, workspaceId, runtimeAvailab
                             next[index] = after;
                             return next;
                           })}><Icon name="arrow-r" extra="sm" /></button>
-                          <span className="chip-remove" role="button" tabIndex={0} onClick={() => setOrderDraft((current) => current.filter((item) => item !== id))}><Icon name="x" /></span>
+                          <button type="button" className="chip-remove" aria-label={t("modelConfig.removeFromOrder", { name: id })} onClick={() => setOrderDraft((current) => current.filter((item) => item !== id))}><Icon name="x" /></button>
                         </span>
                       ))}
                     </div>
@@ -4253,10 +4253,10 @@ export function ModelConfigPage({ client, sessionId, workspaceId, runtimeAvailab
                       <span className="mono">{selector}</span>
                       <button type="button" className="icon-btn small" aria-label={t("modelConfig.moveUp")} disabled={index === 0} onClick={() => { const next = [...chain]; [next[index - 1], next[index]] = [next[index]!, next[index - 1]!]; setFallbackDraft(next); }}><Icon name="chevron-u" extra="sm" /></button>
                       <button type="button" className="icon-btn small" aria-label={t("modelConfig.moveDown")} disabled={index === chain.length - 1} onClick={() => { const next = [...chain]; [next[index + 1], next[index]] = [next[index]!, next[index + 1]!]; setFallbackDraft(next); }}><Icon name="chevron-d" extra="sm" /></button>
-                      <span className="chip-remove" role="button" tabIndex={0} onClick={() => {
+                      <button type="button" className="chip-remove" aria-label={t("modelConfig.removeFromFallback", { name: selector })} onClick={() => {
                         const current = fallbackDraft ?? data?.fallbackChains[roleDraft.id] ?? data?.fallbackChains[roleDraft.primary] ?? [];
                         setFallbackDraft(current.filter((item) => item !== selector));
-                      }}><Icon name="x" /></span>
+                      }}><Icon name="x" /></button>
                     </span>
                   ))}
                 </div>
@@ -4395,7 +4395,7 @@ export function ModelConfigPage({ client, sessionId, workspaceId, runtimeAvailab
                           <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                             {index ? <span className="cycle-arrow"><Icon name="arrow-r" extra="sm" /></span> : null}
                             <span className="cycle-chip"><Icon name={ROLE_ICONS[role.id] ?? "cpu"} extra="sm" />{role.name} <span className="mono">{role.alias}</span>
-                              <span className="chip-remove" role="button" tabIndex={0} onClick={() => setCycleDraft((current) => current.filter((x) => x !== id))}><Icon name="x" /></span>
+                              <button type="button" className="chip-remove" aria-label={t("modelConfig.removeFromCycle", { name: role.name })} onClick={() => setCycleDraft((current) => current.filter((x) => x !== id))}><Icon name="x" /></button>
                             </span>
                           </span>
                         );

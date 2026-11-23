@@ -279,8 +279,7 @@ export class Win32AuthorityLock {
 
     for (let attempt = 1; attempt <= AUTHORITY_LOCK_MAX_ACQUIRE_RETRIES; attempt += 1) {
       if (await this.#createExclusive(payload)) {
-        let lease: AuthorityLease;
-        lease = Object.freeze({
+        const lease: AuthorityLease = Object.freeze({
           authorityId,
           epoch,
           nonce: ownerNonce,

@@ -452,7 +452,10 @@ export function AnnotationsProvider({
                   if (!preview) {
                     try {
                       localStorage.setItem(key, JSON.stringify(previous));
-                    } catch {}
+                    } catch {
+        // A missing or unreadable annotation store is not an error here: the
+        // caller renders an empty list either way.
+      }
                   }
                 }}
               >

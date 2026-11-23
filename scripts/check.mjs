@@ -236,6 +236,26 @@ if (plan.arch) {
   }
 }
 
+// Lint. `error`-level rules must be clean; the staged `warn` rules are visible
+// in the output but do not fail the step, which is what makes staging honest
+// rather than a way of hiding them.
+if (plan.arch) {
+  const result = await runStep({
+    name: "lint",
+    command: process.execPath,
+    // No `--max-warnings`: the staged `warn` rules are the documented backlog,
+    // and failing on them would make the step red on day one. ESLint exits 0
+    // with warnings present and 1 only on errors, which is the split we want.
+    // `**/*` rather than the shell's `packages/*/src`: this runs without a shell,
+    // so nothing expands the glob and ESLint would report "no files matching".
+    args: [join(root, "node_modules", "eslint", "bin", "eslint.js"),
+           "apps/renderer/src/**/*", "packages/*/src/**/*", "scripts/**/*",
+           "--ext", ".ts,.tsx,.mjs,.js,.cjs"],
+  });
+  report(result);
+  if (!result.ok) failures.push(result.name);
+}
+
 // Cross-process environment-variable contracts. A pure source scan — no build
 // output needed — so it belongs with `arch`, not with the compile-dependent steps.
 if (plan.arch) {

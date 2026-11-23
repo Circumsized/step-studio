@@ -1087,8 +1087,8 @@ export function ConversationMinimap({
               <button
                 type="button"
                 className="menu-item"
-                role="menuitem"
-                aria-pressed={keyOnly}
+                role="menuitemradio"
+                aria-checked={keyOnly}
                 onClick={() => setKeyOnly((only) => !only)}
               >
                 <Icon name={keyOnly ? "eye" : "filter" } extra="sm" />

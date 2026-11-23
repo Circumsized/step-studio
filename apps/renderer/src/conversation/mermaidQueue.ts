@@ -7,7 +7,7 @@ export function mermaidBudget(code: string): { allowed: boolean; score: number; 
   const lines = code.split("\n").length;
   // A cheap heuristic (lines + edge features + node features), not a parser
   // or an estimate of the graph algorithm's exact complexity.
-  const score = lines + (code.match(/-->|==>|-.->|->>|--|->/g)?.length ?? 0) + (code.match(/[\[({]/g)?.length ?? 0);
+  const score = lines + (code.match(/-->|==>|-.->|->>|--|->/g)?.length ?? 0) + (code.match(/[[({]/g)?.length ?? 0);
   if (lines > 600 || score > 1500) return { allowed: false, score, reason: "图表较复杂，已保留源码" };
   return { allowed: true, score };
 }

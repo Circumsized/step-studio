@@ -2180,7 +2180,7 @@ export function createOmpModelsService(options: OmpModelsAdapterOptions = {}): H
       const modelRolesGlobal = await readRolesFromConfigFile(paths.configPath, configRoot);
       const storage = ((await readScalar(paths.configPath, "modelRoleStorage", configRoot)) === "project" ? "project" : "global") as ModelRoleStorage;
       const cwd = cwdOf();
-      let modelRoles = { ...modelRolesGlobal };
+      const modelRoles = { ...modelRolesGlobal };
       const projectKeys = new Set<string>();
       if (storage === "project" && cwd) {
         const projectRoles = await readRolesFromConfigFile(join(getProjectConfigDir(cwd), "config.yml"));
@@ -2392,7 +2392,7 @@ export function createOmpModelsService(options: OmpModelsAdapterOptions = {}): H
         throw { code: "INVALID_ARGUMENT", message: `unknown role ${input.roleId}` };
       }
       const target = await roleTargetPath(paths);
-      let text = await readConfigText(target.path);
+      const text = await readConfigText(target.path);
       const next = input.selector.length === 0
         ? deleteYamlRecordEntry(text, "modelRoles", input.roleId)
         : upsertYamlRecordEntry(text, "modelRoles", input.roleId, input.selector);

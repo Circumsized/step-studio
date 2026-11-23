@@ -61,6 +61,7 @@ function TreeNodes({ nodes, depth, prefix, expanded, onToggle, onFile, onAction,
                 data-dir={path}
                 data-git={node.status ? GIT_STATUS_META[node.status].className : undefined}
                 role="treeitem"
+                aria-selected={false}
                 tabIndex={0}
                 aria-expanded={open}
                 aria-label={`${node.name} 文件夹`}
@@ -100,7 +101,7 @@ function TreeNodes({ nodes, depth, prefix, expanded, onToggle, onFile, onAction,
         }
         const code = node.name.endsWith(".tsx") || node.name.endsWith(".ts");
         return (
-          <div key={path} className={`tree-row${node.turn ? " turn-file" : ""}`} data-file={path} data-git={node.status ? GIT_STATUS_META[node.status].className : undefined} role="treeitem" tabIndex={0} style={pad} onClick={() => onFile(path)} onContextMenu={(event) => fileMenu.onContext(event, path)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onFile(path); } }}>
+          <div key={path} className={`tree-row${node.turn ? " turn-file" : ""}`} data-file={path} data-git={node.status ? GIT_STATUS_META[node.status].className : undefined} role="treeitem" aria-selected={false} tabIndex={0} style={pad} onClick={() => onFile(path)} onContextMenu={(event) => fileMenu.onContext(event, path)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onFile(path); } }}>
             <span className="tw" />
             <span className="fi"><Icon name={code ? "file-code" : "file"} /></span>
             <span className="fname ellipsis">{node.name}</span>

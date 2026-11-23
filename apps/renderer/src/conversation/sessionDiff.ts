@@ -57,7 +57,7 @@ function editLines(diff: JsonValue | undefined): ChangesDiffLine[] {
   }
   if (typeof diff !== "string" || diff.length === 0) return lines;
   for (const line of diff.split("\n")) {
-    const match = /^([ +\-])(\d*)\|(.*)$/u.exec(line);
+    const match = /^([ +-])(\d*)\|(.*)$/u.exec(line);
     if (match === null) lines.push(diffLine(" ", "", "", line));
     else lines.push(diffLine(markOf(match[1]), match[2] ?? "", match[2] ?? "", match[3] ?? ""));
   }
@@ -67,7 +67,7 @@ function editLines(diff: JsonValue | undefined): ChangesDiffLine[] {
 const GROUPED_HEADER_RE = /^(#+)\s+(.*)$/u;
 const GROUPED_HEADER_SUFFIX_RE = /\s+\([^)]*\)\s*$/u;
 const GROUPED_HEADER_HASH_TAG_RE = /#[0-9a-f]+$/iu;
-const GROUPED_BODY_RE = /^([ +\-])(\d*)│(.*)$/u;
+const GROUPED_BODY_RE = /^([ +-])(\d*)│(.*)$/u;
 
 function astEditDisplayDiffs(display: string): Map<string, ChangesDiffLine[]> {
   const byFile = new Map<string, ChangesDiffLine[]>();

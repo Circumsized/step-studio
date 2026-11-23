@@ -530,8 +530,7 @@ export function ComposerModelPicker({
           className="pill-btn meta-model cmp-responsive-pill"
           aria-haspopup="menu"
           aria-expanded={menu === "model"}
-          aria-label={t("composer.selectModel")}
-          aria-description={modelLabel}
+          aria-label={modelLabel ? `${t("composer.selectModel")}: ${modelLabel}` : t("composer.selectModel")}
           data-tip={!modelReady ? t("common.notImplemented") : `${t("composer.model")}: ${modelLabel}`}
           onClick={() => {
             if (menu === "model") {
@@ -611,8 +610,7 @@ export function ComposerModelPicker({
           disabled={!pick || thinking.disabled || !thinkingReady}
           aria-haspopup="menu"
           aria-expanded={menu === "thinking"}
-          aria-label={t("composer.reasoningEffort")}
-          aria-description={thinkingLabel}
+          aria-label={thinkingLabel ? `${t("composer.reasoningEffort")}: ${thinkingLabel}` : t("composer.reasoningEffort")}
           data-tip={
             !thinkingReady
               ? t("common.notImplemented")

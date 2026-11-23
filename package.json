@@ -55,16 +55,23 @@
     "build:packages": "node scripts/build-packages.mjs",
     "test:core": "node scripts/test-core.mjs",
     "test:tooling": "npm run build:packages && node --test scripts/*.test.mjs",
-    "audit:deps": "npm audit --omit=dev --registry=https://registry.npmjs.org"
+    "audit:deps": "npm audit --omit=dev --registry=https://registry.npmjs.org",
+    "lint": "eslint apps/renderer/src packages/*/src scripts --ext .ts,.tsx,.mjs,.js,.cjs",
+    "lint:fix": "eslint apps/renderer/src packages/*/src scripts --ext .ts,.tsx,.mjs,.js,.cjs --fix"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
     "@electron/asar": "3.4.1",
+    "@eslint/js": "^9.39.5",
     "@types/node": "^24.0.0",
+    "app-builder-lib": "26.15.3",
     "electron-builder": "^26.0.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "typescript": "^5.9.0",
-    "app-builder-lib": "26.15.3"
+    "typescript-eslint": "^8.73.0"
   }
 }

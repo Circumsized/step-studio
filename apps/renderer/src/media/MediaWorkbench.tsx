@@ -36,17 +36,23 @@ export const MEDIA_INTENT_KEY = "omp.mediaIntent";
 export function setMediaIntent(type: MediaKind): void {
   try {
     sessionStorage.setItem(MEDIA_INTENT_KEY, type);
-  } catch {}
+  } catch {
+    // Best-effort: a media root that cannot be read leaves the pane
+    // empty, which the UI already shows honestly.
+  }
 }
 const active = (job: MediaJob) =>
   ["queued", "running", "waiting"].includes(job.state);
 export function takeMediaIntent(): MediaKind {
+  let value: string | null = null;
   try {
-    const value = sessionStorage.getItem(MEDIA_INTENT_KEY);
-    sessionStorage.removeItem(MEDIA_INTENT_KEY);
-    if (["image", "video", "speech", "transcription"].includes(value ?? ""))
-      return value as MediaKind;
-  } catch {}
+    value = sessionStorage.getItem(MEDIA_INTENT_KEY);
+  } catch {
+    // Storage can be unavailable (private mode, a blocked cookie). The intent is
+    // an optimisation, so its absence is not an error.
+  }
+  if (["image", "video", "speech", "transcription"].includes(value ?? ""))
+    return value as MediaKind;
   return "image";
 }
 export function MediaWorkbench({

@@ -346,7 +346,7 @@ function EditBody({ tool }: { tool: ToolView }) {
             chunkClassName="cv-chunk-rows"
             renderRow={(index) => {
               const line = capped.rows[index]!;
-              const match = /^([ +\-])(\d*)\|(.*)$/.exec(line);
+              const match = /^([ +-])(\d*)\|(.*)$/.exec(line);
               const marker = match?.[1] ?? " ";
               const cls = marker === "+" ? "add" : marker === "-" ? "del" : "";
               return (

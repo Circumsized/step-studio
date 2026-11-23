@@ -443,7 +443,7 @@ export function SkillsDrawer({
         />
         <span className="kbd">/</span>
       </label>
-      <nav className="sd-tabs" role="tablist" aria-label={t("skills.categoriesAria")}>
+      <div className="sd-tabs" role="tablist" aria-label={t("skills.categoriesAria")}>
         {([
           ["all", t("common.all"), items.length],
           ["skill", t("skills.tabSkills"), skillN],
@@ -465,7 +465,7 @@ export function SkillsDrawer({
             {label} <span className="count">{count}</span>
           </button>
         ))}
-      </nav>
+      </div>
       <div className="sd-body" id="sdBody" tabIndex={-1}>
         {grouped.length === 0 ? (
           <div className="sd-empty">

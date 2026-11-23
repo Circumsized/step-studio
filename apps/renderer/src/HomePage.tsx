@@ -977,7 +977,6 @@ function TokenUsageCard({ client, onOpenStats }: { client?: StudioClient; onOpen
                 key={cell.ts}
                 className={`tk-cell${kind ? ` ${kind}` : ""}${isToday ? " tk-today" : ""}${hi ? " tk-hi" : ""}`}
                 data-ts={cell.ts}
-                tabIndex={0}
                 role="img"
                 aria-label={future ? `${dayLabel(cell.ts, resolvedLanguage)} (${t("home.future")})` : `${dayLabel(cell.ts, resolvedLanguage)}, ${fmtTokens(total)} tok`}
                 style={future ? undefined : { background: tokenFill(total, heatCap) }}

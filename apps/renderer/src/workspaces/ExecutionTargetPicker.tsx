@@ -174,7 +174,7 @@ export function ExecutionTargetPicker({ onOpen, otherMenuOpen = false }: { onOpe
       </div>
     </> : null}
     {displayError && !modalOpen ? <span className="execution-error" role="alert">{displayError}</span> : null}
-    {modalOpen ? createPortal(<dialog role="dialog" ref={dialog} className="ssh-dialog" aria-labelledby="ssh-dialog-title" onCancel={event => { event.preventDefault(); closeModal(); }}>
+    {modalOpen ? createPortal(<dialog ref={dialog} className="ssh-dialog" aria-labelledby="ssh-dialog-title" onCancel={event => { event.preventDefault(); closeModal(); }}>
       <div className="ssh-dialog-head"><h2 id="ssh-dialog-title">{form ? editing ? "编辑 SSH 连接" : "添加 SSH 连接" : "选择远端项目目录"}</h2><button type="button" className="icon-btn" aria-label="关闭" disabled={busy} onClick={closeModal}><Icon name="x" /></button></div>
       {form ? <form onSubmit={event => { event.preventDefault(); save(); }}>
         <label>连接名称<input autoFocus value={name} onChange={event => setName(event.target.value)} placeholder="开发服务器" maxLength={80} disabled={busy} /></label>

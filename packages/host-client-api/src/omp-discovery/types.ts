@@ -64,7 +64,7 @@ export interface DiscoveredPlugin {
  * Settings-driven discovery filters. Declared for the next round; this
  * round `discover*` must ignore them.
  */
-export interface SkillDiscoveryFilters {
+export type SkillDiscoveryFilters = Record<string, never> & {
   // enabled?: boolean;
   // enableCodexUser?: boolean;
   // enableClaudeUser?: boolean;

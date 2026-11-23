@@ -241,8 +241,10 @@ export function TaskProgressDock({
 
   const pauseTodoAutoScroll = () => {
     userPausedRef.current = true;
+    // The scroll position is deliberately left alone here: pausing autoscroll
+    // must not move the view under the user.
     const list = listRef.current;
-    if (list !== null) list.scrollTop = list.scrollTop;
+    if (list !== null) void list;
   };
 
   if (todos.length === 0 && files.length === 0) return null;
