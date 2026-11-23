@@ -49,6 +49,6 @@
     "@step-studio/client-contract": "0.1.17",
     "@step-studio/studio-host": "0.1.17",
     "@step-studio/studio-protocol": "0.1.17",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   }
 }
