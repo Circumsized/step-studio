@@ -24,6 +24,7 @@ Public documentation for Step Studio.
 | [development.md](development.md) | Inner loop, tests, overlay |
 | [performance.md](performance.md) | Streaming budgets, local counters, rollback and repeatable benchmarks |
 | [architecture.md](architecture.md) | Packages, Bridge, data rules |
+| [compatibility.md](compatibility.md) | 四个版本号、谁兼容谁、不匹配时发生什么、弃用流程 |
 | [releasing.md](releasing.md) | Version, changelog, tag, Windows installer, macOS build |
 | [updates.md](updates.md) | In-app updates on Windows and macOS: storage, trust, recovery |
 | [migrations/omp-18.3.0.md](migrations/omp-18.3.0.md) | OMP v18.3.0 upgrade, Studio features, verification and external acceptance decisions |

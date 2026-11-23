@@ -79,6 +79,9 @@ export class StudioClientImpl implements StudioClient {
         const bootstrap = await this.transport.bootstrap();
         if (this.closed || generation !== this.transportGeneration) throw CLIENT_CLOSED_ERROR;
         if (bootstrap.contractVersion !== CLIENT_CONTRACT_VERSION) {
+          // Exact equality, no window — see docs/compatibility.md. A contract
+          // bump is a hard cut: the old shell is UNAVAILABLE against every new
+          // host, with no downgrade path.
           throw {
             code: "UNAVAILABLE",
             message: `Client contract mismatch: expected ${CLIENT_CONTRACT_VERSION}, received ${String(bootstrap.contractVersion)}`,
