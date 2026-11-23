@@ -1,3 +1,7 @@
+*.patch text eol=lf whitespace=-trailing-space,-space-before-tab
+omp-patch/overlay/** text=auto eol=lf
+*.sh text eol=lf
+
 # Normalize line endings on commit, and never convert them on checkout.
 #
 # The Windows runner checks out with `core.autocrlf=true` by default, so a file
