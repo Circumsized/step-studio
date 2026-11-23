@@ -148,17 +148,22 @@ pub fn read_model() -> Value {
 }
 
 /// Whether `/proc` is the source, which is the only place this is exact.
+///
+/// Linux only. macOS is `cfg(unix)` too, but it has no `/proc` — it was falling
+/// into the Linux arm below and silently returning nothing, so the tree held
+/// only the daemon and this flag still claimed `true`. The `rust-macos` CI job
+/// caught it on its first run.
 pub fn is_exact() -> bool {
-    cfg!(unix)
+    cfg!(target_os = "linux")
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn parent_of(pid: u32) -> Option<u32> {
     let status = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
     parse_status_field(&status, "PPid:").map(|ppid| ppid as u32)
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn children_of(pid: u32) -> Vec<u32> {
     // `/proc/<pid>/task/<tid>/children` is the kernel's own answer, so a process
     // that forked and has not yet exec'd is still found.
@@ -181,7 +186,7 @@ fn children_of(pid: u32) -> Vec<u32> {
     found
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn rss_of(pid: u32) -> Option<u64> {
     let status = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
     // `VmRSS:  6772 kB` — kilobytes, so scaled to bytes.
@@ -201,20 +206,22 @@ fn parse_status_field(status: &str, key: &str) -> Option<u64> {
     None
 }
 
-/// No toolhelp snapshot without `unsafe`, so only the daemon itself can be
+/// Windows and macOS: no `/proc`, and reaching the platform's own process table
+/// needs `unsafe` this workspace forbids. Only the daemon itself can be
 /// described. The children it spawned are known by pid from `Child`, but their
-/// own children are not reachable.
-#[cfg(not(unix))]
+/// own children are not reachable — which is why `is_exact` is false here and
+/// the read model says so rather than letting a short total look whole.
+#[cfg(not(target_os = "linux"))]
 fn parent_of(_pid: u32) -> Option<u32> {
     None
 }
 
-#[cfg(not(unix))]
+#[cfg(not(target_os = "linux"))]
 fn children_of(_pid: u32) -> Vec<u32> {
     Vec::new()
 }
 
-#[cfg(not(unix))]
+#[cfg(not(target_os = "linux"))]
 fn rss_of(_pid: u32) -> Option<u64> {
     None
 }
@@ -237,6 +244,13 @@ mod tests {
 
     #[test]
     fn a_spawned_child_is_named_the_adapter() {
+        // The role comes from the depth in the tree, which needs `/proc`. macOS
+        // has none, so there is nothing to assert there — skipping with a reason
+        // beats a red job that trains people to ignore it.
+        if !is_exact() {
+            eprintln!("skipping: no /proc on this platform, so the tree has no children");
+            return;
+        }
         // The role comes from the depth in the tree, not from the executable's
         // name — a guess about what a binary is would be wrong the moment it is
         // renamed.
@@ -264,6 +278,14 @@ mod tests {
 
     #[test]
     fn a_grandchild_is_named_the_cli() {
+        // The role comes from the depth in the tree, which needs `/proc`. macOS
+        // has none, so there is nothing to assert there — skipping with a reason
+        // beats a red job that trains people to ignore it. Checked before the
+        // spawn so the child is still `wait()`ed on every path.
+        if !is_exact() {
+            eprintln!("skipping: no /proc on this platform, so the tree has no children");
+            return;
+        }
         // Two commands, not one: `sh -c 'sleep 30'` execs the single command in
         // place, so there is no grandchild at all and the test would be vacuous.
         // A shell with two things to do has to fork for one of them.
@@ -318,11 +340,14 @@ mod tests {
     #[test]
     fn the_model_says_whether_the_platform_could_describe_everything() {
         let model = read_model();
-        // On Unix `/proc` is the source and the tree is exact; elsewhere it is
+        // On Linux `/proc` is the source and the tree is exact; elsewhere it is
         // not, and the flag says so rather than letting a short total look whole.
+        // macOS is `cfg(unix)` but has no `/proc`, so it belongs with the
+        // inexact platforms — asserting `cfg!(unix)` here is what let the
+        // overclaim survive.
         assert_eq!(
             model.get("complete").and_then(Value::as_bool),
-            Some(cfg!(unix))
+            Some(cfg!(target_os = "linux"))
         );
     }
 }
