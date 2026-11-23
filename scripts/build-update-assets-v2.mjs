@@ -2,6 +2,12 @@ import { createHash, sign } from "node:crypto";
 import { cp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+// A deep import of an internal path: `app-builder-lib` does not re-export
+// `buildBlockMap` from its entry point, so this is the only way to reach it. The
+// package is declared in devDependencies for exactly this reason — an undeclared
+// transitive dependency whose internal layout upstream can rearrange. Dependabot
+// now watches npm, so a breaking bump surfaces as a red build rather than as a
+// release-time failure.
 import { buildBlockMap } from "app-builder-lib/out/targets/blockmap/blockmap.js";
 import { createRuntimeArchive, verifySignedArtifact, RUNTIME_ARTIFACT_LAYOUT, parseRuntimeInstallationManifest, verifyUpdateManifest, updateSigningBytes, createTrustedKeyVerifier, parseRuntimeSignatureManifest } from "@step-studio/runtime-installer";
 import { STUDIO_PROTOCOL_VERSION } from "@step-studio/studio-protocol";

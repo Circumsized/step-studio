@@ -6,6 +6,12 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
+// A deep import of an internal path: `app-builder-lib` does not re-export
+// `buildBlockMap` from its entry point, so this is the only way to reach it. The
+// package is declared in devDependencies for exactly this reason — an undeclared
+// transitive dependency whose internal layout upstream can rearrange. Dependabot
+// now watches npm, so a breaking bump surfaces as a red build rather than as a
+// release-time failure.
 import { buildBlockMap } from "app-builder-lib/out/targets/blockmap/blockmap.js";
 import { NodeHttpExecutor } from "builder-util/out/nodeHttpExecutor.js";
 import { GenericDifferentialDownloader } from "electron-updater/out/differentialDownloader/GenericDifferentialDownloader.js";

@@ -44,13 +44,6 @@
     "vendor:keys": "node scripts/runtime-signing-keys.mjs",
     "vendor:build:host": "node scripts/build-omp-host.mjs",
     "vendor:artifact": "npm run build && node scripts/runtime-artifact.mjs",
-    "pack:win": "node scripts/pack-win.mjs",
-    "pack:win:prepare": "node scripts/prepare-installer-resources.mjs",
-    "pack:win:ui": "node scripts/build-installer-host.mjs",
-    "pack:win:audit": "node scripts/audit-installer.mjs",
-    "pack:mac": "node scripts/pack-mac.mjs",
-    "pack:mac:prepare": "node scripts/prepare-installer-resources.mjs",
-    "pack:mac:audit": "node scripts/audit-mac.mjs",
     "vendor:e2e:install": "node scripts/runtime-install-e2e.mjs",
     "vendor:build:natives": "node scripts/build-omp-natives.mjs",
     "vendor:verify:patches": "node scripts/verify-omp-patches.mjs",
@@ -71,6 +64,7 @@
     "@electron/asar": "3.4.1",
     "@types/node": "^24.0.0",
     "electron-builder": "^26.0.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "app-builder-lib": "26.15.3"
   }
 }
