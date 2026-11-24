@@ -161,7 +161,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      # The renderer imports chart sources from the patched vendor tree, so the
+      # submodule has to be present and the overlay applied before anything
+      # compiles. Same two steps the `platform` job runs.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -183,6 +188,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run vendor:overlay:apply
       # The bridge bundles against the workspace packages, so their `dist` has
       # to exist first: esbuild resolves `@step-studio/transport-desktop` to its
       # `package.json` `default` entry, and `npm ci` produces no dist at all.
@@ -204,7 +210,11 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
+      # Same reason as `rust-shell`: the renderer's chart imports live in the
+      # patched vendor tree.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          submodules: recursive
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -226,6 +236,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run vendor:overlay:apply
       - run: npm run build:packages
       - run: npm run build:bridge -w @step-studio/desktop-tauri
       - run: npm run build -w @step-studio/renderer
