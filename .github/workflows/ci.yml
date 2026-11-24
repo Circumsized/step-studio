@@ -129,7 +129,7 @@ jobs:
     # EAGAIN in the handshake proof read that cannot be diagnosed from a Linux
     # host. The shipping target is Windows, so a red macOS job must not gate the
     # Windows deliverable; `scope: full` still runs it.
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.scope == 'full'
     name: Rust crates (macOS arm64)
     runs-on: macos-15
     timeout-minutes: 30

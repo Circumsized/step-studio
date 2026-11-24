@@ -148,8 +148,11 @@ jobs:
 
   publish:
     needs: [prepare, runtime, verify, build-installer]
-    if: ${{ !cancelled() && needs.runtime.result == 'success' && needs.verify.result == 'success' }}
-    if: ${{ !cancelled() && needs.runtime.result == 'success' }}
+    # Every need, explicitly: `needs` lists `build-installer`, and a release
+    # published without its installer is the failure this job exists to
+    # prevent. `!cancelled()` keeps the job reachable when a sibling was
+    # cancelled rather than failed.
+    if: ${{ !cancelled() && needs.runtime.result == 'success' && needs.verify.result == 'success' && needs.build-installer.result == 'success' }}
     runs-on: ubuntu-latest
     environment: release
     permissions:
