@@ -164,9 +164,15 @@ jobs:
       # The renderer imports chart sources from the patched vendor tree, so the
       # submodule has to be present and the overlay applied before anything
       # compiles. Same two steps the `platform` job runs.
+      #
+      # `fetch-depth: 0` because `log_tests` walks the real repository: at the
+      # default depth 1 the page holds one commit, `skip(1)` is empty, and
+      # `the_relation_is_computed_rather_than_asserted` has nothing left to
+      # assert — a shallow clone makes a real test vacuous.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
           submodules: recursive
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -211,10 +217,11 @@ jobs:
     timeout-minutes: 30
     steps:
       # Same reason as `rust-shell`: the renderer's chart imports live in the
-      # patched vendor tree.
+      # patched vendor tree, and `log_tests` walks the real history.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
         with:
           submodules: recursive
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -240,6 +247,12 @@ jobs:
       - run: npm run build:packages
       - run: npm run build:bridge -w @step-studio/desktop-tauri
       - run: npm run build -w @step-studio/renderer
+      # `tauri-build` validates `bundle.resources` at compile time, and
+      # `tauri.windows.conf.json` maps the two sibling exes into the bundle. On
+      # a Windows target that config is live, so the shell crate cannot compile
+      # here until the siblings exist — the same chicken-and-egg
+      # `BUNDLE-TARGETS.md` records for cross-builds, minus the cross-compile.
+      - run: cargo build --release --target x86_64-pc-windows-msvc -p step-studio-host -p step-studio-runtime
       # Then actually run them. This job used to be compile-and-lint only, on the
       # reasoning that the runtime is unverified here (no Step CLI, so the
       # end-to-end tests skip) and a GUI shell cannot run on a hosted runner.
