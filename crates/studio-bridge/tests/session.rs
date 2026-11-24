@@ -14,6 +14,14 @@
 //! `step-studio-runtime` and must not depend on it, and a test locating a binary
 //! by path needs no dependency at all.
 
+//! Unix only, and for a concrete reason rather than a hopeful one: the CLI
+//! behind these tests is reached through a `#!/bin/sh` wrapper that execs
+//! `node`, and the adapter is located by an extension-less name. Windows
+//! would need a `.cmd` wrapper and an `.exe` lookup, which is a second
+//! harness for the same assertions. The Windows-specific code is covered by
+//! the `rust-windows` unit tests; this file is the Unix path.
+#![cfg(unix)]
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
