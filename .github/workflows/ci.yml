@@ -183,7 +183,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run build:bridge
+      # `build:bridge` lives in the tauri app's package.json, not the root's —
+      # running it bare here is "Missing script". Tauri's own beforeBuildCommand
+      # resolves it because it runs with cwd = apps/desktop-tauri; CI runs from
+      # the root, so the workspace flag is required.
+      - run: npm run build:bridge -w @step-studio/desktop-tauri
       - run: npm run build -w @step-studio/renderer
       - run: cargo test -p step-studio-desktop-tauri
       - run: cargo clippy -p step-studio-desktop-tauri --all-targets -- -D warnings
@@ -208,6 +212,18 @@ jobs:
       # `#[cfg(not(unix))]` arms — the pipe-name endpoint, the no-op departure
       # announcement — have no other way to be compiled at all.
       - run: cargo clippy -p step-studio-bridge -p step-studio-runtime -p step-studio-host --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+      # `-p step-studio-desktop-tauri` cannot compile without the two frontend
+      # artifacts: `main.rs` does `include_str!("../../dist/bridge-init.js")` and
+      # `tauri-build` requires `frontendDist` to exist. Neither is produced by
+      # cargo, so the test step below died in the build script until these were
+      # added — the same gap that broke `rust-shell`.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:bridge -w @step-studio/desktop-tauri
+      - run: npm run build -w @step-studio/renderer
       # Then actually run them. This job used to be compile-and-lint only, on the
       # reasoning that the runtime is unverified here (no Step CLI, so the
       # end-to-end tests skip) and a GUI shell cannot run on a hosted runner.
