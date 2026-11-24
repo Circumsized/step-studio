@@ -307,7 +307,7 @@ fn the_protocol_version_is_the_one_both_sides_declare() {
 fn a_duplicated_connection_is_usable_from_both_ends() {
     use std::io::{Read, Write};
 
-    let endpoint = scratch("duplicate").join("bridge.sock");
+    let endpoint = scratch("duplicate").join("duplicate.sock");
     let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
     // Bind the pipe endpoint, not the socket path: on Windows `bind` hands its
     // argument straight to `CreateNamedPipeW`, so a filesystem path is not a
@@ -344,7 +344,7 @@ fn a_duplicated_connection_is_usable_from_both_ends() {
 fn closing_one_end_makes_the_other_see_a_closed_connection() {
     use std::io::Read;
 
-    let endpoint = scratch("closed").join("bridge.sock");
+    let endpoint = scratch("closed").join("closed.sock");
     let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
     // Bind the pipe endpoint, not the socket path: on Windows `bind` hands its
     // argument straight to `CreateNamedPipeW`, so a filesystem path is not a

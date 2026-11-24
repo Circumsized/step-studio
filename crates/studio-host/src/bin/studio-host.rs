@@ -1453,7 +1453,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("ss-first-frame-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a temp dir");
-        let endpoint = dir.join("bridge.sock");
+        let endpoint = dir.join("silent-surface.sock");
 
         let for_client = step_studio_bridge::transport::endpoint_for_bind(&endpoint.to_string_lossy());
         // Bind the pipe endpoint, not the socket path: on Windows `bind` hands
@@ -1494,7 +1494,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("ss-first-frame-ok-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a temp dir");
-        let endpoint = dir.join("bridge.sock");
+        let endpoint = dir.join("speaking-surface.sock");
 
         let for_client = step_studio_bridge::transport::endpoint_for_bind(&endpoint.to_string_lossy());
         // Bind the pipe endpoint, not the socket path: on Windows `bind` hands
