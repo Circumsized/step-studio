@@ -308,11 +308,14 @@ fn a_duplicated_connection_is_usable_from_both_ends() {
     use std::io::{Read, Write};
 
     let endpoint = scratch("duplicate").join("bridge.sock");
-    let listener = transport::bind(&endpoint.to_string_lossy()).expect("bind");
+    let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
+    // Bind the pipe endpoint, not the socket path: on Windows `bind` hands its
+    // argument straight to `CreateNamedPipeW`, so a filesystem path is not a
+    // pipe name.
+    let listener = transport::bind(&for_client).expect("bind");
 
     // Connect from a thread: on Windows `bind` returns immediately and it is
     // `accept` that waits, so the two have to be concurrent.
-    let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
     let connector = std::thread::spawn(move || transport::connect(&for_client));
 
     let accepted = accept_within(listener, std::time::Duration::from_secs(10)).expect("accept");
@@ -342,9 +345,11 @@ fn closing_one_end_makes_the_other_see_a_closed_connection() {
     use std::io::Read;
 
     let endpoint = scratch("closed").join("bridge.sock");
-    let listener = transport::bind(&endpoint.to_string_lossy()).expect("bind");
-
     let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
+    // Bind the pipe endpoint, not the socket path: on Windows `bind` hands its
+    // argument straight to `CreateNamedPipeW`, so a filesystem path is not a
+    // pipe name.
+    let listener = transport::bind(&for_client).expect("bind");
     let connector = std::thread::spawn(move || transport::connect(&for_client));
 
     let accepted = accept_within(listener, std::time::Duration::from_secs(10)).expect("accept");

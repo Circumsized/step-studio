@@ -1455,9 +1455,12 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("a temp dir");
         let endpoint = dir.join("bridge.sock");
 
-        let listener = step_studio_bridge::transport::bind(&endpoint.to_string_lossy())
-            .expect("bind");
         let for_client = step_studio_bridge::transport::endpoint_for_bind(&endpoint.to_string_lossy());
+        // Bind the pipe endpoint, not the socket path: on Windows `bind` hands
+        // its argument straight to `CreateNamedPipeW`, so a filesystem path is
+        // not a pipe name.
+        let listener = step_studio_bridge::transport::bind(&for_client)
+            .expect("bind");
         // Connects, then says nothing at all — and stays connected. Dropping the
         // client handle would be EOF, which `next_frame` already reports as
         // `Ok(None)`; the defect is a peer that is *open and silent*.
@@ -1493,9 +1496,12 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("a temp dir");
         let endpoint = dir.join("bridge.sock");
 
-        let listener = step_studio_bridge::transport::bind(&endpoint.to_string_lossy())
-            .expect("bind");
         let for_client = step_studio_bridge::transport::endpoint_for_bind(&endpoint.to_string_lossy());
+        // Bind the pipe endpoint, not the socket path: on Windows `bind` hands
+        // its argument straight to `CreateNamedPipeW`, so a filesystem path is
+        // not a pipe name.
+        let listener = step_studio_bridge::transport::bind(&for_client)
+            .expect("bind");
         let speaker = std::thread::spawn(move || -> std::io::Result<()> {
             let mut client = step_studio_bridge::transport::connect(&for_client)?;
             let hello = serde_json::json!({

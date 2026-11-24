@@ -637,8 +637,11 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("a temp dir");
         let endpoint = dir.join("bridge.sock");
 
-        let listener = transport::bind(&endpoint.to_string_lossy()).expect("bind");
         let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
+        // Bind the pipe endpoint, not the socket path: on Windows `bind` hands
+        // its argument straight to `CreateNamedPipeW`, so a filesystem path is
+        // not a pipe name. `serve` converts before binding for the same reason.
+        let listener = transport::bind(&for_client).expect("bind");
         let (held_tx, held_rx) = std::sync::mpsc::channel();
         let silent = std::thread::spawn(move || {
             let client = transport::connect(&for_client)?;
@@ -671,8 +674,11 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("a temp dir");
         let endpoint = dir.join("bridge.sock");
 
-        let listener = transport::bind(&endpoint.to_string_lossy()).expect("bind");
         let for_client = transport::endpoint_for_bind(&endpoint.to_string_lossy());
+        // Bind the pipe endpoint, not the socket path: on Windows `bind` hands
+        // its argument straight to `CreateNamedPipeW`, so a filesystem path is
+        // not a pipe name. `serve` converts before binding for the same reason.
+        let listener = transport::bind(&for_client).expect("bind");
         let (held_tx, held_rx) = std::sync::mpsc::channel();
         let talker = std::thread::spawn(move || {
             let mut client = transport::connect(&for_client)?;
