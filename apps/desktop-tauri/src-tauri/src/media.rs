@@ -1090,11 +1090,18 @@ mod tests {
         )
         .expect("answered");
         assert_eq!(outcome.get("ok").and_then(Value::as_bool), Some(false));
+        // Unix points at the reconnect; Windows says plainly that the live
+        // microphone is not ported yet. Both are "what to do", so assert on
+        // the platform's own answer rather than one of the two strings.
+        #[cfg(unix)]
+        let expected = "Reconnect";
+        #[cfg(not(unix))]
+        let expected = "not available on Windows yet";
         assert!(
             outcome
                 .get("message")
                 .and_then(Value::as_str)
-                .is_some_and(|message| message.contains("Reconnect")),
+                .is_some_and(|message| message.contains(expected)),
             "the message says what to do: {outcome}"
         );
     }

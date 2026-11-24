@@ -354,7 +354,11 @@ mod tests {
         // `Write-Output` in PowerShell.
         terminal
             .writer
-            .write_all(b"echo PONYTAIL_OK\nexit\n")
+            // CRLF, not LF: ConPTY feeds a console input buffer, and a console
+            // submits a line on CR. With `\n` alone PowerShell never saw a
+            // complete line, produced nothing, and the read timed out. `sh`
+            // tolerates the trailing CR — the marker still matches.
+            .write_all(b"echo PONYTAIL_OK\r\nexit\r\n")
             .expect("write to the pty");
         terminal.writer.flush().expect("flush the pty");
 

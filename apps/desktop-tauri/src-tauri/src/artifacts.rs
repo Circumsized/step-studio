@@ -208,7 +208,12 @@ impl Library {
                 // library that can never be read again.
                 let root = self.default_payload_root();
                 let _ = std::fs::create_dir_all(&root);
-                let root = std::fs::canonicalize(&root).unwrap_or(root);
+                // `absolute`, not `canonicalize`: on Windows `canonicalize`
+                // answers with the `\\?\` extended-length prefix, which then
+                // lands in the catalog and in every path the renderer sees —
+                // and no longer matches a plain path under `starts_with`.
+                // `absolute` makes the root absolute, which is all this needs.
+                let root = std::path::absolute(&root).unwrap_or(root);
                 return Ok(Catalog::empty(&root));
             }
             Err(error) => {

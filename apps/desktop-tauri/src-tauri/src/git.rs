@@ -1743,7 +1743,17 @@ mod write_tests {
             eprintln!("skipping: no repository, so this test asserted nothing");
             return;
         };
-        for bad in ["../../etc/passwd", "/etc/passwd", "--upload-pack=evil", "a/../../b"] {
+        // `/etc/passwd` escapes on Unix; on Windows it is only an invalid path,
+        // which git refuses for a different reason and this test would then
+        // report the wrong cause. Each platform gets an escape it actually has.
+        #[cfg(windows)]
+        let escapes = ["..\\..\\..\\Windows\\win.ini", "C:\\Windows\\win.ini"];
+        #[cfg(not(windows))]
+        let escapes = ["../../etc/passwd", "/etc/passwd"];
+        for bad in escapes
+            .into_iter()
+            .chain(["--upload-pack=evil", "a/../../b"])
+        {
             let result = paths_op(&root, &["add", "--"], Some(&json!([bad])), false);
             let error = result.expect_err("{bad} must be refused, not passed to git");
             // Which refusal. `paths_op` also fails when git is missing or the
