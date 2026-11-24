@@ -214,12 +214,13 @@ jobs:
     # path could rot unnoticed — this job is what keeps it honest.
     name: Rust crates (Windows)
     runs-on: windows-latest
-    # Larger than the other jobs because this one compiles six packages for the
-    # MSVC target from a cold cache, then runs them. Measured: ~7 min of setup,
-    # clippy and the frontend, then ~23 min in `cargo test` — the 30 min the job
-    # used to have was spent before the tests finished, so the run ended
-    # "cancelled" with the step still in flight.
-    timeout-minutes: 45
+    # The largest budget in the file, and measured rather than guessed. This job
+    # compiles six packages for the MSVC target from a cold cache and then runs
+    # them, and the shell's test binary links wry — which is slow on Windows.
+    # At 30 min the job was cancelled with `cargo test` in flight; at 45 min it
+    # was still cancelled, 45m05s after start. 60 min leaves headroom without
+    # pretending the work is cheap.
+    timeout-minutes: 60
     steps:
       # Same reason as `rust-shell`: the renderer's chart imports live in the
       # patched vendor tree, and `log_tests` walks the real history.
