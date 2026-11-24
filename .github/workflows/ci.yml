@@ -183,6 +183,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The bridge bundles against the workspace packages, so their `dist` has
+      # to exist first: esbuild resolves `@step-studio/transport-desktop` to its
+      # `package.json` `default` entry, and `npm ci` produces no dist at all.
+      - run: npm run build:packages
       # `build:bridge` lives in the tauri app's package.json, not the root's —
       # running it bare here is "Missing script". Tauri's own beforeBuildCommand
       # resolves it because it runs with cwd = apps/desktop-tauri; CI runs from
@@ -222,6 +226,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run build:packages
       - run: npm run build:bridge -w @step-studio/desktop-tauri
       - run: npm run build -w @step-studio/renderer
       # Then actually run them. This job used to be compile-and-lint only, on the
