@@ -105,7 +105,13 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@17aeb3c839e42274e2b8adf721c8c65edfdc74dd # v2.0.12
         with:
           command: check
-          arguments: --all-features=false
+          # No `arguments`. cargo-deny-action v2.0.12 ships a cargo-deny where
+          # `--all-features` is a boolean flag that takes no value, and the old
+          # `--all-features=false` is rejected outright — which is what made the
+          # `Rust crates` job fail on both ubuntu and Windows before any test
+          # ran. Dropping it restores cargo-deny's default, which is not to
+          # enable all features, so the intent is unchanged.
+          arguments:
 
   # macOS has never compiled or run a line of Rust here. The `platform` job does
   # cover it, but only with `scope: full` — a manual dispatch — and it runs
@@ -163,6 +169,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      # The shell's build script reads two frontend artifacts: `main.rs` does
+      # `include_str!("../../dist/bridge-init.js")`, and `tauri-build` requires
+      # `frontendDist` to exist. Neither is produced by cargo, so a job that only
+      # runs cargo fails before a single test — which is what this job was doing.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build:bridge
+      - run: npm run build -w @step-studio/renderer
       - run: cargo test -p step-studio-desktop-tauri
       - run: cargo clippy -p step-studio-desktop-tauri --all-targets -- -D warnings
 
