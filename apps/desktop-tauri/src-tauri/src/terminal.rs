@@ -297,13 +297,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn shell_command_resolves_to_an_executable_path() {
+    fn shell_command_resolves_to_something_the_pty_can_spawn() {
         let shell = shell_command();
         assert!(!shell.trim().is_empty(), "a shell must be resolved");
-        assert!(
-            std::path::Path::new(&shell).is_file(),
-            "{shell} is not a file; the pty would fail to spawn"
-        );
+        // A bare name is resolved through PATH by the spawn call — which is
+        // what `powershell.exe` is on Windows — so only a name carrying a
+        // separator can be checked against the filesystem. Asserting
+        // `is_file()` on the bare name failed on every Windows run.
+        if shell.contains(['/', '\\']) {
+            assert!(
+                std::path::Path::new(&shell).is_file(),
+                "{shell} is not a file; the pty would fail to spawn"
+            );
+        }
     }
 
     #[test]
@@ -340,28 +346,44 @@ mod tests {
         let mut reader = terminal.master.try_clone_reader().expect("clone the reader");
 
         // A command whose output is unmistakable and whose exit ends the shell,
-        // so the reader sees EOF.
+        // so the reader sees EOF. `echo`, not `printf`: the shell here is
+        // whatever `shell_command` resolved — `/bin/sh` on Unix, PowerShell on
+        // Windows — and `printf 'X\n'` is POSIX syntax that PowerShell does
+        // not have, so the marker never appeared and the read below never
+        // returned. `echo` is a builtin in `sh` and an alias for
+        // `Write-Output` in PowerShell.
         terminal
             .writer
-            .write_all(b"printf 'PONYTAIL_OK\\n'\nexit\n")
+            .write_all(b"echo PONYTAIL_OK\nexit\n")
             .expect("write to the pty");
         terminal.writer.flush().expect("flush the pty");
 
-        let mut output = String::new();
-        let mut chunk = [0u8; 4096];
-        // Bounded: a hang here is a failure, not something to wait out.
-        for _ in 0..200 {
-            match reader.read(&mut chunk) {
-                Ok(0) => break,
-                Ok(read) => {
-                    output.push_str(&String::from_utf8_lossy(&chunk[..read]));
-                    if output.contains("PONYTAIL_OK") {
-                        break;
+        // Bounded by a deadline, not by an iteration count: `read` blocks until
+        // a byte arrives, so counting reads bounds nothing. The read runs on a
+        // thread and the wait has a timeout, so a shell that starts and then
+        // says nothing fails here instead of parking the test binary — which is
+        // what it did for 51 minutes on Windows until the job timeout fired.
+        let (sent, received) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut output = String::new();
+            let mut chunk = [0u8; 4096];
+            loop {
+                match reader.read(&mut chunk) {
+                    Ok(0) => break,
+                    Ok(read) => {
+                        output.push_str(&String::from_utf8_lossy(&chunk[..read]));
+                        if output.contains("PONYTAIL_OK") {
+                            break;
+                        }
                     }
+                    Err(_) => break,
                 }
-                Err(_) => break,
             }
-        }
+            let _ = sent.send(output);
+        });
+        let output = received
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .expect("the shell never produced the marker or EOF within 30s");
         assert!(
             output.contains("PONYTAIL_OK"),
             "the shell did not run the command; got: {output:?}"
