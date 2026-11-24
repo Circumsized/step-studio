@@ -1678,7 +1678,7 @@ fn paths_op(
         // A leading dash would be read as an option; an absolute path or a `..`
         // segment would escape the repository. Both are refused rather than
         // passed through.
-        if path.starts_with('-') || Path::new(path).is_absolute() || path.split('/').any(|part| part == "..") {
+        if path.starts_with('-') || Path::new(path).is_absolute() || escapes(path) {
             return Err(format!("refusing the path {path}"));
         }
         command.arg(path);
