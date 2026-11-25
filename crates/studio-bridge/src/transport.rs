@@ -283,7 +283,7 @@ pub fn is_listening(endpoint: &str) -> bool {
         // `\\.\pipe\` name `CreateNamedPipeW` does, and is idempotent on a
         // name that already carries it.
         let name = endpoint_for_bind(endpoint);
-        miow::pipe::wait(&name, Some(std::time::Duration::ZERO)).is_ok()
+        miow::pipe::NamedPipe::wait(&name, Some(std::time::Duration::ZERO)).is_ok()
     }
 }
 
