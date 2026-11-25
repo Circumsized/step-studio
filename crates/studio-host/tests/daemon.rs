@@ -45,7 +45,7 @@ impl Daemon {
     fn build(tag: &str, grace: u64) -> Self {
         let root = repo_root();
         let dir = std::env::temp_dir().join(format!("host-daemon-{tag}-{}", std::process::id()));
-        Self::spawn(tag, grace, &root.join("target/debug/step-studio-host"), &dir, &root)
+        Self::spawn(tag, grace, &daemon_binary(&root), &dir, &root)
     }
 
     /// Start a daemon from a chosen binary, in a chosen directory.
@@ -312,6 +312,43 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// The daemon binary, wherever this workspace last built it.
+///
+/// A plain `cargo build` lands in `target/debug/`; a cross-compiling job lands
+/// in `target/<triple>/release/` with the platform's executable suffix. Four
+/// sites hardcoded the first shape, so on a Windows runner every daemon test
+/// failed with "build the daemon first" while the binary sat one directory
+/// over. Probe the shapes rather than assuming one.
+fn daemon_binary(root: &Path) -> PathBuf {
+    let suffix = if cfg!(windows) { ".exe" } else { "" };
+    let triples = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin", ""];
+    for profile in ["debug", "release"] {
+        for triple in triples {
+            let base = if triple.is_empty() {
+                root.join("target").join(profile)
+            } else {
+                root.join("target").join(triple).join(profile)
+            };
+            let candidate = base.join(format!("step-studio-host{suffix}"));
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+    root.join(format!("target/debug/step-studio-host{suffix}"))
+}
+
+/// What a copied daemon is called in a scratch install directory: the platform's
+/// executable suffix on Windows, because `Command::new` will not run a file
+/// without it there.
+fn installed_name() -> &'static str {
+    if cfg!(windows) {
+        "step-studio-host.exe"
+    } else {
+        "step-studio-host"
+    }
+}
+
 /// Connect as a surface: client-only, so this session owns no child and must
 /// not shut the runtime down when it is dropped.
 fn connect(daemon: &Daemon) -> BridgeSession {
@@ -462,7 +499,7 @@ fn the_daemon_drains_and_exits_when_no_surface_stays() {
 fn a_second_daemon_defers_to_the_one_that_is_running() {
     let daemon = Daemon::start("single");
     let root = repo_root();
-    let second = Command::new(root.join("target/debug/step-studio-host"))
+    let second = Command::new(daemon_binary(&root))
         .arg("--endpoint")
         .arg(&daemon.endpoint)
         .arg("--adapter-endpoint")
@@ -652,7 +689,7 @@ fn a_daemon_whose_adapter_cannot_start_exits_instead_of_degrading() {
     std::fs::create_dir_all(&dir).expect("make a temp dir");
     let root = repo_root();
     let endpoint = dir.join("daemon.sock").to_string_lossy().to_string();
-    let child = Command::new(root.join("target/debug/step-studio-host"))
+    let child = Command::new(daemon_binary(&root))
         .arg("--endpoint")
         .arg(&endpoint)
         .arg("--adapter-endpoint")
@@ -1075,10 +1112,7 @@ fn the_hot_replace_sequence_lands_the_staged_build_and_a_rollback_restores_the_o
     // passed through). What is left is the sequence itself: drain → swap →
     // restart, then rollback, with the user's data untouched throughout.
     let root = repo_root();
-    #[cfg(windows)]
-    let daemon_bin = root.join("target/debug/step-studio-host.exe");
-    #[cfg(not(windows))]
-    let daemon_bin = root.join("target/debug/step-studio-host");
+    let daemon_bin = daemon_binary(&root);
     assert!(daemon_bin.is_file(), "build the daemon first");
 
     let dir = std::env::temp_dir().join(format!("host-daemon-swap-{}", std::process::id()));
@@ -1096,8 +1130,8 @@ fn the_hot_replace_sequence_lands_the_staged_build_and_a_rollback_restores_the_o
     let original = std::fs::read(&daemon_bin).expect("read the daemon binary");
     let mut staged_bytes = original.clone();
     staged_bytes.extend_from_slice(b"staged-build");
-    let target = install.join("step-studio-host");
-    let new = staged.join("step-studio-host");
+    let target = install.join(installed_name());
+    let new = staged.join(installed_name());
     std::fs::write(&target, &original).expect("install the current build");
     std::fs::write(&new, &staged_bytes).expect("stage the new build");
     // `fs::write` creates a 0644 file, and a daemon nobody can exec is a daemon
