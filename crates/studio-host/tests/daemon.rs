@@ -6,6 +6,22 @@
 //! the runtime orphaned, holding the user's session open.
 
 
+//! Unix only, and because of a gap rather than a preference. The host drives
+//! the adapter over a duplex handle, and on Windows the client side of a
+//! named pipe is a single `File` that has to be split into a writer the
+//! supervisor holds and a reader that moves into the pump — plus a blocking
+//! `accept` that has to be bounded so the daemon still observes `stopping`.
+//! Neither is ported; `adapter.rs` refuses with that reason rather than
+//! compiling into a deadlock. Every test here starts a daemon that
+//! supervises an adapter, so all of them fail on Windows until M5.1 lands.
+//! What Windows keeps meanwhile: the `#[cfg(not(unix))]` arms compile and
+//! clippy checks them, and the shell's and the bridge's own unit tests run.
+//!
+//! The `step.cmd` branch below is still needed — it is what makes this file
+//! compile on Windows at all, which is what keeps the gate honest rather
+//! than hiding a build failure.
+#![cfg(unix)]
+
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
