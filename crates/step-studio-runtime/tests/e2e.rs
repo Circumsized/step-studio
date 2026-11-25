@@ -66,8 +66,7 @@ fn fake_step_wrapper(dir: &std::path::Path) -> PathBuf {
 /// `Path::exists` probe this replaced spun until its deadline on Windows
 /// and every test failed with "the adapter never bound its socket".
 fn endpoint_answers(endpoint: &str) -> bool {
-    step_studio_bridge::transport::connect(&step_studio_bridge::transport::endpoint_for_bind(endpoint))
-        .is_ok()
+    step_studio_bridge::transport::is_listening(endpoint)
 }
 
 /// The fake CLI runs under node, so the approval tests need it present.

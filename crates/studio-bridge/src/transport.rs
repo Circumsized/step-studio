@@ -264,6 +264,29 @@ pub fn endpoint_for_bind(endpoint: &str) -> String {
     endpoint.to_string()
 }
 
+/// Whether something is listening at `endpoint`, without disturbing it.
+///
+/// On Unix a connect is harmless and answers the question directly. On Windows
+/// a connect *consumes* a pipe instance: the server has to serve that client
+/// and rebind before the next one gets through, so a readiness probe that
+/// connects wedges the rebind with ERROR_PIPE_BUSY — which is what happened to
+/// the runtime's e2e suite the moment its probe stopped being `Path::exists`.
+/// `WaitNamedPipe` asks without taking one.
+pub fn is_listening(endpoint: &str) -> bool {
+    #[cfg(unix)]
+    {
+        std::os::unix::net::UnixStream::connect(endpoint).is_ok()
+    }
+    #[cfg(windows)]
+    {
+        // `endpoint_for_bind` first: `WaitNamedPipeW` takes the same
+        // `\\.\pipe\` name `CreateNamedPipeW` does, and is idempotent on a
+        // name that already carries it.
+        let name = endpoint_for_bind(endpoint);
+        miow::pipe::wait(&name, Some(std::time::Duration::ZERO)).is_ok()
+    }
+}
+
 /// Connect to a listener at `endpoint`.
 pub fn connect(endpoint: &str) -> io::Result<Stream> {
     #[cfg(unix)]
