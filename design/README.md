@@ -11,6 +11,7 @@
 | [`reference/rust-ts-architecture.md`](reference/rust-ts-architecture.md) | 参考资料：用户提供的 Rust + TypeScript 架构参考文档正文（选型与复刻的输入材料之一） | 选型存疑、需要回溯原始参考时 |
 | [`review/fix-plan-2026-11-22.md`](review/fix-plan-2026-11-22.md) | 生产就绪整改执行设计（[#12](https://github.com/Circumsized/step-studio/issues/12) 的 11 个子 issue）：逐项追踪结论、波次划分、根因/修法/验证/回滚、未验证清单 | 动手整改任何一项前；每波开始与收口时 |
 | [`review/plan-2026-11-15.md`](review/plan-2026-11-15.md) | 安全评审交付物：七项发现的六 gate 审查、13 条假阳性清单、§22 Windows 真机清单 | 回溯某项安全发现的判定依据时 |
+| [`review/afk-loop-postmortem-2026-11-25.md`](review/afk-loop-postmortem-2026-11-25.md) | AFK 循环复盘：一次 Windows CI 修复暴露的五个流程缺陷（反馈 15–20 分钟 vs 业界 10 分钟硬上限、测试无超时、本地编译≠目标平台、同类 bug 修七次才修根因、为变绿关门），逐条附出处与对策 | 下次让 agent 无人值守跑长任务前；调 CI 分层时 |
 | [`progress/`](progress/README.md) | **完成态台账**：一个里程碑一个文件，一条验收条件一行证据；`summary.md` 是总览，`blockers.md` 是跨里程碑阻塞，`audit-*.md` 是只读评估快照 | 想知道「某条验收到底过了没有、卡什么」 |
 
 不在本目录的相邻文件：
