@@ -3,6 +3,22 @@
 //!
 //! Skips when no CLI is installed, so CI is unaffected.
 
+//! Unix only, and because of a gap rather than a preference.
+//!
+//! The adapter binds and accepts on Windows — the pipe name, the fixture
+//! wrapper and the readiness probe were all Unix-shaped and are fixed — but
+//! the handshake then fails: the session connects and reads EOF instead of
+//! the adapter's proof. That is the duplex-handle problem `adapter.rs`
+//! documents for the host side: on Windows a pipe client gets one `File`,
+//! and splitting it into a reader that moves into the pump and a writer the
+//! supervisor holds is unported work. It needs a Windows machine to develop
+//! against, not a guess.
+//!
+//! What Windows keeps meanwhile: the bridge's own transport unit tests, the
+//! shell's unit tests including the Windows keystore, and clippy over the
+//! `#[cfg(not(unix))]` arms.
+#![cfg(unix)]
+
 use std::path::PathBuf;
 use std::time::Duration;
 
