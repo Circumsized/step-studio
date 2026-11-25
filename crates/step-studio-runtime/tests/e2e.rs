@@ -59,6 +59,17 @@ fn fake_step_wrapper(dir: &std::path::Path) -> PathBuf {
     wrapper
 }
 
+/// Whether the adapter's endpoint accepts a connection yet.
+///
+/// The readiness question is "can a surface connect", not "does a file
+/// exist" — and a named pipe has no filesystem presence, so the
+/// `Path::exists` probe this replaced spun until its deadline on Windows
+/// and every test failed with "the adapter never bound its socket".
+fn endpoint_answers(endpoint: &str) -> bool {
+    step_studio_bridge::transport::connect(&step_studio_bridge::transport::endpoint_for_bind(endpoint))
+        .is_ok()
+}
+
 /// The fake CLI runs under node, so the approval tests need it present.
 fn has_node() -> bool {
     std::process::Command::new("node")
@@ -148,7 +159,7 @@ fn the_rust_adapter_drives_the_real_step_cli() {
 
     // Wait for the socket to appear.
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
@@ -248,7 +259,7 @@ fn an_approval_round_trips_through_the_rust_adapter() {
     });
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
@@ -384,7 +395,7 @@ fn an_ask_dialog_round_trips_its_questions() {
     });
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
@@ -548,7 +559,7 @@ fn the_usage_panel_arrives_as_a_command_output_frame() {
     });
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
@@ -622,7 +633,7 @@ fn a_cancelled_answer_reaches_the_cli_as_cancelled() {
     });
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
@@ -727,7 +738,7 @@ fn a_stale_interaction_answer_fails_closed() {
     });
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
@@ -810,7 +821,7 @@ fn aborting_settles_the_turn_the_rust_adapter_is_still_running() {
     });
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
@@ -897,7 +908,7 @@ fn a_new_session_mints_a_fresh_session_id() {
     });
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
@@ -981,7 +992,7 @@ fn a_failed_turn_settles_as_failed_not_completed() {
     });
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
@@ -1053,7 +1064,7 @@ fn a_turn_settles_when_the_cli_dies_mid_turn() {
     });
 
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
-    while !std::path::Path::new(&config.endpoint).exists() {
+    while !endpoint_answers(&config.endpoint) {
         assert!(
             std::time::Instant::now() < deadline,
             "the adapter never bound its socket"
