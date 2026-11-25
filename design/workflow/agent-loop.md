@@ -71,6 +71,12 @@ Anthropic 的 `/goal` 设计专门解决这个：引入一个 **evaluator 模型
      --target x86_64-pc-windows-msvc --all-targets -- -D warnings 干净"
 ```
 
+Ralph Wiggum 的作者 Geoffrey Huntley 把这件事说得最直白（一手，见 [`first-party-practices.md`](first-party-practices.md) §一）：*「做完这个功能」不行，Claude 会自己说服自己已经完成了。要写「所有 CRUD 端点可用，测试覆盖率超过 80%，README 包含 API 文档，完成后输出 COMPLETE」。条件越模糊，它越会找理由提前收工。*
+
+他还给这个方法定了性：**「这种技术在不确定的世界中是确定性糟糕的。可预测的失败胜过不可预测的成功。」** 它不是更聪明，是更可预测——而可预测的前提就是退出条件机器可判。
+
+官方 `ralph-wiggum` 插件的实现机制值得对照：Stop hook 用退出码 2 拦截 Claude 的退出，重新注入原 prompt，直到满足完成条件或达到 `--max-iterations`。**「打回去重做」是机制保证的，不靠模型自觉。**
+
 **不由被审代码自己定义**：Anthropic 的「规则与代码隔离」——*负责审查的规则永远从主分支读取，本次改动不能修改评判自己的那套检查，防止「自己给自己判卷」*。
 
 对应到本项目：同一次改动里，既改产品代码又改 `scripts/architecture.test.mjs` 让新代码过，是违规的。分开提交，分开审。
