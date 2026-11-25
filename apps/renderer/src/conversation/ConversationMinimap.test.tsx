@@ -299,7 +299,7 @@ describe("ConversationMinimap 组件", () => {
     view.rerender(<Harness rows={[...ROWS]} />);
 
     fireEvent.click(screen.getByRole("button", { name: "筛选事件" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "仅显示错误与关键节点" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "仅显示错误与关键节点" }));
 
     expect(screen.queryByRole("button", { name: "#1 用户消息" })).toBeNull();
     expect(screen.queryByRole("button", { name: "#2 助手回复" })).toBeNull();

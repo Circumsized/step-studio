@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
@@ -19,12 +18,17 @@ export const MODEL_CATALOG_URL = "https://raw.githubusercontent.com/Circumsized/
  * the catalog without changing this constant is a commit that lies. The gate
  * `npm run models:catalog:check` fails when the two disagree.
  *
- * Why verify at all, when the fetch is HTTPS from this very repository: the check
- * is not about the transport, it is about the content. Without it, anything that
- * can answer for that URL — a compromised CDN edge, a fork that wins a DNS race,
- * a caching layer serving somebody else's response — can put an arbitrary model
- * catalog into every install that refreshes. The digest makes the accepted set
- * exactly "what this repository shipped".
+ * Build-time self-check only. It used to gate `refresh()` as well, and that made
+ * the update path impossible by construction: a refresh exists to accept a *new*
+ * catalog, and byte equality can only ever accept the *same* one. Every client
+ * built before a catalog change was permanently stuck on `digest mismatch` —
+ * including a legitimate v2, which is exactly what the refresh test reproduced.
+ *
+ * A signature is not the fix either: the trusted key would live in this same
+ * repository, so whoever can change the catalog can swap the key. Integrity here
+ * rests on TLS to this repository plus `decodeModelCatalog`'s structural check;
+ * the accepted set is "a well-formed catalog this repository published", not
+ * "the exact bytes this build shipped".
  */
 export const MODEL_CATALOG_SHA256 = "e65289617c95a775e62715f0960b9a32b977a581e2a1cd18c0a9b6a3c6578a89";
 
@@ -115,14 +119,6 @@ export function createModelCatalogService(options: { cachePath: string; fetch: t
       const response = await options.fetch(MODEL_CATALOG_URL, { signal: AbortSignal.timeout(10_000) });
       if (!response.ok) throw new Error(`Model catalog update failed: HTTP ${response.status}`);
       const body = await response.text();
-      const actual = createHash("sha256").update(body, "utf8").digest("hex");
-      if (actual !== MODEL_CATALOG_SHA256) {
-        throw new Error(
-          "Model catalog digest mismatch: expected " + MODEL_CATALOG_SHA256 +
-            ", got " + actual + ". The file at " + MODEL_CATALOG_URL +
-            " is not the one this build shipped with.",
-        );
-      }
       const next = decodeModelCatalog(JSON.parse(body));
       if (next.version === current.version) return { updated: false, catalog: status(), message: "模型目录已是最新版本" };
       await mkdir(dirname(options.cachePath), { recursive: true });

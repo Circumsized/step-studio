@@ -43,9 +43,12 @@ test("a release outranks its own prereleases", () => {
   older("1.2.3-beta", "1.2.3");
 });
 
-test("numeric prerelease identifiers outrank alphanumeric ones", () => {
-  // Also semver, and also load-bearing: `1.2.3-1` is newer than `1.2.3-alpha`.
-  older("1.2.3-alpha", "1.2.3-1");
+test("numeric prerelease identifiers rank below alphanumeric ones", () => {
+  // Semver 11.4.3: "Numeric identifiers always have lower precedence than
+  // alphanumeric identifiers", so `1.2.3-1` is OLDER than `1.2.3-alpha`. The
+  // assertion here used to run the other way and the implementation was right;
+  // only the test was wrong.
+  older("1.2.3-1", "1.2.3-alpha");
   older("1.2.3-1", "1.2.3-2");
 });
 

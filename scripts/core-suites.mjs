@@ -27,6 +27,9 @@ export const CORE_NODE_SUITES = [
   // Which model catalog the composer sees: the Runtime's, or the config file's.
   "packages/host-client-api/dist/test/runtime-models.test.js",
   "packages/host-client-api/dist/test/session-delete-command.test.js",
+  // Catalog refresh: the update path, and the trust boundary it crosses. Its
+  // fetch is stubbed, so it is hermetic.
+  "packages/host-client-api/dist/test/model-adaptation.test.js",
   // Runtime resolution and the trust gate: which runtime earns a controller,
   // and which executable actually gets spawned.
   // Local file writes, Electron boundaries, installation and update recovery.
@@ -43,16 +46,25 @@ export const CORE_NODE_SUITES = [
   "packages/runtime-installer/dist/test/installer.test.js",
   "packages/runtime-installer/dist/test/update-v2.test.js",
   "packages/runtime-installer/dist/test/update-index.test.js",
+  // Version ordering, including the semver 11.4.3 numeric-below-alphanumeric rule.
+  "packages/runtime-installer/dist/test/version-compare.test.js",
 ];
 
 export const CORE_RENDERER_SUITES = [
   "src/composer/ChipComposer.test.tsx",
   "src/composer/dispatch.test.ts",
   "src/composer/serialize.test.ts",
+  // The service-tier trigger, the minimap filter menu and the SSH connection
+  // dialog. All three are end-user surfaces whose accessible names changed
+  // under the components while the tests stayed behind, so the default gate was
+  // green on suites that were red.
+  "src/composer/ServiceTierPicker.test.tsx",
   "src/conversation/conversationStore.test.ts",
+  "src/conversation/ConversationMinimap.test.tsx",
   "src/conversation/useConversation.test.ts",
   "src/InteractionDeck.test.tsx",
   "src/sessionLifecycle.test.ts",
   "src/HistoryPage.test.tsx",
   "src/settings/DesktopUpdateRecovery.test.tsx",
+  "src/workspaces/ExecutionTargets.test.tsx",
 ];

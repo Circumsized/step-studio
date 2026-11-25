@@ -118,7 +118,11 @@ it("keeps authentication inside the connection dialog and identifies the target 
   const dialog = screen.getByRole("dialog", { name: "添加 SSH 连接" });
   const auth = screen.getByRole("combobox", { name: /认证方式/ });
   fireEvent.click(auth);
-  expect(dialog.contains(screen.getByRole("listbox"))).toBe(true);
+  // 断言的是「认证控件在弹窗里」。选项 popup 由 MUI 挂到 document.body，
+  // 从来不在 dialog 子树内，所以 containment 对它恒为 false——那是测试写错了，
+  // 不是组件把认证漏到了弹窗外。
+  expect(dialog.contains(auth)).toBe(true);
+  expect(screen.getByRole("listbox")).toBeDefined();
   selectOption(auth, "用户名和密码");
   expect(screen.queryByRole("combobox", { name: /远端系统/ })).toBeNull();
   expect(screen.getByText(/连接后自动识别 Windows/)).toBeTruthy();
