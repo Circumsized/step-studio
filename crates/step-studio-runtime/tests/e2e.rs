@@ -42,12 +42,15 @@ fn fake_step_wrapper(dir: &std::path::Path) -> PathBuf {
     // rather than "fixture missing". A fixture belongs with its consumers.
     let fake = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/fake-step.mjs");
-    let wrapper = dir.join("fake-step");
-    std::fs::write(
-        &wrapper,
-        format!("#!/bin/sh\nexec node {} \"$@\"\n", fake.display()),
-    )
-    .expect("write wrapper");
+    let fake = fake.display().to_string();
+    #[cfg(unix)]
+    let (wrapper, body) = (
+        dir.join("fake-step"),
+        format!("#!/bin/sh\nexec node {fake} \"$@\"\n"),
+    );
+    #[cfg(windows)]
+    let (wrapper, body) = (dir.join("fake-step.cmd"), format!("@echo off\r\nnode \"{fake}\" %*\r\n"));
+    std::fs::write(&wrapper, body).expect("write wrapper");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

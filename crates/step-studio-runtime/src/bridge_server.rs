@@ -1358,9 +1358,19 @@ mod tests {
     /// that fails because node is missing says nothing about the bound.
     fn fake_step_wrapper(dir: &std::path::Path) -> PathBuf {
         let fake = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/fake-step.mjs");
-        let wrapper = dir.join("fake-step");
-        std::fs::write(&wrapper, format!("#!/bin/sh\nexec node {} \"$@\"\n", fake.display()))
-            .expect("write wrapper");
+        let fake = fake.display().to_string();
+        // `#!/bin/sh` on Unix, `fake-step.cmd` on Windows: a `#!` script is not
+        // a Win32 executable, so the spawn fails with ERROR_BAD_EXE_FORMAT and
+        // the test reads that as "the silent peer was refused for the wrong
+        // reason". Same shape as the daemon's own fixture wrapper.
+        #[cfg(unix)]
+        let (wrapper, body) = (
+            dir.join("fake-step"),
+            format!("#!/bin/sh\nexec node {fake} \"$@\"\n"),
+        );
+        #[cfg(windows)]
+        let (wrapper, body) = (dir.join("fake-step.cmd"), format!("@echo off\r\nnode \"{fake}\" %*\r\n"));
+        std::fs::write(&wrapper, body).expect("write wrapper");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
