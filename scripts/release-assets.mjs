@@ -6,10 +6,26 @@
  */
 import { join } from "node:path";
 
-import { MAC_TARGET_PLATFORM, macDmgFileName, macUpdateZipFileName } from "./mac-bundle.mjs";
 import { runtimeOsOf } from "./target-platform.mjs";
 
-export { MAC_TARGET_PLATFORM };
+export const MAC_TARGET_PLATFORM = "darwin-arm64";
+
+/**
+ * macOS asset names. These three used to come from `scripts/mac-bundle.mjs`,
+ * which the Electron removal deleted while this file kept importing it — so
+ * every release script that reaches `release-assets.mjs` died at import time,
+ * before it could do anything. The rest of that module was electron-builder
+ * config derivation and ad hoc signing, all of which went with Electron; only
+ * the names are still load-bearing, and `release-assets.test.mjs` pins them.
+ */
+export function macDmgFileName(version) {
+  return `Step-Studio-${version}-macos-arm64.dmg`;
+}
+
+/** Update payload: the signed .app as a zip. The dmg is for first installs. */
+export function macUpdateZipFileName(version) {
+  return `Step-Studio-${version}-macos-arm64.zip`;
+}
 
 function archOf(platform) {
   return platform.slice(platform.indexOf("-") + 1);

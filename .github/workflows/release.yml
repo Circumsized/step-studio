@@ -93,14 +93,42 @@ jobs:
     permissions:
       contents: read
     steps:
+      # `submodules: recursive` because the renderer imports chart sources from
+      # the patched vendor tree. `fetch-depth: 0` because `log_tests` walks the
+      # real repository: at the default depth 1 the page holds one commit,
+      # `skip(1)` is empty, and one of its assertions has nothing left to assert.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
         with:
           node-version: 24
+          cache: npm
+      # wry renders through webkit2gtk, and `cargo test --workspace` has
+      # `apps/desktop-tauri/src-tauri` in its members — without these the job
+      # dies in the shell's build script before a single test runs. Same list
+      # the `rust-shell` CI job installs.
+      - name: Install GTK/WebKit dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.8.0
+      # Without the install and the overlay, `npm run check` fails on its first
+      # step: the workspace packages resolve from a `dist` that `npm ci` does not
+      # produce, and the renderer's chart imports need the patched vendor tree.
+      # This job used to run `check` straight off a bare checkout, so its first
+      # run could not even find `typescript`.
+      - run: npm ci
+      - run: npm run vendor:overlay:apply
+      - run: npm run build:packages
+      # Two frontend artifacts the shell's build script reads and cargo does not
+      # produce: `include_str!("../../dist/bridge-init.js")` and `frontendDist`.
+      - run: npm run build:bridge -w @step-studio/desktop-tauri
+      - run: npm run build -w @step-studio/renderer
       - name: npm run check -- --production
         run: npm run check -- --production
       # One test in this suite needs a live provider: `step_rpc`'s
@@ -117,33 +145,132 @@ jobs:
         with:
           command: check all
 
-  # Builds the desktop installers and attaches them to the release.
+  # Builds the Windows installers and attaches them to the release.
   #
   # There was no job that produced them, so the only way to get a Setup exe was to
   # run `tauri build` by hand — which is how `release-assets.mjs` came to advertise
-  # an artifact name nothing ever produced.
+  # an artifact name nothing ever produced. Three defects made that permanent:
+  #
+  #   1. No `npm ci`, no submodules, no vendor overlay, so `tauri build`'s
+  #      beforeBuildCommand could not resolve a single workspace package.
+  #   2. The upload was named `release-candidate-installer`, but
+  #      `platformOfReleaseCandidate` only accepts `x64`, `arm64` and
+  #      `darwin-arm64` — so `publish` threw `Unexpected release candidate` on the
+  #      first directory it listed.
+  #   3. Nothing generated the signed `updates-<platform>.json` the publisher
+  #      verifies and uploads, so even a correctly named candidate was incomplete.
+  #
+  # `environment: release` is what makes `secrets.OMP_RUNTIME_SIGNING_KEY`
+  # available; the previous job had no environment and could not have signed.
+  #
+  # Still missing, deliberately: darwin-arm64. It needs the ditto zip of the
+  # signed `.app` that `pack:mac` used to produce, and no Windows-only release
+  # should wait on it. `include_macos` stays a no-op until that step exists.
   build-installer:
-    needs: [prepare]
-    runs-on: windows-latest
+    needs: [prepare, runtime]
+    runs-on: ${{ matrix.os }}
+    environment: release
+    timeout-minutes: 180
     permissions:
       contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: win32-x64,   candidate: x64,   os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { platform: win32-arm64, candidate: arm64, os: windows-11-arm, target: aarch64-pc-windows-msvc }
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STEP_STUDIO_TARGET_PLATFORM: win32
+      STEP_STUDIO_TARGET_ARCH: ${{ matrix.candidate }}
+      STEP_STUDIO_RUNTIME_CHANNEL: ${{ inputs.runtime_channel || 'stable' }}
+      STEP_STUDIO_RELEASE_KIND: ${{ needs.prepare.outputs.kind }}
+      STEP_STUDIO_RUNTIME_MIN_APP_VERSION: ${{ inputs.runtime_min_app_version }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
         with:
           node-version: 24
+          cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: x86_64-pc-windows-msvc
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.8.0
+      # Same reason as `verify`: the renderer's chart imports come from the
+      # patched vendor tree, and every workspace package resolves from a `dist`
+      # that `npm ci` does not create.
+      - run: npm ci
+      - run: npm run vendor:overlay:apply
+      - run: npm run build:packages
+      # `find-runtime.sh` hashes committed inputs, so it recomputes the same
+      # artifact key the `runtime` job uploaded. Pattern-matching the download
+      # instead would also work; this way a channel change is visible here.
+      - name: Find the signed Runtime
+        id: runtime
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          BUN_VERSION: ${{ env.BUN_VERSION }}
+          REBUILD: "false"
+        run: bash .github/scripts/find-runtime.sh
+      # By `key`, not `name`: when a Runtime is reused, `name` points at the
+      # earlier run's candidate while the `runtime` job re-uploads those bytes
+      # under `key` in *this* run. Downloading `name` would find nothing.
+      - name: Download the signed Runtime
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ steps.runtime.outputs.key }}
+          path: runtime/${{ matrix.platform }}
       - name: Build the NSIS installer
         working-directory: apps/desktop-tauri
-        run: npx tauri build --target x86_64-pc-windows-msvc --bundles nsis
+        run: npx tauri build --target ${{ matrix.target }} --bundles nsis
+      # The catalog points at a stable asset name; tauri names its output after
+      # productName and version. Glob rather than spell it: the arch token moves.
+      - name: Stage the installer under its release asset name
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          mkdir -p outputs/installer
+          setup="$(ls apps/desktop-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe | head -1)"
+          cp "$setup" "outputs/installer/Step-Studio-Setup-${version}-windows-${{ matrix.candidate }}.exe"
+      # Reads the previously published signed catalogs so this candidate can
+      # prove it does not move a published Runtime or app backwards; without it
+      # every sequence restarts at 1. It writes STEP_STUDIO_PREVIOUS_CATALOG_DIR
+      # and STEP_STUDIO_PREVIOUS_UPDATE_INDEX to $GITHUB_ENV, which is why it is
+      # its own step: variables written there are visible to *later* steps, not
+      # to the rest of the same `run` block.
+      - name: Collect the previous signed catalogs
+        run: node scripts/collect-update-history.mjs
+      # `--setup` is not passed: the staged path already is
+      # `packagedAppAssetPath()`, which is what the script looks for by default.
+      - name: Build and verify the signed update candidate
+        env:
+          STEP_STUDIO_SIGNING_SECRET: ${{ secrets.OMP_RUNTIME_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/step-studio-runtime-signing.pem"
+          printf '%s' "$STEP_STUDIO_SIGNING_SECRET" > "$key"
+          chmod 600 "$key"
+          trap 'rm -f "$key"' EXIT
+          export STEP_STUDIO_RUNTIME_SIGNING_KEY="$key"
+          export STEP_STUDIO_RUNTIME_SIGNING_KEY_ID="$(node -p 'require("./packaging/keys/trusted-keys.json").activeKeyId')"
+          node scripts/build-update-assets-v2.mjs --runtime-dir "runtime/${{ matrix.platform }}"
+          node scripts/verify-update-assets-v2.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: release-candidate-installer
-          path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+          # `releaseCandidateName()` for a Windows platform is exactly this.
+          # `publish` downloads `release-candidate-*` and derives the platform
+          # back out of the directory name, so the suffix is load-bearing.
+          name: release-candidate-${{ matrix.candidate }}
+          compression-level: 0
+          path: outputs/release/${{ matrix.candidate }}/
           if-no-files-found: error
 
   publish:

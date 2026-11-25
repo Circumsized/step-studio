@@ -147,4 +147,18 @@ function macReleaseNotes(manifest) {
     : "这是 Runtime 独立更新，不是桌面安装包。在 Step Studio 中检查更新即可。\n\n";
   return `# ${app ? `Step Studio ${app.version}` : `Step Runtime ${rt.version}`}\n\n${install}## Runtime\n\n版本：${rt.version} · 通道：${rt.channel} · 最低桌面版本：${rt.minAppVersion}\n\n<details>\n<summary>自动更新附件说明（普通用户无需下载）</summary>\n\n${app ? "- 整包 ZIP（macos-arm64.zip）：已签名的 .app，供应用内更新使用；首次安装请用 dmg。\n" : ""}- Runtime ZIP：签名运行时工件，供自动更新或离线导入。\n- blockmap：增量下载索引，不是可执行安装包。\n- updates-*.json：签名版本清单，供更新器使用。\n\n</details>\n`;
 }
-if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) buildUpdateAssetsV2().then(r => console.log(`Built signed update catalog: ${r.out}`)).catch(e => { console.error(e.message); process.exitCode = 1; });
+if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
+  // `--runtime-dir` and `--setup` let a release job point straight at the
+  // artifacts it just produced, instead of restaging them under
+  // `packaging/runtime-payload/<version>/` the way `pack:win:prepare` used to.
+  // Without them the script discovers both by convention, which is what the
+  // local `npm run updates:build` path still does.
+  const argv = process.argv.slice(2);
+  const value = (flag) => { const at = argv.indexOf(flag); return at === -1 ? undefined : argv[at + 1]; };
+  const options = {};
+  for (const [flag, key] of [["--runtime-dir", "runtimeDir"], ["--setup", "setupPath"], ["--first-install", "firstInstallPath"]]) {
+    const given = value(flag);
+    if (given !== undefined) options[key] = given;
+  }
+  buildUpdateAssetsV2(options).then(r => console.log(`Built signed update catalog: ${r.out}`)).catch(e => { console.error(e.message); process.exitCode = 1; });
+}

@@ -4394,7 +4394,7 @@ checksum = "ff7589a1859b09232522bb9edf076ca7fcf14ded96685d3fa629db73023ffbb7"
 
 [[package]]
 name = "step-studio-bridge"
-version = "0.1.0"
+version = "0.1.17"
 dependencies = [
  "base64 0.22.1",
  "criterion",
@@ -4408,7 +4408,7 @@ dependencies = [
 
 [[package]]
 name = "step-studio-desktop-tauri"
-version = "0.1.0"
+version = "0.1.17"
 dependencies = [
  "aes-gcm",
  "getrandom 0.3.4",
@@ -4430,7 +4430,7 @@ dependencies = [
 
 [[package]]
 name = "step-studio-host"
-version = "0.1.0"
+version = "0.1.17"
 dependencies = [
  "ed25519-dalek",
  "serde",
@@ -4442,18 +4442,18 @@ dependencies = [
 
 [[package]]
 name = "step-studio-peer-uid"
-version = "0.1.0"
+version = "0.1.17"
 
 [[package]]
 name = "step-studio-pty-bench"
-version = "0.1.0"
+version = "0.1.17"
 dependencies = [
  "portable-pty",
 ]
 
 [[package]]
 name = "step-studio-runtime"
-version = "0.1.0"
+version = "0.1.17"
 dependencies = [
  "base64 0.22.1",
  "hmac",
@@ -4465,7 +4465,7 @@ dependencies = [
 
 [[package]]
 name = "step-studio-sessions"
-version = "0.1.0"
+version = "0.1.17"
 dependencies = [
  "serde",
  "serde_json",
@@ -4473,7 +4473,7 @@ dependencies = [
 
 [[package]]
 name = "step-studio-tui"
-version = "0.1.0"
+version = "0.1.17"
 dependencies = [
  "crossterm",
  "ratatui",

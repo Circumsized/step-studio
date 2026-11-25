@@ -12,7 +12,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.17"
 # The whole workspace is MIT. See LICENSE and NOTICE.
 license = "MIT"
 edition = "2021"
