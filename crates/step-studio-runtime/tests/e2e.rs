@@ -85,10 +85,29 @@ fn launch(tag: &str) -> (AdapterConfig, PathBuf) {
     config_in(&dir, step)
 }
 
+/// A socket filename unique to this test's directory.
+///
+/// On Unix the directory is part of the path and the name can be constant. On
+/// Windows the transport reduces a path to its last component, so a constant
+/// name is a shared pipe — and `max_instances(1)` means every test but the
+/// first to bind fails.
+fn socket_name(dir: &std::path::Path) -> String {
+    let stem = dir
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| "adapter".to_string());
+    format!("{stem}.sock")
+}
+
 fn config_in(dir: &std::path::Path, step_command: String) -> (AdapterConfig, PathBuf) {
     {
         let config = AdapterConfig {
-            endpoint: dir.join("bridge.sock").to_string_lossy().to_string(),
+            // Named after the directory, not a constant: on Windows
+            // `endpoint_for_bind` keeps only the last path component, so eight
+            // tests that all call theirs `bridge.sock` are one pipe name and
+            // only the first adapter to bind survives. The directories were
+            // always unique; the names were not.
+            endpoint: dir.join(socket_name(dir)).to_string_lossy().to_string(),
             token: "rust-runtime-token".to_string(),
             runtime_epoch: 1,
             cwd: dir.to_string_lossy().to_string(),
