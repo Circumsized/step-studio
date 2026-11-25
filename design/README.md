@@ -13,6 +13,7 @@
 | [`review/plan-2026-11-15.md`](review/plan-2026-11-15.md) | 安全评审交付物：七项发现的六 gate 审查、13 条假阳性清单、§22 Windows 真机清单 | 回溯某项安全发现的判定依据时 |
 | [`review/afk-loop-postmortem-2026-11-25.md`](review/afk-loop-postmortem-2026-11-25.md) | AFK 循环复盘：一次 Windows CI 修复暴露的五个流程缺陷（反馈 15–20 分钟 vs 业界 10 分钟硬上限、测试无超时、本地编译≠目标平台、同类 bug 修七次才修根因、为变绿关门），逐条附出处与对策 | 下次让 agent 无人值守跑长任务前；调 CI 分层时 |
 | [`progress/`](progress/README.md) | **完成态台账**：一个里程碑一个文件，一条验收条件一行证据；`summary.md` 是总览，`blockers.md` 是跨里程碑阻塞，`audit-*.md` 是只读评估快照 | 想知道「某条验收到底过了没有、卡什么」 |
+| [`workflow/`](workflow/README.md) | **开发工作流**：AFK 无人值守、CI/CD 分层与门禁、PR 审查方法论、agent loop 循环流程；README 里是按 A/B/C 三类归集的真实问题对照表 | 让 agent 跑长任务前；调 CI 或审查流程时 |
 
 不在本目录的相邻文件：
 
