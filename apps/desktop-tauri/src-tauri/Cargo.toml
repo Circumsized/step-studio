@@ -54,7 +54,7 @@ aes-gcm = "0.10"
 # Already in this crate's closure, so it adds no package.
 regex = "1"
 # The OS randomness source, for the data-encryption key and each GCM nonce.
-getrandom = "0.3"
+getrandom = "0.4"
 # Navigation URLs are parsed here so a `file:` or `data:` target is refused before
 # it reaches the runtime. Already in this crate's closure.
 url = "2"

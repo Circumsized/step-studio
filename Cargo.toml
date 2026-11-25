@@ -35,7 +35,7 @@ sha2 = "0.10"
 base64 = "0.22"
 # Already in the lock three times over (via rand_core, ed25519-dalek and
 # others), so the bridge token costs no new package.
-getrandom = "0.2"
+getrandom = "0.4"
 step-studio-bridge = { path = "crates/studio-bridge" }
 step-studio-sessions = { path = "crates/step-studio-sessions" }
 # The TUI surface's renderer and terminal. See §9.4: this is the registered
