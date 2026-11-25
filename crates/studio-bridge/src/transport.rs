@@ -346,8 +346,17 @@ pub fn bind(endpoint: &str) -> io::Result<Listener> {
         // rebind needs — makes 255 live, and `serve_surface` is deliberately
         // one-surface-at-a-time: a second surface waits rather than competing.
         // 255 instances of one name would let it compete.
+        //
+        // `endpoint_for_bind` first, so a caller may hand `bind` either the
+        // socket path or the pipe name. `CreateNamedPipeW` takes a name in the
+        // `\\.\pipe\` namespace and nothing else, so a path here is
+        // ERROR_INVALID_NAME — and that mistake has now been made in seven test
+        // sites, each of which passed the path and the pipe name to different
+        // calls. The conversion is idempotent: a name that already carries the
+        // prefix is returned unchanged, which is what `serve` hands in.
+        let name = endpoint_for_bind(endpoint);
         Ok(std::sync::Arc::new(
-            miow::pipe::NamedPipeBuilder::new(endpoint)
+            miow::pipe::NamedPipeBuilder::new(&name)
                 .first(false)
                 .max_instances(1)
                 .create()?,
