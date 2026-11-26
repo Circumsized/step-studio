@@ -49,8 +49,8 @@ jobs:
       kind: ${{ steps.config.outputs.kind }}
       runtime_platforms: ${{ steps.config.outputs.runtime_platforms }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v4.4.1
         with:
           node-version: 24
       - id: config
@@ -97,11 +97,11 @@ jobs:
       # the patched vendor tree. `fetch-depth: 0` because `log_tests` walks the
       # real repository: at the default depth 1 the page holds one commit,
       # `skip(1)` is empty, and one of its assertions has nothing left to assert.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
           submodules: recursive
           fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v4.4.1
         with:
           node-version: 24
           cache: npm
@@ -206,11 +206,11 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
           submodules: recursive
           fetch-depth: 0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v4.4.1
         with:
           node-version: 24
           cache: npm
@@ -246,7 +246,7 @@ jobs:
       # earlier run's candidate while the `runtime` job re-uploads those bytes
       # under `key` in *this* run. Downloading `name` would find nothing.
       - name: Download the signed Runtime
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ steps.runtime.outputs.key }}
           path: runtime/${{ matrix.platform }}
@@ -304,7 +304,7 @@ jobs:
           export STEP_STUDIO_RUNTIME_SIGNING_KEY_ID="$(node -p 'require("./packaging/keys/trusted-keys.json").activeKeyId')"
           node scripts/build-update-assets-v2.mjs --runtime-dir "${{ steps.staged.outputs.dir }}"
           node scripts/verify-update-assets-v2.mjs
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           # `releaseCandidateName()` for a Windows platform is exactly this.
           # `publish` downloads `release-candidate-*` and derives the platform
@@ -326,8 +326,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v4.4.1
         with:
           node-version: 24
       # No `merge-multiple: true`. With it, every matching artifact's contents
@@ -337,7 +337,7 @@ jobs:
       # matches — and the first entry throws `Unexpected release candidate`.
       # Without it, each artifact keeps its own subdirectory, which is what the
       # publisher expects.
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: release-candidate-*
           path: outputs/publish
