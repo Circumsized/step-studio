@@ -10,9 +10,9 @@
 | **Studio 协议版本** | `packages/studio-protocol/src/contracts/protocol.ts` `STUDIO_PROTOCOL_VERSION` | `1` | 帧格式：大端长度前缀、五键帧头、记录/字段分隔符。**改它等于换一种线上方言** |
 | **客户端契约版本** | 同文件 `CLIENT_CONTRACT_VERSION`（`client-contract` 转出口） | `2` | `ClientBootstrap` 的形状。renderer 与 host 必须一致 |
 | **Runtime 兼容窗口** | 更新清单里 `studioProtocol: { min, max }`（`packages/runtime-installer/src/update-index.ts`） | 由 Runtime 侧声明 | 这个 Runtime 能驱动哪些协议版本的壳 |
-| **应用版本** | `package.json` `0.1.17`；`apps/desktop-tauri/package.json` 与 `tauri.conf.json` 仍是 `0.1.0` | 不一致 | 更新清单的 `minAppVersion` 比对它 |
+| **应用版本** | `package.json`、`Cargo.toml`（`[workspace.package]`）、`apps/desktop-tauri/package.json`、`tauri.conf.json` 四处一致 | 一致 | 更新清单的 `minAppVersion` 比对它。`scripts/version-alignment.test.mjs` 钉住这个一致 |
 
-最后一行是**已知的不一致，不是疏漏**：壳作为独立 surface 从 `0.1.0` 起版，而仓库根版本跟随 workspace。改哪一边都牵动发布口径，记在这里而不是各自猜。
+最后一行曾经记的是「已知的不一致，不是疏漏：壳作为独立 surface 从 `0.1.0` 起版」。**那个决定是错的，2026-11-25 更正。** 它没算到发布链读版本的方式：`scripts/build-update-assets-v2.mjs` 从 `package.json` 取 `appVersion`，据此把资产命名为 `Step-Studio-Setup-0.1.17-windows-x64.exe` 并写进签名清单的 `app.version`；而 `tauri build` 从 `tauri.conf.json` 取版本，产出的是 `Step Studio_0.1.0_x64-setup.exe`。签名清单于是宣称一个安装包并不携带的版本，`minAppVersion` 的比对也跟着错。壳作为独立 surface 起版这件事本身没错，错的是让它和发布口径脱钩——所以现在四处对齐，由测试钉住。
 
 ## 谁兼容谁
 
@@ -75,4 +75,4 @@ if (bootstrap.contractVersion !== CLIENT_CONTRACT_VERSION) {
 
 - **兼容窗口的真实行为没有实机验过**：`studioProtocol.min/max` 的判定逻辑只在单测里覆盖，没有跑过「旧壳 + 新 Runtime」这个组合。
 - **诊断页不显示这四个版本号**。版本不匹配时用户无从判断差在哪，只能看到一句 `UNAVAILABLE`。这是 [#11](https://github.com/Circumsized/step-studio/issues/11) 里明确要做而没做的部分。
-- **应用版本的三处不一致**（`package.json` / `tauri.conf.json` / `desktop-tauri/package.json`）没有对发布口径的影响评估。
+- 应用版本已对齐（见上），但**对齐是手工维持的**：`scripts/version-alignment.test.mjs` 只比对字面量，不会阻止有人在第五处引入新的版本字段。

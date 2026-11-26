@@ -100,6 +100,11 @@ export async function buildUpdateAssetsV2(options = {}) {
     // The macOS dmg is downloaded by people, never by the updater. It rides in the signed
     // manifest only so verification and publishing can prove its bytes; clients ignore it.
     const firstInstall = options.firstInstallPath ?? packagedFirstInstallPath(root, appVersion, platform);
+    // `firstInstallAssetName` is undefined off macOS: on Windows the catalog's
+    // Setup serves both roles, so an explicit path there is a caller error, not
+    // an extra asset. Publishing it would put a `.dmg` into a Windows release
+    // the notes never mention.
+    if (firstInstall !== undefined && !darwin) throw new Error(`--first-install is macOS-only; ${platform} has no first-install download`);
     if (firstInstall !== undefined) {
       const dmg = join(out, basename(firstInstall));
       if (resolve(firstInstall) !== resolve(dmg)) await cp(firstInstall, dmg);
@@ -154,11 +159,20 @@ if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
   // Without them the script discovers both by convention, which is what the
   // local `npm run updates:build` path still does.
   const argv = process.argv.slice(2);
-  const value = (flag) => { const at = argv.indexOf(flag); return at === -1 ? undefined : argv[at + 1]; };
+  const known = new Map([["--runtime-dir", "runtimeDir"], ["--setup", "setupPath"], ["--first-install", "firstInstallPath"]]);
   const options = {};
-  for (const [flag, key] of [["--runtime-dir", "runtimeDir"], ["--setup", "setupPath"], ["--first-install", "firstInstallPath"]]) {
-    const given = value(flag);
-    if (given !== undefined) options[key] = given;
+  for (let at = 0; at < argv.length; at += 1) {
+    const key = known.get(argv[at]);
+    if (key === undefined) throw new Error(`Unknown option: ${argv[at]}`);
+    const given = argv[at + 1];
+    // `indexOf` + `argv[at + 1]` silently accepted `--setup` as the last token
+    // and let `--setup --first-install /p` swallow the next flag as a path, so a
+    // typo in the release job surfaced as an ENOENT from `cp()` deep in the
+    // build rather than at the command line.
+    if (given === undefined || given.startsWith("--")) throw new Error(`${argv[at]} needs a value`);
+    if (options[key] !== undefined) throw new Error(`${argv[at]} given more than once`);
+    options[key] = given;
+    at += 1;
   }
   buildUpdateAssetsV2(options).then(r => console.log(`Built signed update catalog: ${r.out}`)).catch(e => { console.error(e.message); process.exitCode = 1; });
 }

@@ -46,6 +46,12 @@ jobs:
       - run: npm ci
       # The renderer imports chart sources from the patched vendor tree.
       - run: npm run vendor:overlay:apply
+      # The catalog is generated from the pinned upstream models.json, and
+      # `MODEL_CATALOG_SHA256` must match it. Without this the two could drift
+      # apart and nothing would say so: the check is a manual command, so it was
+      # never run by anything. The signature half is release-time and runs in
+      # release.yml's `verify` instead — see scripts/model-catalog.mjs.
+      - run: npm run models:catalog:check
       # Architecture rules, selector rules, compile, core suites, then the
       # production bundles. One entry point, same code path as a local run.
       - run: npm run check -- --production

@@ -124,6 +124,12 @@ jobs:
       # run could not even find `typescript`.
       - run: npm ci
       - run: npm run vendor:overlay:apply
+      # A catalog whose `MODEL_CATALOG_SHA256` no longer matches the file is a
+      # commit that lies about what it ships — and a catalog whose `.sig.json` is
+      # missing makes every client's refresh 404 while every other gate stays
+      # green. Both are checked here rather than on every push, because the
+      # signature can only be produced by whoever holds the Release secret.
+      - run: node scripts/model-catalog.mjs --check --signature
       - run: npm run build:packages
       # Two frontend artifacts the shell's build script reads and cargo does not
       # produce: `include_str!("../../dist/bridge-init.js")` and `frontendDist`.
@@ -177,9 +183,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Windows x64 only. `win32-arm64` is not a smaller version of this job:
+        # `apps/desktop-tauri/src-tauri/tauri.windows.conf.json` hardcodes
+        # `x86_64-pc-windows-msvc` in both `bundle.resources` and
+        # `beforeBuildCommand`, so an arm64 leg would either fail to find x64
+        # std on an arm64-only toolchain or — if that were papered over — ship an
+        # ARM64 shell with x64 `step-studio-host.exe` inside it, because
+        # `verify-update-assets-v2.mjs` never checks the Setup's PE arch.
+        # Fixing it means parameterising that triple and adding the arch
+        # assertion; until then `target_arch: arm64` fails loudly below rather
+        # than silently building x64.
         include:
-          - { platform: win32-x64,   candidate: x64,   os: windows-latest, target: x86_64-pc-windows-msvc }
-          - { platform: win32-arm64, candidate: arm64, os: windows-11-arm, target: aarch64-pc-windows-msvc }
+          - { platform: win32-x64, candidate: x64, os: windows-latest, target: x86_64-pc-windows-msvc }
     env:
       GH_TOKEN: ${{ github.token }}
       STEP_STUDIO_TARGET_PLATFORM: win32
@@ -210,6 +225,13 @@ jobs:
       - run: npm ci
       - run: npm run vendor:overlay:apply
       - run: npm run build:packages
+      # `target_arch` used to narrow a matrix that no longer reads it, so asking
+      # for arm64 built x64 and said nothing. Fail here instead.
+      - name: Refuse an architecture this job cannot build
+        if: ${{ inputs.target_arch == 'arm64' }}
+        run: |
+          echo "::error::win32-arm64 needs tauri.windows.conf.json parameterised off x86_64-pc-windows-msvc, plus a PE-arch assertion in verify-update-assets-v2.mjs. Build x64 until then."
+          exit 1
       # `find-runtime.sh` hashes committed inputs, so it recomputes the same
       # artifact key the `runtime` job uploaded. Pattern-matching the download
       # instead would also work; this way a channel change is visible here.
@@ -228,17 +250,36 @@ jobs:
         with:
           name: ${{ steps.runtime.outputs.key }}
           path: runtime/${{ matrix.platform }}
+      # The signed payload is one level below where the download landed:
+      # `defaultArtifactDirectory()` writes to
+      # `packages/runtime-installer/dist/artifacts/<platform>/<runtimeVersion>/`,
+      # and the `runtime` job uploads the platform directory, so the artifact's
+      # own root is the version directory. `verifySignedArtifact` reads
+      # `runtime-manifest.json` from the directory it is given, so passing the
+      # platform directory is an ENOENT.
+      - name: Locate the staged Runtime
+        id: staged
+        run: |
+          set -euo pipefail
+          root="runtime/${{ matrix.platform }}"
+          versions="$(ls "$root")"
+          [ "$(printf '%s\n' "$versions" | wc -l)" -eq 1 ] || { echo "expected exactly one staged Runtime under $root, got: $versions"; exit 1; }
+          echo "dir=$root/$versions" >> "$GITHUB_OUTPUT"
       - name: Build the NSIS installer
         working-directory: apps/desktop-tauri
         run: npx tauri build --target ${{ matrix.target }} --bundles nsis
       # The catalog points at a stable asset name; tauri names its output after
       # productName and version. Glob rather than spell it: the arch token moves.
+      # The path is the repository root's `target/`, not
+      # `apps/desktop-tauri/target/` — `src-tauri` declares no `[workspace]`
+      # table and the root `Cargo.toml` lists it as a member, so cargo puts the
+      # whole workspace's output in one directory.
       - name: Stage the installer under its release asset name
         run: |
           set -euo pipefail
           version="$(node -p 'require("./package.json").version')"
           mkdir -p outputs/installer
-          setup="$(ls apps/desktop-tauri/target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe | head -1)"
+          setup="$(ls target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe | head -1)"
           cp "$setup" "outputs/installer/Step-Studio-Setup-${version}-windows-${{ matrix.candidate }}.exe"
       # Reads the previously published signed catalogs so this candidate can
       # prove it does not move a published Runtime or app backwards; without it
@@ -261,7 +302,7 @@ jobs:
           trap 'rm -f "$key"' EXIT
           export STEP_STUDIO_RUNTIME_SIGNING_KEY="$key"
           export STEP_STUDIO_RUNTIME_SIGNING_KEY_ID="$(node -p 'require("./packaging/keys/trusted-keys.json").activeKeyId')"
-          node scripts/build-update-assets-v2.mjs --runtime-dir "runtime/${{ matrix.platform }}"
+          node scripts/build-update-assets-v2.mjs --runtime-dir "${{ steps.staged.outputs.dir }}"
           node scripts/verify-update-assets-v2.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -289,11 +330,17 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.1
         with:
           node-version: 24
+      # No `merge-multiple: true`. With it, every matching artifact's contents
+      # land directly in `outputs/publish/`, so `readdir` sees
+      # `updates-win32-x64.json` and the Setup exe instead of the
+      # `release-candidate-<arch>/` directories `platformOfReleaseCandidate`
+      # matches — and the first entry throws `Unexpected release candidate`.
+      # Without it, each artifact keeps its own subdirectory, which is what the
+      # publisher expects.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: release-candidate-*
           path: outputs/publish
-          merge-multiple: true
       - name: Publish complete immutable release
         env:
           GH_TOKEN: ${{ github.token }}
