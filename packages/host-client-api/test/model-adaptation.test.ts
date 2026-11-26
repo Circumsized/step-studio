@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync, sign } from "node:crypto";
 import { test } from "node:test";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { MODEL_THINKING_MODES, modelParameterValues, thinkingForRoleModel, clampRoleThinking, type ModelCatalogDocument, type ModelThinkingConfig } from "@step-studio/client-contract";
-import { createModelCatalogService, resolveModelAdaptation, decodeModelCatalog, MODEL_CATALOG_URL } from "../src/model-adaptation.js";
+import {
+  createModelCatalogService, resolveModelAdaptation, decodeModelCatalog,
+  MODEL_CATALOG_URL, MODEL_CATALOG_SIGNATURE_URL, MODEL_CATALOG_PUBLIC_KEYS,
+  createCatalogSignatureVerifier, verifyCatalogSignature, MODEL_CATALOG_MAX_BYTES,
+} from "../src/model-adaptation.js";
 import { BUILTIN_MODEL_CATALOG } from "../src/model-catalog.generated.js";
 import { createOmpModelsService, toYamlProvider } from "../src/omp-models-adapter.js";
 import { parseModelsYml } from "../src/models-yml.js";
@@ -44,13 +49,16 @@ test("manual catalog refresh is offline at startup, preserves pinned drafts, and
   const directory = await mkdtemp(join(tmpdir(), "omp-catalog-"));
   const next: ModelCatalogDocument = { ...catalog, version: "v2", entries: [{ ...catalog.entries[0]!, values: { contextWindow: 999999 } }] };
   let calls = 0;
-  const fetch: typeof globalThis.fetch = async (url, init) => {
-    calls += 1; assert.equal(url, MODEL_CATALOG_URL); assert.equal(init?.headers, undefined);
-    if (calls > 1) throw new Error("offline");
-    return Response.json(next);
+  const fetch: typeof globalThis.fetch = async (url) => {
+    calls += 1;
+    if (calls > 2) throw new Error("offline");
+    assert.ok(url === MODEL_CATALOG_URL || url === MODEL_CATALOG_SIGNATURE_URL, `unexpected url ${String(url)}`);
+    return url === MODEL_CATALOG_SIGNATURE_URL
+      ? Response.json({ schema: 1, keyId: "test", algorithm: "ed25519", value: "stub" })
+      : Response.json(next);
   };
   const cachePath = join(directory, "cache.json");
-  const service = createModelCatalogService({ cachePath, fetch, builtin: catalog });
+  const service = createModelCatalogService({ cachePath, fetch, builtin: catalog, verifySignature: () => true });
   assert.equal((await service.status()).version, "v1"); assert.equal(calls, 0);
   assert.equal((await service.refresh()).catalog.version, "v2");
   const input = { providerId: "official", api: "anthropic-messages", modelId: "model-a-2026" };
@@ -58,7 +66,93 @@ test("manual catalog refresh is offline at startup, preserves pinned drafts, and
   assert.equal((await service.resolve(input)).values.contextWindow, 999999);
   await assert.rejects(service.refresh(), /offline/);
   assert.equal((await service.status()).version, "v2");
-  assert.equal((await createModelCatalogService({ cachePath, fetch, builtin: catalog }).status()).version, "v2");
+  // The cache is authenticated on load too, so this reader needs the same stub
+  // verifier the writer used.
+  assert.equal((await createModelCatalogService({ cachePath, fetch, builtin: catalog, verifySignature: () => true }).status()).version, "v2");
+});
+
+test("a catalog update must carry a signature a trusted key produced", () => {
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const verifier = createCatalogSignatureVerifier({ "test-key": publicKey.export({ type: "spki", format: "pem" }).toString() });
+  const payload = new TextEncoder().encode('{"schemaVersion":1,"version":"v1"}');
+  const value = sign(null, payload, privateKey).toString("base64url");
+  const good = { algorithm: "ed25519", keyId: "test-key", value };
+
+  assert.equal(verifier(good, payload), true);
+  // 字节被换、keyId 不在表里、算法不是 ed25519——三种都必拒。
+  assert.equal(verifier(good, new TextEncoder().encode('{"schemaVersion":1,"version":"v2"}')), false);
+  assert.equal(verifier({ ...good, keyId: "step-studio-release-2026a" }, payload), false);
+  assert.equal(verifier({ ...good, algorithm: "rsa-sha256" }, payload), false);
+  assert.equal(verifier({ ...good, value: `${value.slice(0, -2)}xy` }, payload), false);
+
+  // 表里两把都是真公钥，且都不是上面那把测试钥匙的。
+  for (const [keyId, pem] of Object.entries(MODEL_CATALOG_PUBLIC_KEYS)) {
+    assert.match(pem, /^-----BEGIN PUBLIC KEY-----/u, keyId);
+    assert.equal(createCatalogSignatureVerifier({ [keyId]: pem })(good, payload), false, `${keyId} must not accept a foreign signature`);
+  }
+});
+
+test("verifyCatalogSignature refuses a malformed or unverifiable envelope", () => {
+  const body = "{}";
+  for (const bad of ["", "not json", "[]", "null", '{"algorithm":"ed25519"}', '{"keyId":"k","value":"v"}']) {
+    assert.throws(() => verifyCatalogSignature(new TextEncoder().encode(body), bad, () => true), `envelope ${bad}`);
+  }
+  assert.throws(() => verifyCatalogSignature(new TextEncoder().encode(body), '{"algorithm":"ed25519","keyId":"k","value":"v"}', () => false), /does not verify/);
+  assert.doesNotThrow(() => verifyCatalogSignature(new TextEncoder().encode(body), '{"algorithm":"ed25519","keyId":"k","value":"v"}', () => true));
+});
+
+test("refresh refuses a catalog whose signature does not verify, and never caches it", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "omp-catalog-"));
+  const next: ModelCatalogDocument = { ...catalog, version: "v2", entries: [{ ...catalog.entries[0]!, values: { contextWindow: 999999 } }] };
+  const fetch: typeof globalThis.fetch = async (url) =>
+    url === MODEL_CATALOG_SIGNATURE_URL
+      ? Response.json({ schema: 1, keyId: "step-studio-release-2026a", algorithm: "ed25519", value: "not-a-real-signature" })
+      : Response.json(next);
+  const cachePath = join(directory, "cache.json");
+  const service = createModelCatalogService({ cachePath, fetch, builtin: catalog });
+  await assert.rejects(service.refresh(), /does not verify/);
+  assert.equal((await service.status()).version, "v1", "the poisoned catalog must not reach the cache or the live view");
+  await assert.rejects(readFile(cachePath, "utf8"), /ENOENT/);
+});
+
+test("a cached catalog is re-authenticated on the next launch", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "omp-catalog-"));
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const pem = publicKey.export({ type: "spki", format: "pem" }).toString();
+  const verifier = createCatalogSignatureVerifier({ "test-key": pem });
+  const cachePath = join(directory, "cache.json");
+  const body = JSON.stringify({ ...catalog, version: "v2", entries: [{ ...catalog.entries[0]!, values: { contextWindow: 999999 } }] });
+  const signature = JSON.stringify({ schema: 1, keyId: "test-key", algorithm: "ed25519", value: sign(null, Buffer.from(body), privateKey).toString("base64url") });
+
+  // A cache file this build cannot authenticate is ignored, not trusted: the
+  // service falls back to the builtin rather than adopting planted bytes.
+  await writeFile(cachePath, JSON.stringify({ schema: 1, catalog: body, signature: "not-it" }), "utf8");
+  assert.equal((await createModelCatalogService({ cachePath, fetch: async () => { throw new Error("offline"); }, builtin: catalog, verifySignature: verifier }).status()).version, "v1");
+
+  await writeFile(cachePath, JSON.stringify({ schema: 1, catalog: body, signature }), "utf8");
+  assert.equal((await createModelCatalogService({ cachePath, fetch: async () => { throw new Error("offline"); }, builtin: catalog, verifySignature: verifier }).status()).version, "v2");
+});
+
+test("the signed bytes are the parsed bytes, BOM and all", () => {
+  const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+  const verifier = createCatalogSignatureVerifier({ "test-key": publicKey.export({ type: "spki", format: "pem" }).toString() });
+  // A BOM is the case where decoding then re-encoding is not the identity, so a
+  // verifier that round-tripped through a string would reject a valid signature.
+  const bytes = Buffer.concat([Buffer.from("\ufeff", "utf8"), Buffer.from('{"schemaVersion":1}')]);
+  const value = sign(null, bytes, privateKey).toString("base64url");
+  assert.doesNotThrow(() => verifyCatalogSignature(new Uint8Array(bytes), JSON.stringify({ keyId: "test-key", algorithm: "ed25519", value }), verifier));
+  assert.throws(() => verifyCatalogSignature(new Uint8Array(Buffer.from('{"schemaVersion":1}')), JSON.stringify({ keyId: "test-key", algorithm: "ed25519", value }), verifier), /does not verify/);
+});
+
+test("refresh refuses a catalog larger than the bound instead of buffering it", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "omp-catalog-"));
+  const oversized = "x".repeat(MODEL_CATALOG_MAX_BYTES + 1);
+  const fetch: typeof globalThis.fetch = async (url) =>
+    url === MODEL_CATALOG_SIGNATURE_URL
+      ? new Response(new Blob([JSON.stringify({ schema: 1, keyId: "k", algorithm: "ed25519", value: "v" })]), { headers: { "content-length": "60" } })
+      : new Response(new Blob([oversized]), { headers: { "content-length": String(oversized.length) } });
+  const service = createModelCatalogService({ cachePath: join(directory, "cache.json"), fetch, builtin: catalog });
+  await assert.rejects(service.refresh(), /too large|exceeds/);
 });
 
 test("complete thinking modes survive save/read, source records survive reopening, and external edits become manual", async () => {

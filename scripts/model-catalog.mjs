@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
@@ -78,8 +78,48 @@ async function checkCatalogDigest() {
   }
 }
 
+/**
+ * The signature `refresh()` fetches beside the catalog must exist and verify.
+ *
+ * Without this the file can simply be absent — `model-adaptation.ts` fetches
+ * `catalog/model-catalog-v1.json.sig.json`, gets a 404, and every client's
+ * "检查并更新目录" fails while `npm run check` stays green. Producing it needs
+ * the private key, which is a Release environment secret and never in this
+ * repository:
+ *
+ *   STEP_STUDIO_RUNTIME_SIGNING_KEY=/path/to/key.pem node scripts/sign-model-catalog.mjs
+ */
+async function checkCatalogSignature() {
+  const catalogPath = resolve(root, "catalog/model-catalog-v1.json");
+  const signaturePath = `${catalogPath}.sig.json`;
+  let envelope;
+  try {
+    envelope = JSON.parse(await readFile(signaturePath, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") throw new Error("catalog/model-catalog-v1.json.sig.json is missing; produce it with `STEP_STUDIO_RUNTIME_SIGNING_KEY=... node scripts/sign-model-catalog.mjs`");
+    throw error;
+  }
+  const table = JSON.parse(await readFile(resolve(root, "packaging/keys/trusted-keys.json"), "utf8"));
+  const name = table.keys[envelope.keyId];
+  if (!name || envelope.algorithm !== "ed25519" || typeof envelope.value !== "string") throw new Error(`Catalog signature envelope is not usable: keyId ${envelope.keyId}`);
+  const publicKey = createPublicKey(await readFile(resolve(root, "packaging/keys", name)));
+  if (publicKey.asymmetricKeyType !== "ed25519") throw new Error(`${name} is not an Ed25519 key`);
+  const bytes = await readFile(catalogPath);
+  if (!verify(null, bytes, publicKey, Buffer.from(envelope.value, "base64url"))) {
+    throw new Error("catalog/model-catalog-v1.json.sig.json does not verify against the catalog; re-sign both together");
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const catalog = await generateModelCatalog(process.argv.includes("--check"));
+  // `--check` is the repository invariant: the generated module and the digest
+  // pin describe the file on disk, so a commit that lies is caught on every
+  // push. The signature is a release-time artifact — its private key is a
+  // Release environment secret and is never in this repository — so it is
+  // verified with `--check --signature`, which is what the release gate runs.
+  // Verifying it on every push would make main red for something only a key
+  // holder can produce, which trains people to ignore red.
   if (process.argv.includes("--check")) await checkCatalogDigest();
+  if (process.argv.includes("--check") && process.argv.includes("--signature")) await checkCatalogSignature();
   console.log(`Model catalog ${catalog.version}: ${catalog.entries.length} models, OMP ${catalog.upstreamCommit}`);
 }
