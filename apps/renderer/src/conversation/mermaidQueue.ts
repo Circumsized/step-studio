@@ -1,6 +1,43 @@
 import { RenderCache, renderBytes } from "./renderCache";
 
-export const MERMAID_CONFIG = Object.freeze({ startOnLoad: false, securityLevel: "strict" as const, theme: "default" as const });
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    Object.freeze(value);
+    for (const nested of Object.values(value)) deepFreeze(nested);
+  }
+  return value;
+}
+
+export const MERMAID_CONFIG = deepFreeze({
+  startOnLoad: false,
+  securityLevel: "strict" as const,
+  theme: "default" as const,
+  // `strict` makes mermaid run its output through DOMPurify and drop HTML
+  // labels, event handlers and non-relative hrefs. It is also mermaid's own
+  // default, and mermaid's default `secure` list already contains
+  // `securityLevel`, so a diagram cannot talk its way out of it.
+  //
+  // The two settings that actually change something:
+  //
+  // `htmlLabels: false` — `getEffectiveHtmlLabels` resolves
+  // `config.htmlLabels ?? config.flowchart.htmlLabels ?? true`, so HTML labels
+  // (rendered through `foreignObject`) are ON unless turned off. Node labels
+  // become SVG text instead of HTML.
+  //
+  // `secure: ["htmlLabels"]` — mermaid lets a diagram's own frontmatter override
+  // `initialize()`, and `sanitize` drops only the keys listed in
+  // `["secure", ...siteConfig.secure]` from those directives. Without this entry
+  // a fenced block carrying `htmlLabels: true` re-opens the HTML-label path on a
+  // per-diagram basis, which is exactly the thing `htmlLabels: false` just
+  // closed. `securityLevel` is deliberately not repeated: it is already in
+  // mermaid's default list, and `assignWithDepth` unions arrays rather than
+  // replacing them, so the default protections all survive.
+  //
+  // Not `as const`: mermaid's `secure` is `string[]`, and a readonly tuple is
+  // not assignable to it. The array itself is frozen by `deepFreeze` below.
+  htmlLabels: false,
+  secure: ["htmlLabels"],
+});
 export type MermaidConfig = typeof MERMAID_CONFIG;
 export function mermaidBudget(code: string): { allowed: boolean; score: number; reason?: string } {
   if (code.length > 20_000) return { allowed: false, score: 0, reason: "图表过大，已保留源码" };

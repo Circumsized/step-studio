@@ -3,6 +3,37 @@ import { MERMAID_CONFIG, MermaidQueue, mermaidBudget } from "./mermaidQueue";
 import { RenderCache } from "./renderCache";
 const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 
+describe("the mermaid config a diagram cannot talk its way out of", () => {
+  // These three are the whole defence on the path that puts model-produced SVG
+  // into `dangerouslySetInnerHTML`, and mermaid's own default is the reason two
+  // of them are load-bearing rather than decorative:
+  //
+  //   - `securityLevel` defaults to "strict" and is in mermaid's default `secure`
+  //     list, so a diagram's frontmatter cannot downgrade it.
+  //   - `htmlLabels` resolves as `config.htmlLabels ?? flowchart.htmlLabels ??
+  //     true`, so HTML labels (rendered through `foreignObject`) are ON unless
+  //     this turns them off.
+  //   - `secure` therefore has to name `htmlLabels`: `sanitize` drops only
+  //     `["secure", ...siteConfig.secure]` keys from frontmatter directives, so
+  //     without this entry a fenced block carrying `htmlLabels: true` re-opens
+  //     the HTML-label path per diagram.
+  //
+  // Deleting any of the three leaves `npm run check` green, which is exactly why
+  // they are asserted here instead of left to the comment.
+  it("pins strict sanitisation, HTML labels off, and the one key a diagram could re-open", () => {
+    expect(MERMAID_CONFIG.securityLevel).toBe("strict");
+    expect(MERMAID_CONFIG.htmlLabels).toBe(false);
+    expect(MERMAID_CONFIG.secure).toEqual(["htmlLabels"]);
+    expect(MERMAID_CONFIG.startOnLoad).toBe(false);
+  });
+
+  it("is frozen deeply enough that a caller cannot re-open the label path", () => {
+    expect(Object.isFrozen(MERMAID_CONFIG)).toBe(true);
+    expect(Object.isFrozen(MERMAID_CONFIG.secure)).toBe(true);
+    expect(() => { (MERMAID_CONFIG.secure as string[]).push("securityLevel"); }).toThrow();
+  });
+});
+
 describe("Mermaid budgets and lifecycle", () => {
   it("checks character, line and heuristic complexity limits before invoking render", async () => {
     const render = vi.fn(async () => "<svg/>");

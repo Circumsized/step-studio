@@ -13,7 +13,7 @@
     "windows": [],
     "security": {
       "csp": null,
-      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: omp-artifact:; media-src 'self' blob: omp-artifact:; font-src 'self' data:; connect-src 'self' omp-artifact: http://localhost:5173 ws://localhost:5173; frame-src 'self' http://127.0.0.1:3847; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: omp-artifact:; media-src 'self' blob: omp-artifact:; font-src 'self' data:; connect-src 'self' omp-artifact: ipc: http://ipc.localhost https://ipc.localhost http://localhost:5173 ws://localhost:5173; frame-src 'self' http://127.0.0.1:3847; object-src 'none'; base-uri 'self'; form-action 'self'",
       "assetProtocol": {
         "enable": false,
         "scope": []

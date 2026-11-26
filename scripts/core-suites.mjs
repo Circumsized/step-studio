@@ -61,6 +61,10 @@ export const CORE_RENDERER_SUITES = [
   "src/composer/ServiceTierPicker.test.tsx",
   "src/conversation/conversationStore.test.ts",
   "src/conversation/ConversationMinimap.test.tsx",
+  // The mermaid config that decides whether model-produced SVG reaches
+  // `dangerouslySetInnerHTML` sanitised. Its assertions are the only thing that
+  // fails if someone drops `htmlLabels` from `secure`.
+  "src/conversation/mermaidQueue.test.ts",
   "src/conversation/useConversation.test.ts",
   "src/InteractionDeck.test.tsx",
   "src/sessionLifecycle.test.ts",

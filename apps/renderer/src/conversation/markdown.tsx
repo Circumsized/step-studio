@@ -9,6 +9,7 @@ import remarkGfm from "remark-gfm";
 import { scanStreamingMarkdown, type StreamingCodeFence, type StreamingMarkdownScan } from "./markdownBlocks";
 import { withMagicKeywordChildren } from "./magicKeywordMarkdown";
 import { LazyMermaid } from "./LazyMermaid";
+import { MERMAID_CONFIG } from "./mermaidQueue";
 import { performanceOptions } from "../performanceOptions";
 import { HighlightedCode } from "../highlight/HighlightedCode";
 
@@ -41,7 +42,7 @@ function LegacyMermaid({ code }: { code: string }) {
     if (svg !== null || host.current === null) return;
     let active = true;
     const render = () => { void import("mermaid").then(async ({ default: mermaid }) => {
-      mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "default" });
+      mermaid.initialize(MERMAID_CONFIG);
       const result = await mermaid.render(`omp-mermaid-${Math.random().toString(36).slice(2)}`, code);
       if (active) { cacheMermaid(code, result.svg); setSvg(result.svg); }
     }).catch(() => { if (active) setSvg(""); }); };

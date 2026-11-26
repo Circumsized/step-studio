@@ -224,6 +224,7 @@ if (plan.arch) {
 if (plan.arch) {
   for (const [name, script] of [
     ["action-pins", "mutable-action-tags.test.mjs"],
+    ["packaged-csp", "packaged-csp.test.mjs"],
     ["js-licences", "check-js-licenses.mjs"],
   ]) {
     const result = await runStep({
@@ -331,6 +332,19 @@ if (plan.production) {
     { name: "bundle:renderer", command: process.execPath, args: [viteBin, "build"], cwd: join(root, "apps", "renderer") },
   ];
   await pool(steps, failures);
+  // After the bundle, not beside it: this asserts the built index.html actually
+  // carries the policy, which is the step that fails open. The `arch`-group
+  // `packaged-csp` test reads the source constant, so a plugin that stops
+  // injecting — a lost literal `<head>`, the `includes("Content-Security-
+  // Policy")` early return tripping, or the plugin dropped from the array —
+  // would ship an app with no CSP at all while the source test stayed green.
+  const artifact = await runStep({
+    name: "packaged-csp-artifact",
+    command: process.execPath,
+    args: [join(root, "scripts", "packaged-csp-artifact.test.mjs")],
+  });
+  report(artifact);
+  if (!artifact.ok) failures.push(artifact.name);
 }
 
 console.log("");

@@ -13,8 +13,28 @@ import react from "@vitejs/plugin-react";
 // statistics page's loopback frame lives in `frame-src` here because listing
 // any source there replaces the `default-src` fallback.
 // Vite dev still needs HMR.
+//
+// `connect-src` must name Tauri's IPC origin, and `'self'` does not cover it.
+// In the tauri this app resolves (2.12.5, per Cargo.lock):
+// `src/protocol/mod.rs:32-39` builds the page origin as
+// `http(s)://tauri.localhost` on Windows and `tauri://localhost` elsewhere,
+// while `scripts/ipc-protocol.js:37` sends every `invoke` to
+// `convertFileSrc(cmd, 'ipc')` — `http(s)://ipc.localhost` on Windows,
+// `ipc://localhost` elsewhere (`scripts/core.js:13-20`). Different host, so
+// `'self'` matches the page and not the IPC endpoint.
+//
+// The cost of omitting them was smaller than it first looks, and worth stating
+// accurately: `ipc-protocol.js:59-68` catches the refused fetch, logs one
+// "IPC custom protocol failed, Tauri will now use the postMessage interface
+// instead" warning, sets `customProtocolIpcFailed`, and re-sends through
+// `window.ipc.postMessage` — the native wry bridge, which is not a network
+// request and so is not governed by CSP at all. Every `invoke` still worked.
+// What was lost is the intended fast path: one wasted fetch and one console
+// warning per webview load, and a dependency on the fallback that Tauri
+// documents as the degraded mode. `scripts/packaged-csp.test.mjs` pins the
+// three origins so the fallback cannot quietly become the only path.
 const PACKAGED_RENDERER_CSP =
-  "default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: omp-artifact:; media-src 'self' blob: omp-artifact:; font-src 'self' data:; connect-src 'self' omp-artifact:; frame-src 'self' http://127.0.0.1:3847; object-src 'none'; base-uri 'self'; form-action 'self'";
+  "default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: omp-artifact:; media-src 'self' blob: omp-artifact:; font-src 'self' data:; connect-src 'self' omp-artifact: ipc: http://ipc.localhost https://ipc.localhost; frame-src 'self' http://127.0.0.1:3847; object-src 'none'; base-uri 'self'; form-action 'self'";
 
 function packagedCspPlugin() {
   return {
