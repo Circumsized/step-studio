@@ -179,7 +179,9 @@ describe("spaceMinimapMarks", () => {
     for (let index = 0; index < marks.length; index += 1) fractions[`m${index}`] = index / (marks.length - 1);
     const begun = performance.now();
     const placed = spaceMinimapMarks(marks, fractions);
-    expect(performance.now() - begun).toBeLessThan(120);
+    // 这条现在跑在默认门禁里，所以预算放到 CI 满载也不会误报的档位：它守的是
+    // 「别变成 O(n²)」这个量级，不是 120ms。真要卡性能，用 bench，不用测试。
+    expect(performance.now() - begun).toBeLessThan(2000);
     expect(placed.length).toBeLessThanOrEqual(Math.ceil(1 / 0.018) + 1);
   });
 });
@@ -299,8 +301,10 @@ describe("ConversationMinimap 组件", () => {
     view.rerender(<Harness rows={[...ROWS]} />);
 
     fireEvent.click(screen.getByRole("button", { name: "筛选事件" }));
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "仅显示错误与关键节点" }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "仅显示错误与关键节点" }));
 
+    // `aria-checked` 才是状态的出处，标签不翻转到它身上。
+    expect(screen.getByRole("menuitemcheckbox", { name: "仅显示错误与关键节点" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.queryByRole("button", { name: "#1 用户消息" })).toBeNull();
     expect(screen.queryByRole("button", { name: "#2 助手回复" })).toBeNull();
     expect(screen.getByRole("button", { name: "#2 错误" })).toBeDefined();

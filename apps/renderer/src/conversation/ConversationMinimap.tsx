@@ -1087,12 +1087,15 @@ export function ConversationMinimap({
               <button
                 type="button"
                 className="menu-item"
-                role="menuitemradio"
+                role="menuitemcheckbox"
                 aria-checked={keyOnly}
                 onClick={() => setKeyOnly((only) => !only)}
               >
                 <Icon name={keyOnly ? "eye" : "filter" } extra="sm" />
-                {keyOnly ? "显示全部节点" : "仅显示错误与关键节点"}
+                {/* 标签不随状态翻转：`aria-checked` 已经说明当前状态，标签再跟着变，
+                    屏读器会念成「已勾选，显示全部节点」——把状态和动作搅成一个词。
+                    `menuitemradio` 也不对，那是互斥集合里的一项，这里是独立开关。 */}
+                仅显示错误与关键节点
               </button>
             </div>
           ) : null}

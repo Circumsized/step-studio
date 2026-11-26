@@ -118,11 +118,15 @@ it("keeps authentication inside the connection dialog and identifies the target 
   const dialog = screen.getByRole("dialog", { name: "添加 SSH 连接" });
   const auth = screen.getByRole("combobox", { name: /认证方式/ });
   fireEvent.click(auth);
-  // 断言的是「认证控件在弹窗里」。选项 popup 由 MUI 挂到 document.body，
-  // 从来不在 dialog 子树内，所以 containment 对它恒为 false——那是测试写错了，
-  // 不是组件把认证漏到了弹窗外。
+  // Both the control and its option list stay inside the dialog. This assertion
+  // used to be here, was removed as "MUI portals it to body", and that diagnosis
+  // was wrong on both counts: the portal target is this repo's own `AppSelect`,
+  // and it escaped only because `closest("[role='dialog']")` cannot match a
+  // native `<dialog>`'s implicit role. A native modal puts everything outside its
+  // subtree in the inert top layer, so an escaped option list is unclickable and
+  // unfocusable — a real defect, not a test artefact.
   expect(dialog.contains(auth)).toBe(true);
-  expect(screen.getByRole("listbox")).toBeDefined();
+  expect(dialog.contains(screen.getByRole("listbox"))).toBe(true);
   selectOption(auth, "用户名和密码");
   expect(screen.queryByRole("combobox", { name: /远端系统/ })).toBeNull();
   expect(screen.getByText(/连接后自动识别 Windows/)).toBeTruthy();

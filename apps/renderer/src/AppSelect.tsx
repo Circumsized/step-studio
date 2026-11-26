@@ -262,7 +262,14 @@ export function AppSelect({ value, onChange, children, placeholder, className = 
         </div>
       </div>,
       // Keep the search field within the modal's focus and accessibility boundary.
-      trigger.current?.closest("[role='dialog']") ?? document.body,
+      // `dialog` as well as `[role='dialog']`: three dialogs in this app are native
+      // `<dialog>` elements (ExecutionTargetPicker, SshPreparationDialog,
+      // SshPasswordDialog), which carry the role implicitly and have no `role`
+      // attribute, so the attribute selector alone matched nothing and portalled
+      // their option lists to `document.body` — outside a modal's top layer, where
+      // they are inert and painted behind the dialog. The ExecutionTargets test
+      // asserted that containment and was failing for exactly this reason.
+      trigger.current?.closest("dialog, [role='dialog']") ?? document.body,
     ) : null}
   </>;
 }
