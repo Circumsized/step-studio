@@ -4398,7 +4398,7 @@ version = "0.1.17"
 dependencies = [
  "base64 0.22.1",
  "criterion",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "hmac",
  "miow",
  "serde",
@@ -4411,7 +4411,7 @@ name = "step-studio-desktop-tauri"
 version = "0.1.17"
 dependencies = [
  "aes-gcm",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "keyring",
  "portable-pty",
  "regex",
